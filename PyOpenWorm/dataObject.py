@@ -226,15 +226,6 @@ class DataObject(DataUser):
         # graph and convert them into objects of the type of the querying object.
         #
         gp = self.graph_pattern(query=True)
-        # Append some extra patterns to get *all* values for *all* the properties
-        #for prop in self.properties:
-            ## hack, hack, hack
-            #if isinstance(prop, SimpleProperty):
-                #z = prop.v
-                #prop.v = []
-                #prop_gp = prop.graph_pattern(query=True)
-                #gp += " .\n"+prop_gp
-                #prop.v = z
         ident = self.identifier(query=True)
         varlist = [n.linkName for n in self.properties if isinstance(n, SimpleProperty) ]
         if DataObject._is_variable(ident):

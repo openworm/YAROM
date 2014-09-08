@@ -6,7 +6,6 @@ import traceback
 __all__ = [ "DataObjectMapper"]
 
 _DataObjects = dict()
-# TODO: Put the subclass relationships in the database
 _DataObjectsParents = dict()
 
 def makeDatatypeProperty(*args,**kwargs):
@@ -59,6 +58,10 @@ def _create_property(owner_class, linkName, property_type, value_type=False):
     return c
 
 class DataObjectMapper(type):
+    """A type for DataObjects
+
+    Sets up the graph with things needed for DataObjects
+    """
     def __init__(cls, name, bases, dct, conf=False):
         bs = list(bases)
         cls.du = DataUser()

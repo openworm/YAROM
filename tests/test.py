@@ -43,7 +43,7 @@ except:
     TEST_CONFIG = Configure.open("tests/test_default.conf")
 
 @unittest.skipIf((TEST_CONFIG['rdf.source'] == 'Sleepycat') and (has_bsddb==False), "Sleepycat store will not work without bsddb")
-class _DataTest(unittest.TestCase):
+class _DataTestB(unittest.TestCase):
     TestConfig = TEST_CONFIG
     def delete_dir(self):
         self.path = self.TestConfig['rdf.store_conf']
@@ -62,13 +62,21 @@ class _DataTest(unittest.TestCase):
             else:
                 raise e
     def setUp(self):
-        # Set do_logging to True if you like walls of text
         self.delete_dir()
+
+    def tearDown(self):
+        self.delete_dir()
+
+
+class _DataTest(_DataTestB):
+    def setUp(self):
+        _DataTestB.setUp(self)
+        # Set do_logging to True if you like walls of text
         PyOpenWorm.connect(conf=self.TestConfig, do_logging=False)
 
     def tearDown(self):
         PyOpenWorm.disconnect()
-        self.delete_dir()
+        _DataTestB.tearDown(self)
 
     @property
     def config(self):
@@ -993,6 +1001,29 @@ class PropertyTest(_DataTest):
         self.assertIsNone(t.one())
         t.b=True
         self.assertEqual('12', t.one())
+
+class MapperTest(_DataTestB):
+    def setUp(self):
+        _DataTestB.setUp(self)
+        Configureable.conf = self.TestConfig
+        Configureable.conf = Data()
+        Configureable.conf.openDatabase()
+
+    def tearDown(self):
+        Configureable.conf.closeDatabase()
+
+    def test_addToGraph(self):
+        """Test that we can load a descendant of DataObject as a class"""
+        from PyOpenWorm import dataObject
+
+        dc = DataObjectMapper("TestDOM", (P.DataObject,), dict())
+        self.assertIn((dc.rdf_type, R.RDFS['subClassOf'], P.DataObject.rdf_type), dc.du.rdf)
+
+    def test_access_created_from_module(self):
+        """Test that we can add an object and then access it from the PyOpenWorm module"""
+        from PyOpenWorm import dataObject
+        dc = DataObjectMapper("TestDOM", (P.DataObject,), dict())
+        self.assertTrue(issubclass(P.TestDOM, P.DataObject))
 
 class SimplePropertyTest(_DataTest):
     def __init__(self,*args,**kwargs):
