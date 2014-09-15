@@ -57,18 +57,40 @@ def _create_property(owner_class, linkName, property_type, value_type=False):
 
     return c
 
+def oid(identifier,rdf_type=False):
+    """ Load an object from the database using its type tag """
+    # XXX: This is a class method because we need to get the conf
+    # We should be able to extract the type from the identifier
+    if rdf_type:
+        uri = rdf_type
+    else:
+        uri = identifier
+
+    cn = _extract_class_name(uri)
+    # if its our class name, then make our own object
+    # if there's a part after that, that's the property name
+    o = _DataObjects[cn](ident=identifier)
+    return o
+
+def _extract_class_name(uri):
+    from urlparse import urlparse
+    u = urlparse(uri)
+    x = u.path.split('/')
+    if len(x) >= 3 and x[1] == 'entities':
+        return x[2]
+
 class DataObjectMapper(type):
     """A type for DataObjects
 
     Sets up the graph with things needed for DataObjects
     """
     def __init__(cls, name, bases, dct, conf=False):
-        bs = list(bases)
+        type.__init__(cls,name,bases,dct)
+
         cls.du = DataUser()
-        type.__init__(cls,name,tuple(bs),dct)
         cls.dataObjectProperties = []
         #print 'doing init for', cls
-        for x in bs:
+        for x in bases:
             try:
                 cls.dataObjectProperties += x.dataObjectProperties
             except AttributeError:
@@ -81,6 +103,7 @@ class DataObjectMapper(type):
 
     @classmethod
     def makeClass(cls, name, bases, objectProperties=False, datatypeProperties=False):
+        """ Intended to be used for setting up a class from the RDF graph, for instance. """
         # Need to distinguish datatype and object properties...
         if not datatypeProperties:
             datatypeProperties = []
@@ -142,19 +165,4 @@ class DataObjectMapper(type):
             pass
         except:
             traceback.print_exc()
-
-    def oid(self,identifier,rdf_type=False):
-        """ Load an object from the database using its type tag """
-        # XXX: This is a class method because we need to get the conf
-        # We should be able to extract the type from the identifier
-        if rdf_type:
-            uri = rdf_type
-        else:
-            uri = identifier
-
-        cn = self._extract_class_name(uri)
-        # if its our class name, then make our own object
-        # if there's a part after that, that's the property name
-        o = _DataObjects[cn](ident=identifier)
-        return o
 

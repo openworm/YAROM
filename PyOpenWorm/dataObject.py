@@ -202,14 +202,6 @@ class DataObject(DataUser):
         self.add_statements(self.triples(check_saved=ss))
 
     @classmethod
-    def _extract_class_name(self,uri):
-        from urlparse import urlparse
-        u = urlparse(uri)
-        x = u.path.split('/')
-        if len(x) >= 3 and x[1] == 'entities':
-            return x[2]
-
-    @classmethod
     def _extract_property_name(self,uri):
         from urlparse import urlparse
         u = urlparse(uri)

@@ -1008,22 +1008,26 @@ class MapperTest(_DataTestB):
         Configureable.conf = self.TestConfig
         Configureable.conf = Data()
         Configureable.conf.openDatabase()
+        from PyOpenWorm import dataObject
 
     def tearDown(self):
         Configureable.conf.closeDatabase()
+        _DataTestB.tearDown(self)
 
     def test_addToGraph(self):
         """Test that we can load a descendant of DataObject as a class"""
-        from PyOpenWorm import dataObject
-
         dc = DataObjectMapper("TestDOM", (P.DataObject,), dict())
         self.assertIn((dc.rdf_type, R.RDFS['subClassOf'], P.DataObject.rdf_type), dc.du.rdf)
 
     def test_access_created_from_module(self):
         """Test that we can add an object and then access it from the PyOpenWorm module"""
-        from PyOpenWorm import dataObject
         dc = DataObjectMapper("TestDOM", (P.DataObject,), dict())
-        self.assertTrue(issubclass(P.TestDOM, P.DataObject))
+        self.assertTrue(hasattr(P,"TestDOM"))
+
+    def test_oid_class_exists(self):
+        """Test that we can add an object and then access it from the PyOpenWorm module"""
+        dc = oid("TestDOM", (P.DataObject,), dict())
+        self.assertTrue(hasattr(P,"TestDOM"))
 
 class SimplePropertyTest(_DataTest):
     def __init__(self,*args,**kwargs):
