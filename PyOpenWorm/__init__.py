@@ -52,6 +52,7 @@ from .configure import Configure,Configureable,ConfigValue,BadConf
 from .data import Data
 from .dataUser import DataUser
 from .mapper import DataObjectMapper, oid
+from .quantity import Quantity
 
 __import__('__main__').connected = False
 
