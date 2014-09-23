@@ -39,16 +39,8 @@ Notes:
 Classes
 -------
 
-.. automodule:: PyOpenWorm.evidence
-.. automodule:: PyOpenWorm.network
-.. automodule:: PyOpenWorm.neuron
-.. automodule:: PyOpenWorm.worm
-.. automodule:: PyOpenWorm.muscle
-.. automodule:: PyOpenWorm.connection
-.. automodule:: PyOpenWorm.relationship
 .. automodule:: PyOpenWorm.dataObject
 .. automodule:: PyOpenWorm.data
-.. automodule:: PyOpenWorm.cell
 .. automodule:: PyOpenWorm.configure
 """
 
@@ -60,7 +52,6 @@ from .configure import Configure,Configureable,ConfigValue,BadConf
 from .data import Data
 from .dataUser import DataUser
 from .mapper import DataObjectMapper, oid
-from .quantity import Quantity
 
 __import__('__main__').connected = False
 
@@ -146,17 +137,9 @@ def connect(configFile=False,
     # have to register the right one to disconnect...
     atexit.register(disconnect)
     from .dataObject import DataObject, Property, SimpleProperty
-    from .cell import Cell
-    from .neuron import Neuron
-    from .muscle import Muscle
-    from .network import Network
-    from .worm import Worm
-    from .relationship import Relationship
     from .evidence import Evidence,EvidenceError
     from .connection import Connection
 
-    # Not a dataobject, but depends on some of them
-    from .my_neuroml import NeuroML
     DataObjectMapper.setUpDB()
     m.connected = True
     if data:
