@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/mwatts15/YAROM.png?branch=new-classes)](https://travis-ci.org/mwatts15/YAROM)
+[![Build Status](https://travis-ci.org/mwatts15/YAROM.png?branch=master)](https://travis-ci.org/mwatts15/YAROM)
 
 YAROM
 =====
