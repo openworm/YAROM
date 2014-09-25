@@ -1,46 +1,14 @@
-[![Build Status](https://travis-ci.org/openworm/PyOpenWorm.png?branch=new-classes)](https://travis-ci.org/openworm/PyOpenWorm)
+[![Build Status](https://travis-ci.org/mwatts15/YAROM.png?branch=new-classes)](https://travis-ci.org/mwatts15/YAROM)
 
-PyOpenWorm
-===========
+YAROM
+=====
 
 A unified, simple data access library for data & facts about *C. elegans* biology
-
-What does it do?
-----------------
-
-Enables a simple API for asking various questions about the cells of the *C. elegans*, enabling the sharing of data about *C. elegans* for the purpose of building a data-to-model pipeline for the OpenWorm project.
-
-Why is this necessary?
-----------------------
-
-There are many different useful ways to compute with data related to the worm.
-Different data structures have different strengths and answer different questions.
-For example, a NetworkX representation of the connectome as a complex graph enables
-questions to be asked about first and second nearest neighbors of a given neuron.
-In contrast, an RDF semantic graph representation is useful for reading and 
-writing annotations about multiple aspects of a neuron, such as what papers 
-have been written about it, multiple different properties it may have such as
-ion channels and neurotransmitter receptors.  A NeuroML representation is useful
-for answering questions about model morphology and simulation parameters.  Lastly,
-a Blender representation is a full 3D shape definition that can be used for 
-calculations in 3D space.  Further representations regarding activity patterns
-such as Neo or simulated activity can be considered as well.
-
-Using these different representations separately leads to ad hoc scripting for
-for each representation.  This presents a challenge for data integration and 
-consolidation of information in 'master' authoritative representations.  By
-creating a unified data access layer, different representations
-can become encapsulated into an abstract view.  This allows the user to work with
-objects related to the biological reality of the worm.  This has the advantage that 
-the user can forget about which representation is being used under the hood.  
-
-The worm itself has a unified sense of neurons, networks, muscles,
-ion channels, etc and so should our code.
 
 Basic Usage
 -----------
 
-You may need to install some dependencies in order to use PyOpenWorm. These can be installed with:
+You may need to install some dependencies in order to use yarom. These can be installed with:
 
     python setup.py develop --user
 
@@ -48,8 +16,8 @@ To get started, you'll probably want to load in the database. If you cloned the 
 by doing 
 
 ```python
-  >>> import PyOpenWorm as P
-  >>> P.connect('PyOpenWorm/default.conf')
+  >>> import yarom as P
+  >>> P.connect('yarom/default.conf')
 
   >>> P.loadData('OpenWormData/out.n3', 'n3')
 
@@ -61,7 +29,7 @@ Then you can try out a few things:
 
 ```python
   # Set up
-  >>> P.connect('PyOpenWorm/default.conf')
+  >>> P.connect('yarom/default.conf')
 
   # Grabs the representation of the neuronal network
   >>> net = P.Worm().get_neuron_network()
@@ -200,7 +168,7 @@ Returns the c. elegans connectome represented as a [NetworkX](http://networkx.gi
 
 ```
 
-More examples can be found [here](http://pyopenworm.readthedocs.org/en/alpha0.5/making_dataObjects.html) and [here](https://github.com/openworm/PyOpenWorm/tree/alpha0.5/examples).
+More examples can be found [here](http://pyopenworm.readthedocs.org/en/alpha0.5/making_dataObjects.html) and [here](https://github.com/mwatts15/YAROM/tree/alpha0.5/examples).
 
 
 Ease of use

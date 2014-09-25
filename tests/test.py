@@ -5,9 +5,9 @@ import neuroml
 import neuroml.writers as writers
 import sys
 sys.path.insert(0,".")
-import PyOpenWorm
-import PyOpenWorm as P
-from PyOpenWorm import *
+import yarom
+import yarom as P
+from yarom import *
 import test_data as TD
 import networkx
 import rdflib
@@ -72,15 +72,15 @@ class _DataTest(_DataTestB):
     def setUp(self):
         _DataTestB.setUp(self)
         # Set do_logging to True if you like walls of text
-        PyOpenWorm.connect(conf=self.TestConfig, do_logging=False)
+        yarom.connect(conf=self.TestConfig, do_logging=False)
 
     def tearDown(self):
-        PyOpenWorm.disconnect()
+        yarom.disconnect()
         _DataTestB.tearDown(self)
 
     @property
     def config(self):
-        return PyOpenWorm.config()
+        return yarom.config()
 
 class ConfigureTest(unittest.TestCase):
     def test_fake_config(self):
@@ -154,7 +154,7 @@ class DataObjectTest(_DataTest):
 
     def test_DataUser(self):
         do = P.DataObject()
-        self.assertTrue(isinstance(do,PyOpenWorm.DataUser))
+        self.assertTrue(isinstance(do,yarom.DataUser))
 
     def test_identifier(self):
         """ Test that we can set and return an identifier """
@@ -188,11 +188,11 @@ class DataObjectTest(_DataTest):
         self.assertEqual(self.config['user.email'], u)
 
     def test_object_from_id(self):
+        """ Test the wrapper for oid """
         do = P.DataObject(ident="http://example.org")
-        g = do.object_from_id('http://openworm.org/entities/Neuron')
-        self.assertIsInstance(g,P.Neuron)
-        g = do.object_from_id('http://openworm.org/entities/Connection')
-        self.assertIsInstance(g,P.Connection)
+        dc = DataObjectMapper("TestDOM", (P.DataObject,), dict())
+        g = do.object_from_id(self.config['rdf.namespace']['TestDOM'])
+        self.assertIsInstance(g,P.TestDOM)
 
     @unittest.skip("Should be tracked by version control")
     def test_upload_date(self):
@@ -271,7 +271,7 @@ class DataUserTest(_DataTest):
     def test_add_statements_completes(self):
         """ Test that we can upload lots of triples.
 
-        This is to address the problem from issue #31 on https://github.com/openworm/PyOpenWorm/issues
+        This is to address the problem from issue #31 on https://github.com/openworm/yarom/issues
         """
         g = rdflib.Graph()
         for i in range(9000):
@@ -286,7 +286,7 @@ class DataUserTestToo(unittest.TestCase):
     def test_init_config_no_Data(self):
         """ Should fail if given a non-Data configuration """
         # XXX: This test touches some machinery in
-        # PyOpenWorm/__init__.py. Feel like it's a bad test
+        # yarom/__init__.py. Feel like it's a bad test
         tmp = Configureable.conf
         Configureable.conf = Configure()
         with self.assertRaises(BadConf):
@@ -561,7 +561,7 @@ class MapperTest(_DataTestB):
         Configureable.conf = self.TestConfig
         Configureable.conf = Data()
         Configureable.conf.openDatabase()
-        from PyOpenWorm import dataObject
+        from yarom import dataObject
 
     def tearDown(self):
         Configureable.conf.closeDatabase()
@@ -573,14 +573,16 @@ class MapperTest(_DataTestB):
         self.assertIn((dc.rdf_type, R.RDFS['subClassOf'], P.DataObject.rdf_type), dc.du.rdf)
 
     def test_access_created_from_module(self):
-        """Test that we can add an object and then access it from the PyOpenWorm module"""
+        """Test that we can add an object and then access it from the yarom module"""
         dc = DataObjectMapper("TestDOM", (P.DataObject,), dict())
         self.assertTrue(hasattr(P,"TestDOM"))
 
     def test_oid_class_exists(self):
-        """Test that we can add an object and then access it from the PyOpenWorm module"""
-        dc = oid("TestDOM", (P.DataObject,), dict())
-        self.assertTrue(hasattr(P,"TestDOM"))
+        """Test that we can add an object and then access it from the yarom module"""
+        dc = DataObjectMapper("TestDOM", (P.DataObject,), dict())
+        p = dc()
+        q = oid(p.identifier())
+        self.assertEqual(p,q)
 
 class SimplePropertyTest(_DataTest):
     def __init__(self,*args,**kwargs):
@@ -589,7 +591,7 @@ class SimplePropertyTest(_DataTest):
     def setUp(self):
         _DataTest.setUp(self)
 
-        # Done dynamically to ensure that all of the PyOpenWorm setup happens before the class is created
+        # Done dynamically to ensure that all of the yarom setup happens before the class is created
         class K(P.DataObject):
             datatypeProperties = ['boots']
             objectProperties = ['bats']
@@ -666,3 +668,7 @@ class SimplePropertyTest(_DataTest):
         sp = T(owner=do)
         self.assertNotEqual(len(list(sp.triples())), 0)
         self.assertNotEqual(len(list(sp.triples(query=True))), 0)
+def main():
+    unittest.main()
+if __name__ == '__main__':
+    main()
