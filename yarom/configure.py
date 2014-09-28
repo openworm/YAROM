@@ -96,10 +96,10 @@ class Configure(object):
                 self[x] = other[x]
         return self
 
-    def get(self, pname, default=False):
+    def get(self, pname, default=None):
         if pname in self._properties:
             return self._properties[pname].get()
-        elif default:
+        elif (default is not None):
             return default
         else:
             print self._properties
