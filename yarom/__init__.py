@@ -106,6 +106,7 @@ def connect(configFile=False,
     import logging
     import atexit
     import sys
+    import importlib
     m = __import__('__main__')
     if m.connected == True:
         print "yarom already connected"
@@ -125,7 +126,7 @@ def connect(configFile=False,
     else:
         try:
             from pkg_resources import Requirement, resource_filename
-            filename = resource_filename(Requirement.parse("yarom"),"db/default.conf")
+            filename = resource_filename(Requirement.parse("yarom"),"default.conf")
             Configureable.conf = Data.open(filename)
         except:
             logging.info("Couldn't load default configuration")

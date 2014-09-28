@@ -293,6 +293,55 @@ class DataUserTestToo(unittest.TestCase):
             DataUser()
         Configureable.conf = tmp
 
+    def test_inference(self):
+        """ A simple test on the inference engine """
+        ex = R.Namespace("http://example.org/")
+        pred = ex['sameAs']
+        with sameAsRules(ex,pred) as rules_file:
+            c = Configure()
+            c.copy(TEST_CONFIG)
+            c['rdf.source'] = 'zodb'
+            c['rdf.store_conf'] = 'zodb'
+            Configureable.conf = c
+            d = Data()
+            Configureable.conf = d
+            d['rdf.inference'] = True
+            d['rdf.rules'] = rules_file
+            d.openDatabase()
+            graph = [(ex['x'], pred, ex['z']),
+                     (ex['z'], ex['b'], ex['k']),
+                     (ex['z'], ex['d'], ex['e'])]
+            du = DataUser()
+            du.add_statements(graph)
+            self.assertIn((ex['x'], ex['b'], ex['k']), du.rdf)
+            self.assertIn((ex['x'], ex['d'], ex['e']), du.rdf)
+
+class sameAsRules(object):
+    def __init__(self, ns=False, predicate='sameAs'):
+        self.rules = None
+        self.ns = ns
+        self.predicate = predicate
+
+    def __enter__(self):
+        """ make a rules file with a simple 'sameAs' rule and return the file name """
+        self.rules = tempfile.mkstemp()[1]
+        f = open(self.rules, "w")
+        if self.ns:
+            ex = self.ns
+        else:
+            ex = R.Namespace(ns)
+        v = {"x" : R.Variable('x').n3(),
+                "y" : self.predicate.n3(),
+                "z" : R.Variable('z').n3(),
+                "m" : R.Variable('m').n3(),
+                "n" : R.Variable('n').n3() }
+        f.write("{ %(x)s %(y)s %(z)s . %(z)s %(m)s %(n)s } => { %(x)s %(m)s %(n)s } .\n" % v)
+        f.close()
+        return self.rules
+
+    def __exit__(self, *args,**kwargs):
+        os.unlink(self.rules)
+
 class RDFLibTest(unittest.TestCase):
     """Test for RDFLib."""
 
@@ -668,7 +717,10 @@ class SimplePropertyTest(_DataTest):
         sp = T(owner=do)
         self.assertNotEqual(len(list(sp.triples())), 0)
         self.assertNotEqual(len(list(sp.triples(query=True))), 0)
-def main():
-    unittest.main()
+def main(*args,**kwargs):
+    unittest.main(*args,**kwargs)
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) == 3:
+        main(defaultTest=sys.argv[1])
+    else:
+        main()

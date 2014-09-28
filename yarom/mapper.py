@@ -166,3 +166,15 @@ class DataObjectMapper(type):
         except:
             traceback.print_exc()
 
+    def cleanupGraph(cls):
+        """ Cleans up the graph by removing statements that can't be connected to typed statement. """
+        q = """
+        DELETE { ?b ?x ?y }
+        WHERE
+        {
+            ?b ?x ?y .
+            FILTER (NOT EXISTS { ?b rdf:type ?c } ) .
+        }
+          """
+        cls.du.rdf.update(q)
+

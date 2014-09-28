@@ -64,6 +64,8 @@ class DataUser(Configureable):
             gr = self.conf['rdf.graph']
             for x in g:
                 gr.add(x)
+            if self.conf.get('rdf.inference', False):
+                self.conf['fuxi.infer_func'](gr, g)
 
         if self.conf['rdf.source'] == 'ZODB':
             # Commit the current commit
@@ -101,12 +103,12 @@ class DataUser(Configureable):
     #def _add_unannotated_statements(self, graph):
     # A UTC class.
 
-    def retract_statements(self, graph):
+    def retract_statements(self, query):
         """
         Remove a set of statements from the database.
-        :param graph: An iterable of triples
+        :param query: A SPARQL graph pattern
         """
-        self._remove_from_store_by_query(graph)
+        self._remove_from_store_by_query(query)
     def _remove_from_store_by_query(self, q):
         import logging as L
         s = " DELETE WHERE {" + q + " } "

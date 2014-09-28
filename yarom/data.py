@@ -76,8 +76,52 @@ class Data(Configure, Configureable):
                 'serialization' : SerializationSource,
                 'zodb' : ZODBSource
                 }
+
         i = self.sources[self['rdf.source'].lower()]()
         self.source = i
+
+        if self.get("rdf.inference", False):
+            if 'rdf.rules' not in self:
+                raise Exception("You've set `rdf.inference' in your configuration. You must provide n3 rules in your configuration (`rdf.rules') in order to use rdf inference.")
+
+            from FuXi.Rete.RuleStore import SetupRuleStore
+            from FuXi.Rete.Util import generateTokenSet
+            from FuXi.Horn.HornRules import HornFromN3
+            #fetch the derived object's graph
+            rule_store, rule_graph, network = SetupRuleStore(makeNetwork=True)
+
+            #build a network of rules
+            for rule in HornFromN3(self['rdf.rules']):
+                network.buildNetworkFromClause(rule)
+
+            def infer(graph, new_data):
+                """ Fire FuXi rule engine to infer triples """
+                # apply rules to original facts to infer new facts
+                closureDeltaGraph = Graph()
+                network.inferredFacts = closureDeltaGraph
+
+                network.feedFactsToAdd(generateTokenSet(new_data))
+                # combine original facts with inferred facts
+                if graph:
+                    for x in closureDeltaGraph:
+                        graph.add(x)
+            self['fuxi.network'] = network
+            self['fuxi.infer_func'] = infer
+
+            # XXX: Not sure if this is the most appropriate way to set
+            #      up the network
+            i._get = i.get
+            def get():
+                """ A one-time wrapper. resets to the actual `get` after being called once """
+                g = i._get() # get the graph in the normal way
+                infer(False, g) # add the initial facts to the rete network
+                i.get = i._get # restore the old `get`
+                return g
+
+            i.get = get
+
+
+
         self.link('semantic_net_new', 'semantic_net', 'rdf.graph')
         self['rdf.graph'] = i
         return i
