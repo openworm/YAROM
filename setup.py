@@ -8,7 +8,7 @@ with open('requirements.txt') as f:
 
 import os
 
-long_description = open("README.md").read()
+long_description = open("README.rst").read()
 
 setup(
     name = "YAROM",
@@ -22,7 +22,7 @@ setup(
     packages = ['yarom'],
     package_data = {"yarom":['default.conf', 'rules.n3']},
     author = "Mark Watts",
-    author_email = "mark.watts2015@gmail.com",
+    author_email = "wattsmark2015@gmail.com",
     description = "Yet Another RDF-Object Mapper",
     long_description = long_description,
     license = "BSD",
