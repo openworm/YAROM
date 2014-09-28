@@ -707,7 +707,7 @@ class SimplePropertyTest(_DataTest):
         self.assertEqual(do.bats.identifier(),do1.bats.identifier())
 
     def test_triples_with_no_value(self):
-        """ Test that when there is no value set for a property, it still yields triples """
+        """ Test that when there is no value set for a property, it still yields no triples """
         do = P.DataObject(ident=R.URIRef("http://example.org"))
         class T(P.SimpleProperty):
             property_type = 'DatatypeProperty'
@@ -715,8 +715,8 @@ class SimplePropertyTest(_DataTest):
             owner_type = P.DataObject
 
         sp = T(owner=do)
-        self.assertNotEqual(len(list(sp.triples())), 0)
-        self.assertNotEqual(len(list(sp.triples(query=True))), 0)
+        self.assertEqual(len(list(sp.triples())), 0)
+        self.assertEqual(len(list(sp.triples(query=True))), 0)
 def main(*args,**kwargs):
     unittest.main(*args,**kwargs)
 if __name__ == '__main__':
