@@ -20,7 +20,7 @@ setup(
     setup_requires="six==1.7.3",
     version = '0.5.0-alpha',
     packages = ['yarom'],
-    package_data = {"yarom":['default.conf']},
+    package_data = {"yarom":['default.conf', 'rules.n3']},
     author = "Mark Watts",
     author_email = "mark.watts2015@gmail.com",
     description = "Yet Another RDF-Object Mapper",
@@ -35,5 +35,6 @@ setup(
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
-        'Topic :: Scientific/Engineering']
+        'Topic :: Scientific/Engineering'],
+    zip_safe = False
 )

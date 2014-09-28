@@ -142,7 +142,7 @@ class DataObject(DataUser):
 
     def make_identifier(self, data):
         import hashlib
-        return R.URIRef(self.rdf_namespace[hashlib.sha224(str(data)).hexdigest()])
+        return R.URIRef(self.rdf_namespace["a"+hashlib.sha224(str(data)).hexdigest()])
 
     def triples(self, query=False, check_saved=False):
         """ Should be overridden by derived classes to return appropriate triples

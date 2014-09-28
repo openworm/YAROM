@@ -106,6 +106,8 @@ class Data(Configure, Configureable):
                     for x in closureDeltaGraph:
                         graph.add(x)
             self['fuxi.network'] = network
+            self['fuxi.rule_graph'] = rule_graph
+            self['fuxi.rule_store'] = rule_store
             self['fuxi.infer_func'] = infer
 
             # XXX: Not sure if this is the most appropriate way to set

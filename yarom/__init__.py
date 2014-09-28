@@ -126,7 +126,7 @@ def connect(configFile=False,
     else:
         try:
             from pkg_resources import Requirement, resource_filename
-            filename = resource_filename(Requirement.parse("yarom"),"default.conf")
+            filename = resource_filename(Requirement.parse("yarom"),"yarom/default.conf")
             Configureable.conf = Data.open(filename)
         except:
             logging.info("Couldn't load default configuration")

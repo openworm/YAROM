@@ -1,4 +1,6 @@
-[![Build Status](https://travis-ci.org/mwatts15/YAROM.png?branch=master)](https://travis-ci.org/mwatts15/YAROM)
+.. image :: https://travis-ci.org/mwatts15/YAROM.png?branch=master
+   :alt: Build Status
+   :target: https://travis-ci.org/mwatts15/YAROM
 
 YAROM
 =====
@@ -14,12 +16,9 @@ If you got this library from GitHub or as a source archive, then install yarom:
 
 The configuration establishes which source of RDF data you're reading from. Connect opens necessary resources and must be called before using anything that has to do with the RDF graph.
 
-```python
   >>> import yarom as P
   >>> P.connect('yarom/default.conf')
 
   # Do something...
 
   >>> P.disconnect()
-
-```
