@@ -410,15 +410,7 @@ class SimpleProperty(Property):
                             yield t
                 except Exception:
                     traceback.print_exc()
-        else:
-            # XXX : Note: we insert 'variables' into the graph so that we don't
-            # have to do OPTIONAL patterns in load.
-            # We could instead use Triple objects to which we attach 'optional' tags
-            # to indicate that the triple should be in an optional pattern when
-            # queried.
-            gv = self._graph_variable(self.linkName)
-            yield (owner_id, self.link, ident)
-            yield (ident, self.value_property, gv)
+
     def load(self):
         """ Load in data from the database. Derived classes should override this for their own data structures.
 
