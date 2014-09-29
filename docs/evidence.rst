@@ -1,7 +1,7 @@
 .. _evidence:
 
-Metadata in PyOpenWorm
-======================
+Metadata in YAROM
+=================
 
 Attaching evidence
 -------------------

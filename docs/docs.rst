@@ -4,7 +4,7 @@ Adding documentation
 =====================
 Documentation for |pow| is housed in two locations: 
 
-    #. In the top-level project directory as :file:`INSTALL.md` and :file:`README.md`. 
+    #. In the top-level project directory as :file:`README.rst`. 
     #. As a `Sphinx <http://sphinx-doc.org/>`_ project under the ``docs`` directory 
 
 To add a page about useful facts concerning C. elegans to the documentation, include an entry in the list under ``toctree`` in :file:`docs/index.rst` like::

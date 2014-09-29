@@ -43,8 +43,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'PyOpenWorm'
-copyright = u'2013, OpenWorm'
+project = u'yarom'
+copyright = u'2014, Mark Watts'
 
 # For substitutions in docs
 rst_epilog = """
@@ -190,7 +190,7 @@ else:
 #html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'PyOpenWormdoc'
+htmlhelp_basename = 'yaromdoc'
 
 
 # -- Options for LaTeX output --------------------------------------------------
@@ -209,8 +209,8 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'PyOpenWorm.tex', u'PyOpenWorm Documentation',
-   u'PyOpenWorm', 'manual'),
+  ('index', 'yarom.tex', u'yarom Documentation',
+   u'yarom', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -239,8 +239,8 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'pyopenworm', u'PyOpenWorm Documentation',
-     [u'PyOpenWorm'], 1)
+    ('index', 'yarom', u'yarom Documentation',
+     [u'yarom'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -253,9 +253,9 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'PyOpenWorm', u'PyOpenWorm Documentation',
-   u'PyOpenWorm', 'PyOpenWorm', 'Unified data abstraction layer for OpenWorm',
-   'PyOpenWorm'),
+  ('index', 'yarom', u'yarom Documentation',
+   u'yarom', 'yarom', 'Unified data abstraction layer for OpenWorm',
+   'yarom'),
 ]
 
 # Documents to append as an appendix to all manuals.

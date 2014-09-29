@@ -6,7 +6,7 @@ To make new objects like ``Neuron`` or ``Worm``, for the most part, you just nee
 Say, for example, that I want to record some information about drug reactions in C. elegans. I make
 ``Drug`` and ``Experiment`` classes to describe C. elegans reactions::
 
-    from PyOpenWorm import (DataObject,
+    from yarom import (DataObject,
                             DatatypeProperty,
                             ObjectProperty,
                             Worm,

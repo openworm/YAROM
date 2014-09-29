@@ -25,13 +25,13 @@ Contents:
 Modules
 -------
 
-.. automodule:: PyOpenWorm
+.. automodule:: yarom
    :members:
 
 Issues
 ------
 
-.. _github issue: https://github.com/openworm/PyOpenWorm/issues
+.. _github issue: https://github.com/mwatts15/YAROM/issues
 
 Indices and tables
 ==================
