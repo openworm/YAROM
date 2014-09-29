@@ -1,6 +1,6 @@
 .. _evidence:
 
-Metadata in YAROM
+Metadata in |pow|
 =================
 
 Attaching evidence
