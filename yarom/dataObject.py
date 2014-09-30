@@ -47,7 +47,7 @@ class DataObject(DataUser):
     def openSet(self):
         return self._openSet
 
-    __metaclass__ = DataObjectMapper
+    __metaclass__ = MappedClass
     # Must resolve, somehow, to a set of triples that we can manipulate
     # For instance, one or more construct query could represent the object or
     # the triples might be stored in memory.

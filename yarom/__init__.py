@@ -49,10 +49,10 @@ __version__ = '0.5.0-alhpa'
 __author__ = 'Mark Watts'
 
 import traceback
-from .configure import Configure,Configureable,ConfigValue,BadConf
+from .configure import Configuration,Configureable,ConfigValue,BadConf
 from .data import Data
 from .dataUser import DataUser
-from .mapper import DataObjectMapper, oid
+from .mapper import MappedClass, oid
 from .quantity import Quantity
 
 __import__('__main__').connected = False
@@ -126,7 +126,7 @@ def connect(configFile=False,
     atexit.register(disconnect)
     from .dataObject import DataObject, Property, SimpleProperty
 
-    DataObjectMapper.setUpDB()
+    MappedClass.setUpDB()
     m.connected = True
     if data:
         loadData(data, dataFormat)

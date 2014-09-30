@@ -3,7 +3,7 @@ from yarom import DataUser
 import yarom as P
 import traceback
 
-__all__ = [ "DataObjectMapper", "oid", "extract_class_name"]
+__all__ = [ "MappedClass", "oid", "extract_class_name"]
 
 _DataObjects = dict()
 _DataObjectsParents = dict()
@@ -79,7 +79,7 @@ def extract_class_name(uri):
     if len(x) >= 3 and x[1] == 'entities':
         return x[2]
 
-class DataObjectMapper(type):
+class MappedClass(type):
     """A type for DataObjects
 
     Sets up the graph with things needed for DataObjects
@@ -109,11 +109,11 @@ class DataObjectMapper(type):
             datatypeProperties = []
         if not objectProperties:
             objectProperties = []
-        DataObjectMapper(name, bases, dict(objectProperties=objectProperties, datatypeProperties=datatypeProperties))
+        MappedClass(name, bases, dict(objectProperties=objectProperties, datatypeProperties=datatypeProperties))
 
     def register(cls):
         _DataObjects[cls.__name__] = cls
-        _DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, DataObjectMapper)]
+        _DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, MappedClass)]
 
         cls.parents = _DataObjectsParents[cls.__name__]
         cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
@@ -166,7 +166,7 @@ class DataObjectMapper(type):
         except:
             traceback.print_exc()
 
-    def cleanupGraph(cls):
+    def _cleanupGraph(cls):
         """ Cleans up the graph by removing statements that can't be connected to typed statement. """
         q = """
         DELETE { ?b ?x ?y }

@@ -38,9 +38,9 @@ def make_graph(size=100):
         g.add((s,p,o))
     return g
 try:
-    TEST_CONFIG = Configure.open("tests/_test.conf")
+    TEST_CONFIG = Configuration.open("tests/_test.conf")
 except:
-    TEST_CONFIG = Configure.open("tests/test_default.conf")
+    TEST_CONFIG = Configuration.open("tests/test_default.conf")
 
 @unittest.skipIf((TEST_CONFIG['rdf.source'] == 'Sleepycat') and (has_bsddb==False), "Sleepycat store will not work without bsddb")
 class _DataTestB(unittest.TestCase):
@@ -86,18 +86,18 @@ class ConfigureTest(unittest.TestCase):
     def test_fake_config(self):
         """ Try to retrieve a config value that hasn't been set """
         with self.assertRaises(KeyError):
-            c = Configure()
+            c = Configuration()
             c['not_a_valid_config']
 
     def test_literal(self):
         """ Assign a literal rather than a ConfigValue"""
-        c = Configure()
+        c = Configuration()
         c['seven'] = "coke"
         self.assertEqual(c['seven'], "coke")
 
     def test_ConfigValue(self):
         """ Assign a ConfigValue"""
-        c = Configure()
+        c = Configuration()
         class pipe(ConfigValue):
             def get(self):
                 return "sign"
@@ -106,7 +106,7 @@ class ConfigureTest(unittest.TestCase):
 
     def test_getter_no_ConfigValue(self):
         """ Assign a method with a "get". Should return a the object rather than calling its get method """
-        c = Configure()
+        c = Configuration()
         class pipe:
             def get(self):
                 return "sign"
@@ -115,7 +115,7 @@ class ConfigureTest(unittest.TestCase):
 
     def test_late_get(self):
         """ "get" shouldn't be called until the value is *dereferenced* """
-        c = Configure()
+        c = Configuration()
         a = {'t' : False}
         class pipe(ConfigValue):
             def get(self):
@@ -190,7 +190,7 @@ class DataObjectTest(_DataTest):
     def test_object_from_id(self):
         """ Test the wrapper for oid """
         do = P.DataObject(ident="http://example.org")
-        dc = DataObjectMapper("TestDOM", (P.DataObject,), dict())
+        dc = MappedClass("TestDOM", (P.DataObject,), dict())
         g = do.object_from_id(self.config['rdf.namespace']['TestDOM'])
         self.assertIsInstance(g,P.TestDOM)
 
@@ -288,7 +288,7 @@ class DataUserTestToo(unittest.TestCase):
         # XXX: This test touches some machinery in
         # yarom/__init__.py. Feel like it's a bad test
         tmp = Configureable.conf
-        Configureable.conf = Configure()
+        Configureable.conf = Configuration()
         with self.assertRaises(BadConf):
             DataUser()
         Configureable.conf = tmp
@@ -298,7 +298,7 @@ class DataUserTestToo(unittest.TestCase):
         ex = R.Namespace("http://example.org/")
         pred = ex['sameAs']
         with sameAsRules(ex,pred) as rules_file:
-            c = Configure()
+            c = Configuration()
             c.copy(TEST_CONFIG)
             c['rdf.source'] = 'zodb'
             c['rdf.store_conf'] = 'zodb'
@@ -460,7 +460,7 @@ class QuantityTest(unittest.TestCase):
 
 class DataTest(unittest.TestCase):
     def test_namespace_manager(self):
-        c = Configure()
+        c = Configuration()
         c['rdf.source'] = 'default'
         c['rdf.store'] = 'default'
         Configureable.conf = c
@@ -473,7 +473,7 @@ class DataTest(unittest.TestCase):
         """ Should be able to init without these values """
         # XXX: If I don't provide some random config value here, this test doesn't work
         #      I have no idea why.
-        c = Configure(nothing='something')
+        c = Configuration(nothing='something')
         Configureable.conf = c
         d = Data()
         try:
@@ -484,7 +484,7 @@ class DataTest(unittest.TestCase):
 
     def test_ZODB_persistence(self):
         """ Should be able to init without these values """
-        c = Configure()
+        c = Configuration()
         fname ='ZODB.fs'
         c['rdf.source'] = 'ZODB'
         c['rdf.store_conf'] = fname
@@ -511,7 +511,7 @@ class DataTest(unittest.TestCase):
     @unittest.skipIf((has_bsddb==False), "Sleepycat requires working bsddb")
     def test_Sleepycat_persistence(self):
         """ Should be able to init without these values """
-        c = Configure()
+        c = Configuration()
         fname='Sleepycat_store'
         c['rdf.source'] = 'Sleepycat'
         c['rdf.store_conf'] = fname
@@ -539,7 +539,7 @@ class DataTest(unittest.TestCase):
         t = tempfile.mkdtemp()
         f = tempfile.mkstemp()
 
-        c = Configure()
+        c = Configuration()
         c['rdf.source'] = 'trix'
         c['rdf.store'] = 'default'
         c['trix_location'] = f[1]
@@ -567,7 +567,7 @@ class DataTest(unittest.TestCase):
         t = tempfile.mkdtemp()
         f = tempfile.mkstemp()
 
-        c = Configure()
+        c = Configuration()
         c['rdf.source'] = 'serialization'
         c['rdf.serialization'] = f[1]
         c['rdf.serialization_format'] = 'trig'
@@ -618,17 +618,17 @@ class MapperTest(_DataTestB):
 
     def test_addToGraph(self):
         """Test that we can load a descendant of DataObject as a class"""
-        dc = DataObjectMapper("TestDOM", (P.DataObject,), dict())
+        dc = MappedClass("TestDOM", (P.DataObject,), dict())
         self.assertIn((dc.rdf_type, R.RDFS['subClassOf'], P.DataObject.rdf_type), dc.du.rdf)
 
     def test_access_created_from_module(self):
         """Test that we can add an object and then access it from the yarom module"""
-        dc = DataObjectMapper("TestDOM", (P.DataObject,), dict())
+        dc = MappedClass("TestDOM", (P.DataObject,), dict())
         self.assertTrue(hasattr(P,"TestDOM"))
 
     def test_oid_class_exists(self):
         """Test that we can add an object and then access it from the yarom module"""
-        dc = DataObjectMapper("TestDOM", (P.DataObject,), dict())
+        dc = MappedClass("TestDOM", (P.DataObject,), dict())
         p = dc()
         q = oid(p.identifier())
         self.assertEqual(p,q)

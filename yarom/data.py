@@ -4,7 +4,7 @@
 # RDFlib!
 # Other things!
 #
-# Works like Configure:
+# Works like Configuration:
 # Inherit from the DataUser class to access data of all kinds (listed above)
 
 
@@ -17,18 +17,18 @@ import transaction
 import os
 import traceback
 import logging as L
-from .configure import Configureable, Configure, ConfigValue, BadConf
+from .configure import Configureable, Configuration, ConfigValue, BadConf
 
 __all__ = ["Data", "RDFSource", "SerializationSource", "TrixSource", "SPARQLSource", "SleepyCatSource", "DefaultSource", "ZODBSource"]
 
-class Data(Configure, Configureable):
+class Data(Configuration, Configureable):
     """
     Provides configuration for access to the database.
 
     Usally doesn't need to be accessed directly
     """
     def __init__(self, conf=False):
-        Configure.__init__(self)
+        Configuration.__init__(self)
         Configureable.__init__(self,conf)
         # We copy over all of the configuration that we were given
         self.copy(self.conf)
@@ -42,7 +42,7 @@ class Data(Configure, Configureable):
     @classmethod
     def open(cls,file_name):
         """ Open a file storing configuration in a JSON format """
-        Configureable.conf = Configure.open(file_name)
+        Configureable.conf = Configuration.open(file_name)
         return cls()
 
     def openDatabase(self):
@@ -67,7 +67,6 @@ class Data(Configure, Configureable):
         self['rdf.store'] = c['rdf.store'] = c.get('rdf.store', 'default')
         self['rdf.store_conf'] = c['rdf.store_conf'] = c.get('rdf.store_conf', 'default')
 
-        # XXX:The conf=self can probably be removed
         self.sources = {'sqlite' : SQLiteSource,
                 'sparql_endpoint' : SPARQLSource,
                 'sleepycat' : SleepyCatSource,

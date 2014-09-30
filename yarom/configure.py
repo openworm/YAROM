@@ -26,7 +26,7 @@ class _link(ConfigValue):
     def get(self):
         return self.conf[self.members[0]]
 
-class Configure(object):
+class Configuration(object):
     """ Configuration """
     # conf: is a configure instance to base this one on
     # dependencies are required for this class to be initialized (TODO)
@@ -73,7 +73,7 @@ class Configure(object):
     def open(cls,file_name):
         import json
         f = open(file_name)
-        c = Configure()
+        c = Configuration()
         d = json.load(f)
         for k in d:
             value = d[k]
@@ -89,7 +89,7 @@ class Configure(object):
         return c
 
     def copy(self,other):
-        if isinstance(other,Configure):
+        if isinstance(other,Configuration):
             self._properties = dict(other._properties)
         elif isinstance(other,dict):
             for x in other:
@@ -114,7 +114,7 @@ class Configureable(object):
         elif Configureable.conf:
             self.conf = Configureable.conf
         else:
-            self.conf = Configure()
+            self.conf = Configuration()
 
     def __getitem__(self,k):
         return self.conf.get(k)
