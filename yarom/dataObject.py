@@ -212,6 +212,7 @@ class DataObject(DataUser):
         """ Load in data from the database. Derived classes should override this for their own data structures.
 
         ``load()`` returns an iterable object which yields DataObjects which have the same class as the object and have, for the Properties set, the same values
+
         :param self: An object which limits the set of objects which can be returned. Should have the configuration necessary to do the query
         """
         # 'loading' an object _always_ means doing a query. When we do the query, we identify all of the result sets that can make objects in the current
@@ -270,6 +271,12 @@ class DataObject(DataUser):
         """ Remove this object from the data store. """
         self.retract_statements(self.graph_pattern(query=True))
 
+    def __getitem__(self, x):
+        try:
+            return DataUser.__getitem__(self, x)
+        except KeyError:
+            raise Exception("You attempted to get the value `%s' from `%s'. It isn't here. Perhaps you misspelled the name of a Property?" % (x, self))
+
 # Define a property by writing the get
 class Property(DataObject):
     """ Store a value associated with a DataObject
@@ -291,6 +298,10 @@ class Property(DataObject):
             owner.name
 
     """
+
+    # Indicates whether the Property is multivalued
+    multiple = False
+
     def __init__(self, name=False, owner=False, **kwargs):
         DataObject.__init__(self, **kwargs)
         self.owner = owner
@@ -305,6 +316,10 @@ class Property(DataObject):
     def get(self,*args):
         """ Get the things which are on the other side of this property
 
+        The return value must be iterable. For a ``get`` that just returns
+        a single value, an easy way to make an iterable is to wrap the
+        value in a tuple like ``(value,)``.
+
         Derived classes must override.
         """
         # This should run a query or return a cached value
@@ -316,25 +331,48 @@ class Property(DataObject):
         """
         # This should set some values and call DataObject.save()
         raise NotImplementedError()
+
     def one(self):
+        """ Returns a single value for the ``Property`` whether or not it is multivalued.
+        """
+
         try:
-            return next(self.get())
+            r = self.get()
+            return next(iter(r))
         except StopIteration:
             return None
 
     def hasValue(self):
+        """ Returns true if the Property has any values set on it.
+
+        This may be defined differently for each property
+        """
         return True
 
     def __call__(self,*args,**kwargs):
+        """ If arguments are passed to the ``Property``, its ``set`` method
+        is called. Otherwise, the ``get`` method is called. If the ``multiple``
+        member for the ``Property`` is set to ``True``, then a Python set containing
+        the associated values is returned. Otherwise, a single bare value is returned.
+        """
+
         if len(args) > 0 or len(kwargs) > 0:
             self.set(*args,**kwargs)
             return self
         else:
-            return self.get(*args,**kwargs)
+            r = self.get(*args,**kwargs)
+            if self.multiple:
+                return set(r)
+            else:
+                try:
+                    return next(iter(r))
+                except StopIteration:
+                    return None
+
     # Get the property (a relationship) itself
 
 class SimpleProperty(Property):
-    """ A property that has just one link to a literal or DataObject """
+    """ A property that has one or more links to a literals or DataObjects """
 
     def __init__(self,**kwargs):
         if not hasattr(self,'linkName'):
@@ -350,9 +388,14 @@ class SimpleProperty(Property):
             self.link = self.owner_type.rdf_namespace[self.linkName]
 
     def hasValue(self):
+        """ Returns true if the ``Property`` has had ``load`` called previously and some value was available or if ``set`` has been called previously """
         return len(self.v) > 0
 
     def get(self):
+        """ If the ``Property`` has had ``load`` or ``set`` called previously, returns
+        the resulting values. Otherwise, queries the configured rdf graph for values
+        which are set for the ``Property``'s owner.
+        """
         if len(self.v) > 0:
             for x in self.v:
                 if isinstance(x, R.Literal):
