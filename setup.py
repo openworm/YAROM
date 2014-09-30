@@ -27,7 +27,7 @@ setup(
     description = "Yet Another RDF-Object Mapper",
     long_description = long_description,
     license = "BSD",
-    url="http://PyOpenWorm.readthedocs.org/en/latest/",
+    url="http://yarom.readthedocs.org/en/latest/",
     download_url = 'https://github.com/mwatts15/YAROM/archive/master.zip',
     classifiers = [
         'Intended Audience :: Science/Research',

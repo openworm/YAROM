@@ -24,3 +24,7 @@ The configuration establishes which source of RDF data you're reading from. Conn
     # Do something...
       
     >>> P.disconnect()
+
+Documentation
+-------------
+Documentation can be found at http://yarom.readthedocs.org/en/latest/
