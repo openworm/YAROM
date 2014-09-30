@@ -52,7 +52,7 @@ import traceback
 from .configure import Configure,Configureable,ConfigValue,BadConf
 from .data import Data
 from .dataUser import DataUser
-from .mapper import DataObjectMapper, oid
+from .mapper import *
 from .quantity import Quantity
 
 __import__('__main__').connected = False
@@ -124,9 +124,10 @@ def connect(configFile=False,
 
     # have to register the right one to disconnect...
     atexit.register(disconnect)
+    mapper = GetMapper()
     from .dataObject import DataObject, Property, SimpleProperty
+    mapper.remap()
 
-    DataObjectMapper.setUpDB()
     m.connected = True
     if data:
         loadData(data, dataFormat)
