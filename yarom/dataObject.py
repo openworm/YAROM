@@ -1,7 +1,7 @@
 import rdflib as R
 import traceback
 import logging as L
-from .mapper import Mapper
+from .mapper import *
 from .dataUser import DataUser
 
 # in general it should be possible to recover the entire object from its identifier: the object should be representable as a connected graph.
@@ -26,8 +26,6 @@ def _triples_to_bgp(trips):
 
 # We keep a little tree of properties in here
 
-@Mapper.TheMapper.register
-@Mapper.Top
 class DataObject(DataUser):
     """ An object backed by the database
 
@@ -44,10 +42,12 @@ class DataObject(DataUser):
     _openSet = set()
     _closedSet = set()
     i = 0
+
     @classmethod
     def openSet(self):
         return self._openSet
 
+    __metaclass__ = DataObjectMapper
     # Must resolve, somehow, to a set of triples that we can manipulate
     # For instance, one or more construct query could represent the object or
     # the triples might be stored in memory.
@@ -96,7 +96,7 @@ class DataObject(DataUser):
         return self.conf['rdf.namespace']["variable#"+var_name]
 
     def object_from_id(self,*args,**kwargs):
-        return Mapper.TheMapper.oid(*args,**kwargs)
+        return oid(*args,**kwargs)
 
     @classmethod
     def addToOpenSet(cls,o):
@@ -271,7 +271,6 @@ class DataObject(DataUser):
         self.retract_statements(self.graph_pattern(query=True))
 
 # Define a property by writing the get
-@Mapper.TheMapper.register
 class Property(DataObject):
     """ Store a value associated with a DataObject
 
@@ -334,7 +333,6 @@ class Property(DataObject):
             return self.get(*args,**kwargs)
     # Get the property (a relationship) itself
 
-@Mapper.TheMapper.register
 class SimpleProperty(Property):
     """ A property that has just one link to a literal or DataObject """
 
@@ -470,16 +468,13 @@ class SimpleProperty(Property):
     def __str__(self):
         return unicode(self.linkName + "=" + unicode(";".join(unicode(x) for x in self.v)))
 
-@Mapper.TheMapper.register
 class DatatypeProperty(SimpleProperty):
     pass
 
-@Mapper.TheMapper.register
 class ObjectProperty(SimpleProperty):
     pass
 
 
-@Mapper.TheMapper.register
 class values(DataObject):
     """
     A convenience class for working with a collection of objects

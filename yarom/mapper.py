@@ -3,7 +3,10 @@ from yarom import DataUser
 import yarom as P
 import traceback
 
-__all__ = [ "GetMapper", "extract_class_name"]
+__all__ = [ "DataObjectMapper", "oid", "extract_class_name"]
+
+_DataObjects = dict()
+_DataObjectsParents = dict()
 
 def makeDatatypeProperty(*args,**kwargs):
     """ Create a SimpleProperty that has a simple type (string,number,etc) as its value
@@ -37,8 +40,8 @@ def _create_property(owner_class, linkName, property_type, value_type=False):
         value_type = P.DataObject
 
     c = None
-    if property_class_name in self.dataObjects:
-        c = self.dataObjects[property_class_name]
+    if property_class_name in _DataObjects:
+        c = _DataObjects[property_class_name]
     else:
         x = None
         if property_type == 'ObjectProperty':
@@ -54,6 +57,21 @@ def _create_property(owner_class, linkName, property_type, value_type=False):
 
     return c
 
+def oid(identifier,rdf_type=False):
+    """ Load an object from the database using its type tag """
+    # XXX: This is a class method because we need to get the conf
+    # We should be able to extract the type from the identifier
+    if rdf_type:
+        uri = rdf_type
+    else:
+        uri = identifier
+
+    cn = extract_class_name(uri)
+    # if its our class name, then make our own object
+    # if there's a part after that, that's the property name
+    o = _DataObjects[cn](ident=identifier)
+    return o
+
 def extract_class_name(uri):
     from urlparse import urlparse
     u = urlparse(uri)
@@ -61,114 +79,72 @@ def extract_class_name(uri):
     if len(x) >= 3 and x[1] == 'entities':
         return x[2]
 
-class _B(object):
-    def __getattr__(self,*args,**kwargs):
-        raise Exception("You must create a mapper by calling GetMapper before mapping any classes.")
-
-def GetMapper(*args,**kwargs):
-    if isinstance(Mapper.TheMapper, _B):
-        Mapper.TheMapper = Mapper(*args,**kwargs)
-    return Mapper.TheMapper
-
-class Mapper(DataUser):
+class DataObjectMapper(type):
     """A type for DataObjects
 
     Sets up the graph with things needed for DataObjects
     """
+    def __init__(cls, name, bases, dct, conf=False):
+        type.__init__(cls,name,bases,dct)
 
-    TheMapper = _B()
-
-    def __init__(self, *args, **kwargs):
-        DataUser.__init__(self, **kwargs)
-        self.dataObjects = dict()
-        self.dataObjectsParents = dict()
-
-
-    def map(self, cls):
+        cls.du = DataUser()
         cls.dataObjectProperties = []
-
-        for x in cls.__bases__:
+        #print 'doing init for', cls
+        for x in bases:
             try:
                 cls.dataObjectProperties += x.dataObjectProperties
             except AttributeError:
                 pass
+        cls.register()
 
-        cls.parents = self.dataObjectsParents[cls.__name__]
-        cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
-        cls.rdf_namespace = R.Namespace(cls.rdf_type + "/")
-
-        self.addParentsToGraph(cls)
-
-        self.addObjectProperties(cls)
-        self.addDatatypeProperties(cls)
-
-        self.addPropertiesToGraph(cls)
-        self.addNamespaceToManager(cls)
-        return cls
-
-    def oid(identifier,rdf_type=False):
-        """ Load an object from the database using its type tag """
-        # XXX: This is a class method because we need to get the conf
-        # We should be able to extract the type from the identifier
-        if rdf_type:
-            uri = rdf_type
-        else:
-            uri = identifier
-
-        cn = extract_class_name(uri)
-        # if its our class name, then make our own object
-        # if there's a part after that, that's the property name
-        o = self.dataObjects[cn](ident=identifier)
-        return o
-
+    @classmethod
     def setUpDB(self):
         pass
 
-    def remap(self):
-        """ Calls `Mapper.map` on all of the registered classes """
-        for x in self.dataObjects:
-            self.map(self.dataObjects[x])
-
-    def makeClass(self, name, bases, objectProperties=False, datatypeProperties=False):
+    @classmethod
+    def makeClass(cls, name, bases, objectProperties=False, datatypeProperties=False):
         """ Intended to be used for setting up a class from the RDF graph, for instance. """
         # Need to distinguish datatype and object properties...
         if not datatypeProperties:
             datatypeProperties = []
         if not objectProperties:
             objectProperties = []
-        t = type(name, bases, dict(objectProperties=objectProperties, datatypeProperties=datatypeProperties, _generated=True))
-        self.register(t)
+        DataObjectMapper(name, bases, dict(objectProperties=objectProperties, datatypeProperties=datatypeProperties))
 
-    @classmethod
-    def Top(cls, theclass):
-        theclass.MapperTop = True
-        return theclass
+    def register(cls):
+        _DataObjects[cls.__name__] = cls
+        _DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, DataObjectMapper)]
 
-    def register(self, cls):
-        self.dataObjects[cls.__name__] = cls
-        if not hasattr(cls,'MapperTop'):
-            self.dataObjectsParents[cls.__name__] = [x for x in cls.__bases__]
-        else:
-            self.dataObjectsParents[cls.__name__] = []
-        self.map(cls)
-        return cls
+        cls.parents = _DataObjectsParents[cls.__name__]
+        cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
+        cls.rdf_namespace = R.Namespace(cls.rdf_type + "/")
 
-    def addNamespaceToManager(self, cls):
+        cls.addParentsToGraph()
+
+        cls.addObjectProperties()
+        cls.addDatatypeProperties()
+
+        cls.addPropertiesToGraph()
+        cls.addNamespaceToManager()
+
+        setattr(P, cls.__name__, cls)
+
+    def addNamespaceToManager(cls):
         cls.conf['rdf.namespace_manager'].bind(cls.__name__, cls.rdf_namespace)
 
-    def addPropertiesToGraph(self, cls):
+    def addPropertiesToGraph(cls):
         deets = []
         for x in cls.dataObjectProperties:
             deets.append((x.rdf_type, cls.conf['rdf.namespace']['domain'], cls.rdf_type))
-        self.add_statements(deets)
+        cls.du.add_statements(deets)
 
-    def addParentsToGraph(self, cls):
+    def addParentsToGraph(cls):
         deets = []
         for y in cls.parents:
             deets.append((cls.rdf_type, R.RDFS['subClassOf'], y.rdf_type))
-        self.add_statements(deets)
+        cls.du.add_statements(deets)
 
-    def addObjectProperties(self, cls):
+    def addObjectProperties(cls):
         try:
             for x in cls.objectProperties:
                 if isinstance(x,tuple):
@@ -180,7 +156,7 @@ class Mapper(DataUser):
         except:
             traceback.print_exc()
 
-    def addDatatypeProperties(self, cls):
+    def addDatatypeProperties(cls):
         # Also get all of the properites
         try:
             for x in cls.datatypeProperties:
@@ -190,7 +166,7 @@ class Mapper(DataUser):
         except:
             traceback.print_exc()
 
-    def _cleanupGraph(cls):
+    def cleanupGraph(cls):
         """ Cleans up the graph by removing statements that can't be connected to typed statement. """
         q = """
         DELETE { ?b ?x ?y }
@@ -200,5 +176,5 @@ class Mapper(DataUser):
             FILTER (NOT EXISTS { ?b rdf:type ?c } ) .
         }
           """
-        cls.rdf.update(q)
+        cls.du.rdf.update(q)
 
