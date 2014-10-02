@@ -358,14 +358,14 @@ class RDFLibTest(unittest.TestCase):
         #XXX: capture the logged warning
         import cStringIO
         import logging
-
         out = cStringIO.StringIO()
-        logger = logging.getLogger()
+        logger = logging.getLogger('rdflib.term')
         stream_handler = logging.StreamHandler(out)
         logger.addHandler(stream_handler)
         try:
             rdflib.URIRef("some random string")
         finally:
+            out.flush()
             logger.removeHandler(stream_handler)
         v = out.getvalue()
         out.close()
