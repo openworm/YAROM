@@ -1,6 +1,5 @@
 # A consolidation of the data sources for the project
 # includes:
-# NetworkX!
 # RDFlib!
 # Other things!
 #
@@ -32,12 +31,7 @@ class Data(Configuration, Configureable):
         Configureable.__init__(self,conf)
         # We copy over all of the configuration that we were given
         self.copy(self.conf)
-        self.namespace = Namespace("http://openworm.org/entities/")
-        self.molecule_namespace = Namespace("http://openworm.org/entities/molecules/")
-        self['nx'] = _B(self._init_networkX)
-        self['rdf.namespace'] = self.namespace
-        self.link('molecule_name', 'new_graph_uri')
-        self['molecule_name'] = self._molecule_hash
+        self.namespace = self['rdf.namespace']
 
     @classmethod
     def open(cls,file_name):
@@ -67,8 +61,7 @@ class Data(Configuration, Configureable):
         self['rdf.store'] = c['rdf.store'] = c.get('rdf.store', 'default')
         self['rdf.store_conf'] = c['rdf.store_conf'] = c.get('rdf.store_conf', 'default')
 
-        self.sources = {'sqlite' : SQLiteSource,
-                'sparql_endpoint' : SPARQLSource,
+        self.sources = {'sparql_endpoint' : SPARQLSource,
                 'sleepycat' : SleepyCatSource,
                 'default' : DefaultSource,
                 'trix' : TrixSource,
@@ -126,44 +119,6 @@ class Data(Configuration, Configureable):
         self.link('semantic_net_new', 'semantic_net', 'rdf.graph')
         self['rdf.graph'] = i
         return i
-
-    def _molecule_hash(self, data):
-        return URIRef(self.molecule_namespace[hashlib.sha224(str(data)).hexdigest()])
-
-    def _init_networkX(self):
-        import networkx as nx
-        import csv
-        import urllib2
-        g = nx.DiGraph()
-
-        # Neuron table
-        csvfile = urllib2.urlopen(self.conf['neuronscsv'])
-
-        reader = csv.reader(csvfile, delimiter=';', quotechar='|')
-        for row in reader:
-            neurontype = ""
-            # Detects neuron function
-            if "sensory" in row[1].lower():
-                neurontype += "sensory"
-            if "motor" in row[1].lower():
-                neurontype += "motor"
-            if "interneuron" in row[1].lower():
-                neurontype += "interneuron"
-            if len(neurontype) == 0:
-                neurontype = "unknown"
-
-            if len(row[0]) > 0: # Only saves valid neuron names
-                g.add_node(row[0], ntype = neurontype)
-
-        # Connectome table
-        csvfile = urllib2.urlopen(self.conf['connectomecsv'])
-
-        reader = csv.reader(csvfile, delimiter=';', quotechar='|')
-        for row in reader:
-            g.add_edge(row[0], row[1], weight = row[3])
-            g[row[0]][row[1]]['synapse'] = row[2]
-            g[row[0]][row[1]]['neurotransmitter'] = row[4]
-        return g
 
 def modification_date(filename):
     t = os.path.getmtime(filename)
@@ -312,6 +267,7 @@ class SQLiteSource(RDFSource):
     Leaving ``rdf.store`` unconfigured simply gives an in-memory data store.
     """
     def open(self):
+        raise Exception("Please don't use SQLiteSource. It's hanging around until I decide what to do with it")
         import sqlite3
         conn = sqlite3.connect(self.conf['sqldb'])
         cur = conn.cursor()
