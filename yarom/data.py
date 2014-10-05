@@ -31,6 +31,7 @@ class Data(Configuration, Configureable):
         Configureable.__init__(self,conf)
         # We copy over all of the configuration that we were given
         self.copy(self.conf)
+        self['rdf.namespace'] = Namespace(self.get('rdf.namespace', 'http://example.org/TestNamespace/entities'))
         self.namespace = self['rdf.namespace']
 
     @classmethod

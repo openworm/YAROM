@@ -52,10 +52,11 @@ import traceback
 from .configure import Configuration,Configureable,ConfigValue,BadConf
 from .data import Data
 from .dataUser import DataUser
-from .mapper import MappedClass, oid
+from .mapper import MappedClass
 from .quantity import Quantity
 
-__import__('__main__').connected = False
+this_module = __import__('yarom')
+this_module.connected = False
 
 def config():
     return Configureable.conf
@@ -67,7 +68,7 @@ def loadConfig(f):
 
 def disconnect(c=False):
     """ Close the database """
-    m = __import__('__main__')
+    m = this_module
     if not m.connected:
         return
 
@@ -93,7 +94,7 @@ def connect(configFile=False,
     import atexit
     import sys
     import importlib
-    m = __import__('__main__')
+    m = this_module
     if m.connected == True:
         print "yarom already connected"
         return
@@ -125,7 +126,7 @@ def connect(configFile=False,
     # have to register the right one to disconnect...
     atexit.register(disconnect)
     from .dataObject import DataObject, Property, SimpleProperty
-
+    MappedClass.remap()
     MappedClass.setUpDB()
     m.connected = True
     if data:

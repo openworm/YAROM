@@ -3,10 +3,10 @@ from yarom import DataUser
 import yarom as P
 import traceback
 
-__all__ = [ "MappedClass", "oid", "extract_class_name"]
+__all__ = [ "MappedClass", "DataObjects", "DataObjectsParents" ]
 
-_DataObjects = dict()
-_DataObjectsParents = dict()
+DataObjects = dict()
+DataObjectsParents = dict()
 
 def makeDatatypeProperty(*args,**kwargs):
     """ Create a SimpleProperty that has a simple type (string,number,etc) as its value
@@ -30,7 +30,7 @@ def makeObjectProperty(*args,**kwargs):
     """
     return _create_property(*args,property_type='ObjectProperty',**kwargs)
 
-def _create_property(owner_class, linkName, property_type, value_type=False):
+def _create_property(owner_class, linkName, property_type, value_type=False, multiple=False):
     #XXX This should actually get called for all of the properties when their owner
     #    classes are defined.
     #    The initialization, however, must happen with the owner object's creation
@@ -40,8 +40,8 @@ def _create_property(owner_class, linkName, property_type, value_type=False):
         value_type = P.DataObject
 
     c = None
-    if property_class_name in _DataObjects:
-        c = _DataObjects[property_class_name]
+    if property_class_name in DataObjects:
+        c = DataObjects[property_class_name]
     else:
         x = None
         if property_type == 'ObjectProperty':
@@ -51,43 +51,20 @@ def _create_property(owner_class, linkName, property_type, value_type=False):
             value_rdf_type = False
             x = P.DatatypeProperty
 
-        c = type(property_class_name,(x,),dict(linkName=linkName, property_type=property_type, value_rdf_type=value_rdf_type, owner_type=owner_class))
+        c = type(property_class_name,(x,),dict(linkName=linkName, property_type=property_type, value_rdf_type=value_rdf_type, owner_type=owner_class, multiple=multiple))
 
     owner_class.dataObjectProperties.append(c)
 
     return c
-
-def oid(identifier,rdf_type=False):
-    """ Load an object from the database using its type tag """
-    # XXX: This is a class method because we need to get the conf
-    # We should be able to extract the type from the identifier
-    if rdf_type:
-        uri = rdf_type
-    else:
-        uri = identifier
-
-    cn = extract_class_name(uri)
-    # if its our class name, then make our own object
-    # if there's a part after that, that's the property name
-    o = _DataObjects[cn](ident=identifier)
-    return o
-
-def extract_class_name(uri):
-    from urlparse import urlparse
-    u = urlparse(uri)
-    x = u.path.split('/')
-    if len(x) >= 3 and x[1] == 'entities':
-        return x[2]
 
 class MappedClass(type):
     """A type for DataObjects
 
     Sets up the graph with things needed for DataObjects
     """
-    def __init__(cls, name, bases, dct, conf=False):
+    def __init__(cls, name, bases, dct):
         type.__init__(cls,name,bases,dct)
 
-        cls.du = DataUser()
         cls.dataObjectProperties = []
         #print 'doing init for', cls
         for x in bases:
@@ -111,11 +88,33 @@ class MappedClass(type):
             objectProperties = []
         MappedClass(name, bases, dict(objectProperties=objectProperties, datatypeProperties=datatypeProperties))
 
-    def register(cls):
-        _DataObjects[cls.__name__] = cls
-        _DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, MappedClass)]
+    @property
+    def du(self):
+        # This is just a little indirection to make sure we initialize the DataUser property before using it.
+        # Initialization isn't done in __init__ because I wanted to make sure you could call `connect` before
+        # or after declaring your classes
+        if hasattr(self,'_du'):
+            return self._du
+        else:
+            raise Exception("You should have called `map` to get here")
 
-        cls.parents = _DataObjectsParents[cls.__name__]
+    @du.setter
+    def du_set(self, value):
+        assert(isinstance(value,DataUser))
+        self._du = value
+
+    def register(cls):
+        """ Registers the class as a DataObject to be included in the configured rdf graph
+        """
+        DataObjects[cls.__name__] = cls
+        DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, MappedClass)]
+        cls.parents = DataObjectsParents[cls.__name__]
+        return cls
+
+    def map(cls):
+        """ Performs those actions necessary for storing the class and its instances in the graph
+        """
+        cls._du = DataUser()
         cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
         cls.rdf_namespace = R.Namespace(cls.rdf_type + "/")
 
@@ -128,6 +127,14 @@ class MappedClass(type):
         cls.addNamespaceToManager()
 
         setattr(P, cls.__name__, cls)
+        return cls
+
+    @classmethod
+    def remap(metacls):
+        """ Calls `map` on all of the registered classes """
+        classes = sorted(list(DataObjects.values()), cmp=lambda x,y: issubclass(x,y) and 1 or -1)
+        for x in classes:
+            x.map()
 
     def addNamespaceToManager(cls):
         cls.conf['rdf.namespace_manager'].bind(cls.__name__, cls.rdf_namespace)

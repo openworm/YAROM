@@ -23,7 +23,7 @@ try:
 except ImportError:
     has_bsddb = False
 
-namespaces = { "rdf" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#" }
+test_ns = R.Namespace("http://github.com/mwatts15/YAROM/tests")
 
 def clear_graph(graph):
     graph.update("CLEAR ALL")
@@ -187,12 +187,18 @@ class DataObjectTest(_DataTest):
         u = r.uploader()
         self.assertEqual(self.config['user.email'], u)
 
-    def test_object_from_id(self):
-        """ Test the wrapper for oid """
-        do = P.DataObject(ident="http://example.org")
-        dc = MappedClass("TestDOM", (P.DataObject,), dict())
-        g = do.object_from_id(self.config['rdf.namespace']['TestDOM'])
+    def test_object_from_id_class(self):
+        """ Ensure we get an object from just the class name """
+        MappedClass("TestDOM", (P.DataObject,), dict())
+        g = P.DataObject.object_from_id(self.config['rdf.namespace']['TestDOM'])
         self.assertIsInstance(g,P.TestDOM)
+
+    def test_object_from_id_object(self):
+        """ Ensure we get an object from a full object id """
+        dc = MappedClass("TestDOM", (P.DataObject,), dict())
+        td = dc()
+        g = P.DataObject.object_from_id(td.identifier())
+        self.assertEqual(g, td)
 
     @unittest.skip("Should be tracked by version control")
     def test_upload_date(self):
@@ -302,6 +308,7 @@ class DataUserTestToo(unittest.TestCase):
             c.copy(TEST_CONFIG)
             c['rdf.source'] = 'zodb'
             c['rdf.store_conf'] = 'zodb'
+            c['rdf.namespace'] = test_ns
             Configureable.conf = c
             d = Data()
             Configureable.conf = d
@@ -476,6 +483,7 @@ class DataTest(unittest.TestCase):
         c = Configuration()
         c['rdf.source'] = 'default'
         c['rdf.store'] = 'default'
+        c['rdf.namespace'] = test_ns
         Configureable.conf = c
         d = Data()
         d.openDatabase()
@@ -501,6 +509,7 @@ class DataTest(unittest.TestCase):
         fname ='ZODB.fs'
         c['rdf.source'] = 'ZODB'
         c['rdf.store_conf'] = fname
+        c['rdf.namespace'] = test_ns
         Configureable.conf = c
         d = Data()
         try:
@@ -528,6 +537,7 @@ class DataTest(unittest.TestCase):
         fname='Sleepycat_store'
         c['rdf.source'] = 'Sleepycat'
         c['rdf.store_conf'] = fname
+        c['rdf.namespace'] = test_ns
         Configureable.conf = c
         d = Data()
         try:
@@ -555,6 +565,7 @@ class DataTest(unittest.TestCase):
         c = Configuration()
         c['rdf.source'] = 'trix'
         c['rdf.store'] = 'default'
+        c['rdf.namespace'] = test_ns
         c['trix_location'] = f[1]
 
         with open(f[1],'w') as fo:
@@ -585,6 +596,7 @@ class DataTest(unittest.TestCase):
         c['rdf.serialization'] = f[1]
         c['rdf.serialization_format'] = 'trig'
         c['rdf.store'] = 'default'
+        c['rdf.namespace'] = test_ns
         with open(f[1],'w') as fo:
             fo.write(TD.Trig_data)
 
@@ -638,13 +650,6 @@ class MapperTest(_DataTestB):
         """Test that we can add an object and then access it from the yarom module"""
         dc = MappedClass("TestDOM", (P.DataObject,), dict())
         self.assertTrue(hasattr(P,"TestDOM"))
-
-    def test_oid_class_exists(self):
-        """Test that we can add an object and then access it from the yarom module"""
-        dc = MappedClass("TestDOM", (P.DataObject,), dict())
-        p = dc()
-        q = oid(p.identifier())
-        self.assertEqual(p,q)
 
 class SimplePropertyTest(_DataTest):
     def __init__(self,*args,**kwargs):
@@ -730,8 +735,25 @@ class SimplePropertyTest(_DataTest):
         sp = T(owner=do)
         self.assertEqual(len(list(sp.triples())), 0)
         self.assertEqual(len(list(sp.triples(query=True))), 0)
+
+class ObjectCollectionTest(_DataTest):
+    """ Tests for the stupid container class """
+    def test_member(self):
+        oc = P.ObjectCollection('test')
+        do = P.DataObject()
+        oc.member(do)
+        oc.save()
+        print oc.rdf.serialize(format='n3')
+
+        ocr = P.ObjectCollection('test')
+        dor = ocr.member.one()
+        print do.identifier()
+        print dor.identifier()
+        self.assertEqual(do, dor)
+
 def main(*args,**kwargs):
     unittest.main(*args,**kwargs)
+
 if __name__ == '__main__':
     if len(sys.argv) == 3:
         main(defaultTest=sys.argv[1])

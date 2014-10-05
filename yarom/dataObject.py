@@ -75,7 +75,7 @@ class DataObject(DataUser):
             import struct
             v = struct.pack("=2f",random.random(),random.random())
             cname = self.__class__.__name__
-            self._id_variable = self._graph_variable(cname + v.encode('hex'))
+            self._id_variable = self._graph_variable('a'+cname + v.encode('hex'))
             self._id = self.make_identifier(v)
         DataObject.addToOpenSet(self)
 
@@ -95,8 +95,9 @@ class DataObject(DataUser):
         """ Make a variable for storage the graph """
         return self.conf['rdf.namespace']["variable#"+var_name]
 
-    def object_from_id(self,*args,**kwargs):
-        return oid(*args,**kwargs)
+    @classmethod
+    def object_from_id(cls,*args,**kwargs):
+        return cls.oid(*args,**kwargs)
 
     @classmethod
     def addToOpenSet(cls,o):
@@ -109,17 +110,43 @@ class DataObject(DataUser):
             cls._closedSet.add(o)
 
     @classmethod
-    def _is_variable(self,uri):
-        """ Is the uriref a graph variable? """
+    def oid(cls, identifier, rdf_type=False):
+        """ Load an object from the database using its type tag """
+        # XXX: This is a class method because we need to get the conf
         # We should be able to extract the type from the identifier
-        if not isinstance(uri,R.URIRef):
-            return False
-        cn = extract_class_name(uri)
-        #print 'cn = ', cn
-        return (cn == 'variable')
+        if rdf_type:
+            uri = rdf_type
+        else:
+            uri = identifier
+
+        cn = cls.extract_class_name(uri)
+        # if its our class name, then make our own object
+        # if there's a part after that, that's the property name
+        o = DataObjects[cn](ident=identifier)
+        return o
 
     @classmethod
-    def _graph_variable_to_var(self,uri):
+    def extract_class_name(cls, uri):
+        ns = str(cls.conf['rdf.namespace'])
+        if uri.startswith(ns):
+            class_name = uri[len(ns):]
+            name_end_idx = class_name.find('/')
+            if name_end_idx > 0:
+                class_name = class_name[:name_end_idx]
+            return class_name
+        else:
+            raise ValueError("URI must be like '"+ns+"<className>' optionally followed by a hash code")
+
+    @classmethod
+    def _is_variable(cls, uri):
+        """ Is the uriref a graph variable? """
+        from urlparse import urlparse
+        u = urlparse(uri)
+        x = u.path.split('/')
+        return len(x) >= 3 and (x[2] == 'variable')
+
+    @classmethod
+    def _graph_variable_to_var(cls, uri):
         from urlparse import urlparse
         u = urlparse(uri)
         x = u.path.split('/')
@@ -401,6 +428,7 @@ class SimpleProperty(Property):
                 if isinstance(x, R.Literal):
                     x = x.toPython()
                     if isinstance(x, R.Literal):
+                        # toPython just returns its caller when it fails
                         x = str(x)
                 yield x
         else:
@@ -455,9 +483,9 @@ class SimpleProperty(Property):
                     traceback.print_exc()
 
     def load(self):
-        """ Load in data from the database. Derived classes should override this for their own data structures.
-
-        :param self: An object which limits the set of objects which can be returned. Should have the configuration necessary to do the query
+        """ Loads in values to this ``Property`` which have been set for the associated owner,
+        or if the owner refers to an unspecified member of its class, loads values which could
+        be set based on the constraints on the owner.
 
         """
         # This load is way simpler since we just need the values for this property
@@ -517,8 +545,7 @@ class DatatypeProperty(SimpleProperty):
 class ObjectProperty(SimpleProperty):
     pass
 
-
-class values(DataObject):
+class ObjectCollection(DataObject):
     """
     A convenience class for working with a collection of objects
 
@@ -550,16 +577,20 @@ class values(DataObject):
     ----------
     name : DatatypeProperty
         The name of the group of objects
+    group_name : DataObject
+        an alias for ``name``
     value : ObjectProperty
         An object in the group
     add : ObjectProperty
         an alias for ``value``
 
     """
+    objectProperties = ['member']
+    datatypeProperties = ['name']
     def __init__(self,group_name,**kwargs):
         DataObject.__init__(self,**kwargs)
-        self.add = values.ObjectProperty('value', owner=self)
-        self.group_name = values.DatatypeProperty('name', owner=self)
+        self.add = self.member
+        self.group_name = self.name
         self.name(group_name)
 
     def identifier(self, query=False):
