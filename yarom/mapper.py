@@ -72,7 +72,7 @@ class MappedClass(type):
                 cls.dataObjectProperties += x.dataObjectProperties
             except AttributeError:
                 pass
-        cls.register()
+        cls.register().map()
 
     @classmethod
     def setUpDB(self):
