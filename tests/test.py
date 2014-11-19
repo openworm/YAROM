@@ -1,15 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-import neuroml
-import neuroml.writers as writers
 import sys
 sys.path.insert(0,".")
 import yarom
 import yarom as P
 from yarom import *
-from . import test_data as TD
-import networkx
+import tests
+import test_data as TD
 import rdflib
 import rdflib as R
 import pint as Q
@@ -376,7 +374,7 @@ class RDFLibTest(unittest.TestCase):
             logger.removeHandler(stream_handler)
         v = out.getvalue()
         out.close()
-        self.assertRegexpMatches(str(v), r".*some random string.*")
+        self.assertRegex(str(v), r".*some random string.*")
 
     def test_BNode_equality1(self):
         a = rdflib.BNode("some random string")
@@ -391,7 +389,7 @@ class RDFLibTest(unittest.TestCase):
 #class TimeTest(unittest.TestCase):
     #def test_datetime_isoformat_has_timezone(self):
         #time_stamp = now(utc).isoformat()
-        #self.assertRegexpMatches(time_stamp, r'.*[+-][0-9][0-9]:[0-9][0-9]$')
+        #self.assertRegexp(time_stamp, r'.*[+-][0-9][0-9]:[0-9][0-9]$')
 
 class PintTest(unittest.TestCase):
     @classmethod

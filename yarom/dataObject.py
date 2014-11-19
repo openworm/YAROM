@@ -1,6 +1,7 @@
 import rdflib as R
 import traceback
 import logging as L
+import hashlib
 from .mapper import *
 from .dataUser import DataUser
 
@@ -71,15 +72,22 @@ class DataObject(DataUser, metaclass=MappedClass):
             # come up with one from the start. Ensures we always have something
             # that functions as an identifier
             import random
-            import struct
-            v = struct.pack("=2f",random.random(),random.random())
+            v = (random.random(),random.random())
             cname = self.__class__.__name__
-            self._id_variable = self._graph_variable('a'+cname + v.encode('hex'))
+            self._id_variable = self._graph_variable('a'+cname + hashlib.sha224(str(v).encode()).hexdigest())
             self._id = self.make_identifier(v)
         DataObject.addToOpenSet(self)
 
     def __eq__(self,other):
         return isinstance(other,DataObject) and (self.identifier() == other.identifier())
+
+    def __hash__(self):
+        return id(self)
+
+    def __lt__(self, other):
+        if (self == other):
+            return False
+        return True
 
     def __str__(self):
         s = self.__class__.__name__ + "("
@@ -167,8 +175,7 @@ class DataObject(DataUser, metaclass=MappedClass):
             return self._id
 
     def make_identifier(self, data):
-        import hashlib
-        return R.URIRef(self.rdf_namespace["a"+hashlib.sha224(str(data)).hexdigest()])
+        return R.URIRef(self.rdf_namespace["a"+hashlib.sha224(str(data).encode()).hexdigest()])
 
     def triples(self, query=False, check_saved=False):
         """ Should be overridden by derived classes to return appropriate triples

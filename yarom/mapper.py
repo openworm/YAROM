@@ -103,6 +103,9 @@ class MappedClass(type):
         assert(isinstance(value,DataUser))
         self._du = value
 
+    def __lt__(cls, other):
+        return issubclass(cls, other)
+
     def register(cls):
         """ Registers the class as a DataObject to be included in the configured rdf graph
         """
@@ -132,7 +135,7 @@ class MappedClass(type):
     @classmethod
     def remap(metacls):
         """ Calls `map` on all of the registered classes """
-        classes = sorted(list(DataObjects.values()), cmp=lambda x,y: issubclass(x,y) and 1 or -1)
+        classes = sorted(list(DataObjects.values()))
         for x in classes:
             x.map()
 
