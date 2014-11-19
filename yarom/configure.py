@@ -77,7 +77,7 @@ class Configuration(object):
         d = json.load(f)
         for k in d:
             value = d[k]
-            if isinstance(value,basestring):
+            if isinstance(value,str):
                 if value.startswith("BASE/"):
                     from pkg_resources import Requirement, resource_filename
                     value = value[4:]

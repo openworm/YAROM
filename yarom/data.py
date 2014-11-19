@@ -314,7 +314,7 @@ class SQLiteSource(RDFSource):
 
            g0.add([ui, RDFS.label, Literal(str(i))])
            if (prov != ''):
-               g0.add([ui, n[u'text_reference'], Literal(prov)])
+               g0.add([ui, n['text_reference'], Literal(prov)])
 
            i = i + 1
 

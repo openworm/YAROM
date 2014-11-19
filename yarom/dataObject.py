@@ -26,7 +26,7 @@ def _triples_to_bgp(trips):
 
 # We keep a little tree of properties in here
 
-class DataObject(DataUser):
+class DataObject(DataUser, metaclass=MappedClass):
     """ An object backed by the database
 
     Attributes
@@ -47,8 +47,7 @@ class DataObject(DataUser):
     def openSet(self):
         return self._openSet
 
-    __metaclass__ = MappedClass
-    # Must resolve, somehow, to a set of triples that we can manipulate
+        # Must resolve, somehow, to a set of triples that we can manipulate
     # For instance, one or more construct query could represent the object or
     # the triples might be stored in memory.
     def __init__(self,ident=False,triples=False,**kwargs):
@@ -140,14 +139,14 @@ class DataObject(DataUser):
     @classmethod
     def _is_variable(cls, uri):
         """ Is the uriref a graph variable? """
-        from urlparse import urlparse
+        from urllib.parse import urlparse
         u = urlparse(uri)
         x = u.path.split('/')
         return len(x) >= 3 and (x[2] == 'variable')
 
     @classmethod
     def _graph_variable_to_var(cls, uri):
-        from urlparse import urlparse
+        from urllib.parse import urlparse
         u = urlparse(uri)
         x = u.path.split('/')
         #print uri
@@ -230,7 +229,7 @@ class DataObject(DataUser):
 
     @classmethod
     def _extract_property_name(self,uri):
-        from urlparse import urlparse
+        from urllib.parse import urlparse
         u = urlparse(uri)
         x = u.path.split('/')
         if len(x) >= 4 and x[1] == 'entities':
@@ -537,7 +536,7 @@ class SimpleProperty(Property):
         return self.make_identifier((self.owner.identifier(query=query), self.link, value_data))
 
     def __str__(self):
-        return unicode(self.linkName + "=" + unicode(";".join(unicode(x) for x in self.v)))
+        return str(self.linkName + "=" + str(";".join(str(x) for x in self.v)))
 
 class DatatypeProperty(SimpleProperty):
     pass
