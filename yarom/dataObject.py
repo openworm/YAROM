@@ -1,6 +1,7 @@
 import rdflib as R
 import traceback
 import logging as L
+import hashlib
 from .mapper import *
 from .dataUser import DataUser
 
@@ -26,7 +27,7 @@ def _triples_to_bgp(trips):
 
 # We keep a little tree of properties in here
 
-class DataObject(DataUser):
+class DataObject(DataUser, metaclass=MappedClass):
     """ An object backed by the database
 
     Attributes
@@ -47,8 +48,7 @@ class DataObject(DataUser):
     def openSet(self):
         return self._openSet
 
-    __metaclass__ = MappedClass
-    # Must resolve, somehow, to a set of triples that we can manipulate
+        # Must resolve, somehow, to a set of triples that we can manipulate
     # For instance, one or more construct query could represent the object or
     # the triples might be stored in memory.
     def __init__(self,ident=False,triples=False,**kwargs):
@@ -71,15 +71,22 @@ class DataObject(DataUser):
             # come up with one from the start. Ensures we always have something
             # that functions as an identifier
             import random
-            import struct
-            v = struct.pack("=2f",random.random(),random.random())
+            v = (random.random(),random.random())
             cname = self.__class__.__name__
-            self._id_variable = self._graph_variable('a'+cname + v.encode('hex'))
+            self._id_variable = self._graph_variable('a'+cname + hashlib.sha224(str(v).encode()).hexdigest())
             self._id = self.make_identifier(v)
         DataObject.addToOpenSet(self)
 
     def __eq__(self,other):
         return isinstance(other,DataObject) and (self.identifier() == other.identifier())
+
+    def __hash__(self):
+        return id(self)
+
+    def __lt__(self, other):
+        if (self == other):
+            return False
+        return True
 
     def __str__(self):
         s = self.__class__.__name__ + "("
@@ -139,14 +146,14 @@ class DataObject(DataUser):
     @classmethod
     def _is_variable(cls, uri):
         """ Is the uriref a graph variable? """
-        from urlparse import urlparse
+        from urllib.parse import urlparse
         u = urlparse(uri)
         x = u.path.split('/')
         return len(x) >= 3 and (x[2] == 'variable')
 
     @classmethod
     def _graph_variable_to_var(cls, uri):
-        from urlparse import urlparse
+        from urllib.parse import urlparse
         u = urlparse(uri)
         x = u.path.split('/')
         if x[2] == 'variable':
@@ -165,8 +172,7 @@ class DataObject(DataUser):
             return self._id
 
     def make_identifier(self, data):
-        import hashlib
-        return R.URIRef(self.rdf_namespace["a"+hashlib.sha224(str(data)).hexdigest()])
+        return R.URIRef(self.rdf_namespace["a"+hashlib.sha224(str(data).encode()).hexdigest()])
 
     def triples(self, query=False, visited_list=False):
         """ Should be overridden by derived classes to return appropriate triples
@@ -219,7 +225,7 @@ class DataObject(DataUser):
 
     @classmethod
     def _extract_property_name(self,uri):
-        from urlparse import urlparse
+        from urllib.parse import urlparse
         u = urlparse(uri)
         x = u.path.split('/')
         if len(x) >= 4 and x[1] == 'entities':
@@ -529,7 +535,7 @@ class SimpleProperty(Property):
         return self.make_identifier((self.owner.identifier(query=query), self.link, value_data))
 
     def __str__(self):
-        return unicode(self.linkName + "=" + unicode(";".join(unicode(x) for x in self.v)))
+        return str(self.linkName + "=" + str(";".join(str(x) for x in self.v)))
 
 class DatatypeProperty(SimpleProperty):
     pass

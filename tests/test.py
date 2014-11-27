@@ -1,15 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-import neuroml
-import neuroml.writers as writers
 import sys
 sys.path.insert(0,".")
 import yarom
 import yarom as P
 from yarom import *
+import tests
 import test_data as TD
-import networkx
 import rdflib
 import rdflib as R
 import pint as Q
@@ -55,7 +53,7 @@ class _DataTestB(unittest.TestCase):
                 os.unlink(self.path + '.index')
                 os.unlink(self.path + '.tmp')
                 os.unlink(self.path + '.lock')
-        except OSError, e:
+        except OSError as e:
             if e.errno == 2:
                 # The file may not exist and that's fine
                 pass
@@ -288,7 +286,7 @@ class DataUserTest(_DataTest):
         try:
             # Add all of the statements in the graph
             du.add_statements(g)
-        except Exception, e:
+        except Exception as e:
             self.fail("Should be able to add statements in the first place: "+str(e))
 
         g0 = du.conf['rdf.graph']
@@ -405,9 +403,9 @@ class RDFLibTest(unittest.TestCase):
     def test_uriref_not_id(self):
         """ Test that rdflib throws up a warning when we do something bad """
         #XXX: capture the logged warning
-        import cStringIO
+        import io
         import logging
-        out = cStringIO.StringIO()
+        out = io.StringIO()
         logger = logging.getLogger('rdflib.term')
         stream_handler = logging.StreamHandler(out)
         logger.addHandler(stream_handler)
@@ -418,7 +416,7 @@ class RDFLibTest(unittest.TestCase):
             logger.removeHandler(stream_handler)
         v = out.getvalue()
         out.close()
-        self.assertRegexpMatches(str(v), r".*some random string.*")
+        self.assertRegex(str(v), r".*some random string.*")
 
     def test_BNode_equality1(self):
         a = rdflib.BNode("some random string")
@@ -433,7 +431,7 @@ class RDFLibTest(unittest.TestCase):
 #class TimeTest(unittest.TestCase):
     #def test_datetime_isoformat_has_timezone(self):
         #time_stamp = now(utc).isoformat()
-        #self.assertRegexpMatches(time_stamp, r'.*[+-][0-9][0-9]:[0-9][0-9]$')
+        #self.assertRegexp(time_stamp, r'.*[+-][0-9][0-9]:[0-9][0-9]$')
 
 class PintTest(unittest.TestCase):
     @classmethod
@@ -785,12 +783,12 @@ class ObjectCollectionTest(_DataTest):
         do = P.DataObject()
         oc.member(do)
         oc.save()
-        print oc.rdf.serialize(format='n3')
+        print(oc.rdf.serialize(format='n3'))
 
         ocr = P.ObjectCollection('test')
         dor = ocr.member.one()
-        print do.identifier()
-        print dor.identifier()
+        print(do.identifier())
+        print(dor.identifier())
         self.assertEqual(do, dor)
 
 def main(*args,**kwargs):

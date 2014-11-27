@@ -12,10 +12,10 @@ class AcceptanceTest(unittest.TestCase):
         disconnect()
 
     def test_open_set(self):
-        print DataObject.openSet()
+        print(DataObject.openSet())
         values('exo-skeleton')
         values(', ex=')
-        print DataObject.openSet()
+        print(DataObject.openSet())
 
     def test_l(self):
         """
@@ -30,7 +30,7 @@ class AcceptanceTest(unittest.TestCase):
         import os
         # Generate data sets from 10 to 10000 in size
         #  query for properties
-        print 'starting testl'
+        print('starting testl')
         class _to(DataObject):
             def __init__(self,x=False):
                 DataObject.__init__(self)
@@ -44,7 +44,7 @@ class AcceptanceTest(unittest.TestCase):
         try:
             #for 1000, takes about 10 seconds...
             for x in nums:
-                print 'running ',x,'sized test on a ',Configureable.default['rdf.graph'].store,'store'
+                print('running ',x,'sized test on a ',Configureable.default['rdf.graph'].store,'store')
                 v = values('zim')
                 for z in range(int(x)):
                     v.add(_to(random()))
@@ -53,7 +53,7 @@ class AcceptanceTest(unittest.TestCase):
                 for _ in _to().flexo():
                     pass
                 t1 = time()
-                print "took", t1 - t0, "seconds"
+                print("took", t1 - t0, "seconds")
                 Configureable.default['rdf.graph'].remove((None,None,None))
         except:
             traceback.print_exc()
