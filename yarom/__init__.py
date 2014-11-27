@@ -96,7 +96,7 @@ def connect(configFile=False,
     import importlib
     m = this_module
     if m.connected == True:
-        print "yarom already connected"
+        print("yarom already connected")
         return
 
     if do_logging:

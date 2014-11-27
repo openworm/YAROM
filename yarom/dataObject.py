@@ -57,7 +57,6 @@ class DataObject(DataUser):
         else:
             self._triples = triples
 
-        self._is_releasing_triples = False
         self.properties = []
         for x in self.__class__.dataObjectProperties:
             x(owner=self)
@@ -150,9 +149,7 @@ class DataObject(DataUser):
         from urlparse import urlparse
         u = urlparse(uri)
         x = u.path.split('/')
-        #print uri
         if x[2] == 'variable':
-            #print 'fragment = ', u.fragment
             return "?"+u.fragment
 
     def identifier(self,query=False):
@@ -171,49 +168,41 @@ class DataObject(DataUser):
         import hashlib
         return R.URIRef(self.rdf_namespace["a"+hashlib.sha224(str(data)).hexdigest()])
 
-    def triples(self, query=False, check_saved=False):
+    def triples(self, query=False, visited_list=False):
         """ Should be overridden by derived classes to return appropriate triples
 
         Returns
         --------
         An iterable of triples
         """
-        # The default implementation, gives the object no representation or the one
-        # explicitly given in __init__
-        if check_saved == False:
-            check_saved = set()
+        if visited_list == False:
+            visited_list = set()
 
-        if self in check_saved:
+        if self in visited_list:
             return
         else:
-            check_saved.add(self)
+            visited_list.add(self)
 
-        if not self._is_releasing_triples:
-            # Note: We are _definitely_ assuming synchronous operation here.
-            #       Anyway, this code should be idempotent, so that there's no need to lock it...
-            self._is_releasing_triples = True
-            ident = self.identifier(query=query)
+        ident = self.identifier(query=query)
+        yield (ident, R.RDF['type'], self.rdf_type)
 
-            yield (ident, R.RDF['type'], self.rdf_type)
+        # For objects that are defined by triples, we can just release these.
+        # However, they are still data objects, so they must have the above
+        # triples released as well.
+        for x in self._triples:
+            yield x
 
-            # For objects that are defined by triples, we can just release these.
-            # However, they are still data objects, so they must have the above
-            # triples released as well.
-            for x in self._triples:
-                yield x
+        # Properties (of type Property) can be attached to an object
+        # However, we won't require that there even is a property list in this
+        # case.
+        try:
+            for x in self.properties:
+                for y in x.triples(query=query, visited_list=visited_list):
+                    yield y
+        except AttributeError:
+            # XXX Is there a way to check what the failed attribute reference was?
+            pass
 
-            # Properties (of type Property) can be attached to an object
-            # However, we won't require that there even is a property list in this
-            # case.
-            try:
-                for x in self.properties:
-                    for y in x.triples(query=query, check_saved=check_saved):
-                        yield y
-            except AttributeError:
-                # XXX Is there a way to check what the failed attribute reference was?
-                pass
-
-            self._is_releasing_triples = False
     tcalled = 0
     def graph_pattern(self,query=False):
         """ Get the graph pattern for this object.
@@ -226,7 +215,7 @@ class DataObject(DataUser):
         """ Write in-memory data to the database. Derived classes should call this to update the store. """
 
         ss = set()
-        self.add_statements(self.triples(check_saved=ss))
+        self.add_statements(self.triples(visited_list=ss))
 
     @classmethod
     def _extract_property_name(self,uri):
@@ -326,7 +315,7 @@ class Property(DataObject):
 
     """
 
-    # Indicates whether the Property is multivalued
+    # Indicates whether the Property is multi-valued
     multiple = False
 
     def __init__(self, name=False, owner=False, **kwargs):
@@ -399,7 +388,7 @@ class Property(DataObject):
     # Get the property (a relationship) itself
 
 class SimpleProperty(Property):
-    """ A property that has one or more links to a literals or DataObjects """
+    """ A property that has one or more links to literals or DataObjects """
 
     def __init__(self,**kwargs):
         if not hasattr(self,'linkName'):
@@ -435,12 +424,15 @@ class SimpleProperty(Property):
             owner_id = self.owner.identifier(query=True)
             if DataObject._is_variable(owner_id):
                 gp = self.owner.graph_pattern(query=True)
+                print("is variable")
             else:
                 gp = self.graph_pattern(query=True)
+                print("is not variable")
 
             var = "?"+self.linkName
             q = "select distinct " +  var + " where { " + gp + " }"
             L.debug("get query = " + q)
+            print(q)
             qres = self.rdf.query(q)
             for x in qres:
                 if self.property_type == 'DatatypeProperty' \
@@ -450,6 +442,7 @@ class SimpleProperty(Property):
                 elif self.property_type == 'ObjectProperty':
                     # XXX: We can pull the type from the graph. Just be sure
                     #   to get the most specific type
+                    print("What is the id? It's this --> " + str(x[0]))
                     yield self.object_from_id(x[0], self.value_rdf_type)
 
     def set(self,v):
@@ -491,6 +484,7 @@ class SimpleProperty(Property):
         # This load is way simpler since we just need the values for this property
         gp = self.graph_pattern(query=True)
         q = "Select distinct ?"+self.linkName+"  where { "+ gp +" . }"
+        print(q)
         L.debug('load_query='+q)
         qres = self.conf['rdf.graph'].query(q)
         for k in qres:
@@ -523,8 +517,6 @@ class SimpleProperty(Property):
             # or our owner's identifier is a variable
             owner_id = self.owner.identifier(query=query)
             vlen = len(self.v)
-            #print vlen
-            #print owner_id
             if vlen == 0 or DataObject._is_variable(owner_id):
                 return ident
         # Intentional fall through from if statement ...

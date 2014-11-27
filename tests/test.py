@@ -208,6 +208,48 @@ class DataObjectTest(_DataTest):
         r.save()
         u = r.upload_date()
         self.assertIsNotNone(u)
+    def test_triples_cycle(self):
+        """ Test that no duplicate triples are released when there's a cycle in the graph """
+        class T(P.DataObject):
+            objectProperties = ['s']
+
+        t = T()
+        s = T()
+        t.s(s)
+        s.s(t)
+        seen = set()
+        for x in t.triples(query=True):
+            if (x in seen):
+                self.fail("got a duplicate: "+ str(x))
+            else:
+                seen.add(x)
+    def test_triples_clone_sibling(self):
+        """ Test that no duplicate triples are released when there's a clone in the graph.
+
+        For example: A->B
+                     |
+                     +->C->B
+        This is to avoid the simple 'guard' solution in triples which would output B
+        twice.
+        """
+        class T(P.DataObject):
+            objectProperties = ['s']
+
+        t = T()
+        s = T()
+        v = T()
+        t.s(s)
+        t.s(v)
+        v.s(s)
+        seen = set()
+        for x in t.triples(query=True):
+            if (x in seen):
+                self.fail("got a duplicate: "+ str(x))
+            else:
+                seen.add(x)
+
+
+
 
 class DataUserTest(_DataTest):
 
@@ -737,7 +779,7 @@ class SimplePropertyTest(_DataTest):
         self.assertEqual(len(list(sp.triples(query=True))), 0)
 
 class ObjectCollectionTest(_DataTest):
-    """ Tests for the stupid container class """
+    """ Tests for the simple container class """
     def test_member(self):
         oc = P.ObjectCollection('test')
         do = P.DataObject()
