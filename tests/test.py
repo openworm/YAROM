@@ -4,7 +4,7 @@ import unittest
 import sys
 sys.path.insert(0,".")
 import yarom
-import yarom as P
+import yarom as Y
 from yarom import *
 import tests
 import test_data as TD
@@ -151,19 +151,19 @@ class ConfigureableTest(unittest.TestCase):
 class DataObjectTest(_DataTest):
 
     def test_DataUser(self):
-        do = P.DataObject()
+        do = Y.DataObject()
         self.assertTrue(isinstance(do,yarom.DataUser))
 
     def test_identifier(self):
         """ Test that we can set and return an identifier """
-        do = P.DataObject(ident="http://example.org")
+        do = Y.DataObject(ident="http://example.org")
         self.assertEqual(do.identifier(), R.URIRef("http://example.org"))
 
     def test_call_graph_pattern_twice(self):
         """ Be sure that we can call graph pattern on the same object multiple times and not have it die on us """
 
         g = make_graph(20)
-        d = P.DataObject(triples=g)
+        d = Y.DataObject(triples=g)
         self.assertNotEqual(0,len(d.graph_pattern()))
         self.assertNotEqual(0,len(d.graph_pattern()))
 
@@ -171,7 +171,7 @@ class DataObjectTest(_DataTest):
         """ Be sure that we can call graph pattern on the same object multiple times and not have it die on us """
 
         g = make_graph(20)
-        d = P.DataObject(triples=g)
+        d = Y.DataObject(triples=g)
         self.assertNotEqual(0,len(d.graph_pattern(True)))
         self.assertNotEqual(0,len(d.graph_pattern(True)))
 
@@ -180,35 +180,35 @@ class DataObjectTest(_DataTest):
         """ Make sure that we're marking a statement with it's uploader """
 
         g = make_graph(20)
-        r = P.DataObject(triples=g,conf=self.config)
+        r = Y.DataObject(triples=g,conf=self.config)
         r.save()
         u = r.uploader()
         self.assertEqual(self.config['user.email'], u)
 
     def test_object_from_id_class(self):
         """ Ensure we get an object from just the class name """
-        MappedClass("TestDOM", (P.DataObject,), dict())
-        g = P.DataObject.object_from_id(self.config['rdf.namespace']['TestDOM'])
-        self.assertIsInstance(g,P.TestDOM)
+        MappedClass("TestDOM", (Y.DataObject,), dict())
+        g = Y.DataObject.object_from_id(self.config['rdf.namespace']['TestDOM'])
+        self.assertIsInstance(g,Y.TestDOM)
 
     def test_object_from_id_object(self):
         """ Ensure we get an object from a full object id """
-        dc = MappedClass("TestDOM", (P.DataObject,), dict())
+        dc = MappedClass("TestDOM", (Y.DataObject,), dict())
         td = dc()
-        g = P.DataObject.object_from_id(td.identifier())
+        g = Y.DataObject.object_from_id(td.identifier())
         self.assertEqual(g, td)
 
     @unittest.skip("Should be tracked by version control")
     def test_upload_date(self):
         """ Make sure that we're marking a statement with it's upload date """
         g = make_graph(20)
-        r = P.DataObject(triples=g)
+        r = Y.DataObject(triples=g)
         r.save()
         u = r.upload_date()
         self.assertIsNotNone(u)
     def test_triples_cycle(self):
         """ Test that no duplicate triples are released when there's a cycle in the graph """
-        class T(P.DataObject):
+        class T(Y.DataObject):
             objectProperties = ['s']
 
         t = T()
@@ -230,7 +230,7 @@ class DataObjectTest(_DataTest):
         This is to avoid the simple 'guard' solution in triples which would output B
         twice.
         """
-        class T(P.DataObject):
+        class T(Y.DataObject):
             objectProperties = ['s']
 
         t = T()
@@ -656,9 +656,9 @@ class DataTest(unittest.TestCase):
 class PropertyTest(_DataTest):
     def test_one(self):
         """ `one` should return None if there isn't a value or just the value if there is one """
-        class T(P.Property):
+        class T(Y.Property):
             def __init__(self):
-                P.Property.__init__(self)
+                Y.Property.__init__(self)
                 self.b = False
 
             def get(self):
@@ -683,13 +683,13 @@ class MapperTest(_DataTestB):
 
     def test_addToGraph(self):
         """Test that we can load a descendant of DataObject as a class"""
-        dc = MappedClass("TestDOM", (P.DataObject,), dict())
-        self.assertIn((dc.rdf_type, R.RDFS['subClassOf'], P.DataObject.rdf_type), dc.du.rdf)
+        dc = MappedClass("TestDOM", (Y.DataObject,), dict())
+        self.assertIn((dc.rdf_type, R.RDFS['subClassOf'], Y.DataObject.rdf_type), dc.du.rdf)
 
     def test_access_created_from_module(self):
         """Test that we can add an object and then access it from the yarom module"""
-        dc = MappedClass("TestDOM", (P.DataObject,), dict())
-        self.assertTrue(hasattr(P,"TestDOM"))
+        dc = MappedClass("TestDOM", (Y.DataObject,), dict())
+        self.assertTrue(hasattr(Y,"TestDOM"))
 
 class SimplePropertyTest(_DataTest):
     def __init__(self,*args,**kwargs):
@@ -699,7 +699,7 @@ class SimplePropertyTest(_DataTest):
         _DataTest.setUp(self)
 
         # Done dynamically to ensure that all of the yarom setup happens before the class is created
-        class K(P.DataObject):
+        class K(Y.DataObject):
             datatypeProperties = ['boots']
             objectProperties = ['bats']
         self.k = K
@@ -766,11 +766,11 @@ class SimplePropertyTest(_DataTest):
 
     def test_triples_with_no_value(self):
         """ Test that when there is no value set for a property, it still yields no triples """
-        do = P.DataObject(ident=R.URIRef("http://example.org"))
-        class T(P.SimpleProperty):
+        do = Y.DataObject(ident=R.URIRef("http://example.org"))
+        class T(Y.SimpleProperty):
             property_type = 'DatatypeProperty'
             linkName = 'test'
-            owner_type = P.DataObject
+            owner_type = Y.DataObject
 
         sp = T(owner=do)
         self.assertEqual(len(list(sp.triples())), 0)
@@ -778,14 +778,15 @@ class SimplePropertyTest(_DataTest):
 
 class ObjectCollectionTest(_DataTest):
     """ Tests for the simple container class """
-    def test_member(self):
-        oc = P.ObjectCollection('test')
-        do = P.DataObject()
+    def test_member_can_be_restored(self):
+        """ Test that we can retrieve a saved collection and its members """
+        oc = Y.ObjectCollection('test')
+        do = Y.DataObject()
         oc.member(do)
         oc.save()
         print(oc.rdf.serialize(format='n3'))
 
-        ocr = P.ObjectCollection('test')
+        ocr = Y.ObjectCollection('test')
         dor = ocr.member.one()
         print(do.identifier())
         print(dor.identifier())
