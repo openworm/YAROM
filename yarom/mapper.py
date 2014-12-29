@@ -156,23 +156,23 @@ class MappedClass(type):
 
     def addObjectProperties(cls):
         try:
-            for x in cls.objectProperties:
-                if isinstance(x,tuple):
-                    makeObjectProperty(cls,x[0], value_type=x[1])
-                else:
-                    makeObjectProperty(cls,x)
-        except AttributeError:
-            pass
+            if hasattr(cls, 'objectProperties'):
+                assert(isinstance(cls.objectProperties,(tuple,list,set)))
+                for x in cls.objectProperties:
+                    if isinstance(x,tuple):
+                        makeObjectProperty(cls,x[0], value_type=x[1])
+                    else:
+                        makeObjectProperty(cls,x)
         except:
             traceback.print_exc()
 
     def addDatatypeProperties(cls):
         # Also get all of the properites
         try:
-            for x in cls.datatypeProperties:
-                makeDatatypeProperty(cls,x)
-        except AttributeError:
-            pass
+            if hasattr(cls, 'datatypeProperties'):
+                assert(isinstance(cls.datatypeProperties,(tuple,list,set)))
+                for x in cls.datatypeProperties:
+                    makeDatatypeProperty(cls,x)
         except:
             traceback.print_exc()
 

@@ -8,6 +8,7 @@
 
 
 import hashlib
+import re
 from rdflib import URIRef, Literal, Graph, Namespace, ConjunctiveGraph
 from rdflib.namespace import RDFS, RDF, NamespaceManager
 from datetime import datetime as DT
@@ -31,7 +32,12 @@ class Data(Configuration, Configureable):
         Configureable.__init__(self,conf)
         # We copy over all of the configuration that we were given
         self.copy(self.conf)
-        self['rdf.namespace'] = Namespace(self.get('rdf.namespace', 'http://example.org/TestNamespace/entities'))
+        ns_string = self.get('rdf.namespace', 'http://example.org/TestNamespace/entities/')
+
+        if ns_string[-1] != '/':
+            raise Exception("A namespace string must end with a '/'. Got <"+ns_string +">.")
+
+        self['rdf.namespace'] = Namespace(ns_string)
         self.namespace = self['rdf.namespace']
 
     @classmethod
@@ -75,7 +81,7 @@ class Data(Configuration, Configureable):
 
         if self.get("rdf.inference", False):
             if 'rdf.rules' not in self:
-                raise Exception("You've set `rdf.inference' in your configuration. You must provide n3 rules in your configuration (`rdf.rules') in order to use rdf inference.")
+                raise Exception("You've set `rdf.inference' in your configuration. Please provide n3 rules in your configuration (property name `rdf.rules') as well in order to use rdf inference.")
 
             from FuXi.Rete.RuleStore import SetupRuleStore
             from FuXi.Rete.Util import generateTokenSet
@@ -363,27 +369,26 @@ class ZODBSource(RDFSource):
         print("openstr="+openstr)
         try:
             fs = FileStorage(openstr)
+            self.zdb=ZODB.DB(fs)
+            self.conn=self.zdb.open()
+            root=self.conn.root()
+            if 'rdflib' not in root:
+                root['rdflib'] = ConjunctiveGraph('ZODB')
+            self.graph = root['rdflib']
+            try:
+                transaction.commit()
+            except Exception as e:
+                # catch commit exception and close db.
+                # otherwise db would stay open and follow up tests
+                # will detect the db in error state
+                L.warning('Forced to abort transaction on ZODB store opening')
+                traceback.print_exc()
+                transaction.abort()
+            transaction.begin()
+            self.graph.open(self.path)
         except Exception as e:
             print("Format error")
             traceback.print_exc()
-
-        self.zdb=ZODB.DB(fs)
-        self.conn=self.zdb.open()
-        root=self.conn.root()
-        if 'rdflib' not in root:
-            root['rdflib'] = ConjunctiveGraph('ZODB')
-        self.graph = root['rdflib']
-        try:
-            transaction.commit()
-        except Exception as e:
-            # catch commit exception and close db.
-            # otherwise db would stay open and follow up tests
-            # will detect the db in error state
-            L.warning('Forced to abort transaction on ZODB store opening')
-            traceback.print_exc()
-            transaction.abort()
-        transaction.begin()
-        self.graph.open(self.path)
 
 
     def close(self):
