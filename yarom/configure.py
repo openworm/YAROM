@@ -72,19 +72,18 @@ class Configuration(object):
     @classmethod
     def open(cls,file_name):
         import json
-        f = open(file_name)
-        c = Configuration()
-        d = json.load(f)
-        for k in d:
-            value = d[k]
-            if isinstance(value, str):
-                if value.startswith("BASE/"):
-                    from pkg_resources import Requirement, resource_filename
-                    value = value[4:]
-                    value = resource_filename(Requirement.parse('yarom'), value)
-                    d[k] = value
-            c[k] = _C(d[k])
-        f.close()
+        with open(file_name) as f:
+            c = Configuration()
+            d = json.load(f)
+            for k in d:
+                value = d[k]
+                if isinstance(value, str):
+                    if value.startswith("BASE/"):
+                        from pkg_resources import Requirement, resource_filename
+                        value = value[4:]
+                        value = resource_filename(Requirement.parse('yarom'), value)
+                        d[k] = value
+                c[k] = _C(d[k])
         c['configure.file_location'] = file_name
         return c
 
