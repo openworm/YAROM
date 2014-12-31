@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import unittest
+
 import sys
 sys.path.insert(0,".")
+
 import yarom
 import yarom as Y
 from yarom import *
@@ -21,10 +23,16 @@ try:
 except ImportError:
     has_bsddb = False
 
-test_ns = R.Namespace("http://github.com/mwatts15/YAROM/tests")
+test_ns = "http://github.com/mwatts15/YAROM/tests/"
 
 def clear_graph(graph):
     graph.update("CLEAR ALL")
+
+def unlink_zodb_db(fname):
+    os.unlink(fname)
+    os.unlink(fname + '.index')
+    os.unlink(fname + '.tmp')
+    os.unlink(fname + '.lock')
 
 def make_graph(size=100):
     """ Make an rdflib graph """
@@ -49,10 +57,7 @@ class _DataTestB(unittest.TestCase):
             if self.TestConfig['rdf.source'] == "Sleepycat":
                 subprocess.call("rm -rf "+self.path, shell=True)
             elif self.TestConfig['rdf.source'] == "ZODB":
-                os.unlink(self.path)
-                os.unlink(self.path + '.index')
-                os.unlink(self.path + '.tmp')
-                os.unlink(self.path + '.lock')
+                unlink_zodb_db(self.path)
         except OSError as e:
             if e.errno == 2:
                 # The file may not exist and that's fine
@@ -163,8 +168,7 @@ class DataObjectTest(_DataTest):
         """ Be sure that we can call graph pattern on the same object multiple times and not have it die on us """
 
         g = make_graph(20)
-        d = Y.DataObject(triples=g)
-        self.assertNotEqual(0,len(d.graph_pattern()))
+        d = Y.DataObject(triples=g, key="id")
         self.assertNotEqual(0,len(d.graph_pattern()))
 
     def test_call_graph_pattern_twice_query(self):
@@ -194,7 +198,7 @@ class DataObjectTest(_DataTest):
     def test_object_from_id_object(self):
         """ Ensure we get an object from a full object id """
         dc = MappedClass("TestDOM", (Y.DataObject,), dict())
-        td = dc()
+        td = dc(key="the_identifier")
         g = Y.DataObject.object_from_id(td.identifier())
         self.assertEqual(g, td)
 
@@ -233,9 +237,9 @@ class DataObjectTest(_DataTest):
         class T(Y.DataObject):
             objectProperties = ['s']
 
-        t = T()
-        s = T()
-        v = T()
+        t = T(key="a")
+        s = T(key="b")
+        v = T(key="c")
         t.s(s)
         t.s(v)
         v.s(s)
@@ -362,6 +366,7 @@ class DataUserTestToo(unittest.TestCase):
             du.add_statements(graph)
             self.assertIn((ex['x'], ex['b'], ex['k']), du.rdf)
             self.assertIn((ex['x'], ex['d'], ex['e']), du.rdf)
+            unlink_zodb_db('zodb')
 
 class sameAsRules(object):
     def __init__(self, ns=False, predicate='sameAs'):
@@ -565,10 +570,7 @@ class DataTest(unittest.TestCase):
         except:
             traceback.print_exc()
             self.fail("Bad state")
-        os.unlink(fname)
-        os.unlink(fname + '.index')
-        os.unlink(fname + '.tmp')
-        os.unlink(fname + '.lock')
+        unlink_zodb_db(fname)
 
     @unittest.skipIf((has_bsddb==False), "Sleepycat requires working bsddb")
     def test_Sleepycat_persistence(self):
@@ -652,6 +654,15 @@ class DataTest(unittest.TestCase):
             pass
         finally:
             disconnect()
+    def test_namespace_ending_with_alpha(self):
+        """ Test that an unaccetable namespace is rejected."""
+
+        c = Configuration()
+        c['rdf.source'] = 'default'
+        c['rdf.store'] = 'default'
+        c['rdf.namespace'] = "http://www.salon.tk"
+        with self.assertRaises(Exception):
+            Data(c)
 
 class PropertyTest(_DataTest):
     def test_one(self):
@@ -773,6 +784,7 @@ class SimplePropertyTest(_DataTest):
             owner_type = Y.DataObject
 
         sp = T(owner=do)
+        print(list(sp.triples(query=True)))
         self.assertEqual(len(list(sp.triples())), 0)
         self.assertEqual(len(list(sp.triples(query=True))), 0)
 
@@ -781,10 +793,10 @@ class ObjectCollectionTest(_DataTest):
     def test_member_can_be_restored(self):
         """ Test that we can retrieve a saved collection and its members """
         oc = Y.ObjectCollection('test')
-        do = Y.DataObject()
+        do = Y.DataObject(key="sunday morning special")
         oc.member(do)
         oc.save()
-        print(oc.rdf.serialize(format='n3'))
+        #print(oc.rdf.serialize(format='n3'))
 
         ocr = Y.ObjectCollection('test')
         dor = ocr.member.one()
