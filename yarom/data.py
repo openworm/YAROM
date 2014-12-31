@@ -387,9 +387,7 @@ class ZODBSource(RDFSource):
             transaction.begin()
             self.graph.open(self.path)
         except Exception as e:
-            print("Format error")
-            traceback.print_exc()
-
+            raise Exception("ZODB format error. This may be a result of using two different version of ZODB, such as between Python 3.x and Python 2.x")
 
     def close(self):
         if self.graph == False:
