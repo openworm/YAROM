@@ -20,7 +20,7 @@ def _rdf_literal_to_gp(x):
     else:
         return x.n3()
 
-def _triples_to_bgp(trips):
+def triples_to_bgp(trips):
     # XXX: Collisions could result between the variable names of different objects
     g = " .\n".join(" ".join(_rdf_literal_to_gp(x) for x in y) for y in trips)
     return g
@@ -40,18 +40,17 @@ class DataObject(DataUser, metaclass=MappedClass):
         Properties
 
     """
+
     _openSet = set()
     _closedSet = set()
     i = 0
 
     @classmethod
     def openSet(self):
+        """ The open set contains items that must be saved directly in order for their data to be written out """
         return self._openSet
 
-        # Must resolve, somehow, to a set of triples that we can manipulate
-    # For instance, one or more construct query could represent the object or
-    # the triples might be stored in memory.
-    def __init__(self,ident=False,triples=False,**kwargs):
+    def __init__(self,ident=False,triples=False,key=False,**kwargs):
         if not triples:
             self._triples = []
         else:
@@ -60,22 +59,28 @@ class DataObject(DataUser, metaclass=MappedClass):
         self.properties = []
         for x in self.__class__.dataObjectProperties:
             x(owner=self)
-        # Used in triples()
-        self._id_is_set = False
 
         if ident:
             self._id = R.URIRef(ident)
-            self._id_is_set = True
+        elif key:
+            self._id = self.make_identifier(key)
         else:
             # Randomly generate an identifier if the derived class can't
             # come up with one from the start. Ensures we always have something
             # that functions as an identifier
             import random
-            v = (random.random(),random.random())
+            v = (random.random(), random.random())
             cname = self.__class__.__name__
-            self._id_variable = self._graph_variable('a'+cname + hashlib.sha224(str(v).encode()).hexdigest())
-            self._id = self.make_identifier(v)
+            self._id_variable = self._graph_variable(cname + "_" + hashlib.sha224(str(v).encode()).hexdigest())
         DataObject.addToOpenSet(self)
+
+    @property
+    def _id_is_set(self):
+        """ Indicates whether the identifier will return a URI appropriate for use by YAROM
+
+        Sub-classes should not override this method.
+        """
+        return hasattr(self,"_id")
 
     def __eq__(self,other):
         return isinstance(other,DataObject) and (self.identifier() == other.identifier())
@@ -98,8 +103,7 @@ class DataObject(DataUser, metaclass=MappedClass):
         return self.__str__()
 
     def _graph_variable(self,var_name):
-        """ Make a variable for storage the graph """
-        return self.conf['rdf.namespace']["variable#"+var_name]
+        return R.Variable(var_name)
 
     @classmethod
     def object_from_id(cls,*args,**kwargs):
@@ -142,10 +146,18 @@ class DataObject(DataUser, metaclass=MappedClass):
             return class_name
         else:
             raise ValueError("URI must be like '"+ns+"<className>' optionally followed by a hash code")
+    @classmethod
+    def extract_unique_part(cls, uri):
+        if uri.startswith(cls.rdf_namespace):
+            return uri[:len(cls.rdf_namespace)]
+        else:
+            raise Exception("This URI ({}) doesn't start with the appropriate namespace ({})".format(uri, cls.rdf_namespace))
 
     @classmethod
     def _is_variable(cls, uri):
         """ Is the uriref a graph variable? """
+        if isinstance(uri, R.Variable):
+            return True
         from urllib.parse import urlparse
         u = urlparse(uri)
         x = u.path.split('/')
@@ -153,11 +165,11 @@ class DataObject(DataUser, metaclass=MappedClass):
 
     @classmethod
     def _graph_variable_to_var(cls, uri):
-        from urllib.parse import urlparse
-        u = urlparse(uri)
-        x = u.path.split('/')
-        if x[2] == 'variable':
-            return "?"+u.fragment
+        return uri
+
+    @classmethod
+    def make_identifier(cls, data):
+        return R.URIRef(cls.rdf_namespace["a"+hashlib.sha224(str(data).encode()).hexdigest()])
 
     def identifier(self,query=False):
         """
@@ -165,14 +177,19 @@ class DataObject(DataUser, metaclass=MappedClass):
 
         This identifier may be randomly generated, but an identifier returned from the
         graph can be used to retrieve the specific object that it refers to.
+
+        Sub-classes of DataObject may override this to construct identifiers based
+        on some other key.
         """
         if query and not self._id_is_set:
             return self._id_variable
-        else:
+        elif self._id_is_set:
             return self._id
-
-    def make_identifier(self, data):
-        return R.URIRef(self.rdf_namespace["a"+hashlib.sha224(str(data).encode()).hexdigest()])
+        else:
+            # XXX: Make no mistake: not having an identifier here is an error.
+            # You may, however, need to sub-class DataObject to make an
+            # appropriate identifier method.
+            raise Exception("No identifier set for "+str(self))
 
     def triples(self, query=False, visited_list=False):
         """ Should be overridden by derived classes to return appropriate triples
@@ -201,21 +218,17 @@ class DataObject(DataUser, metaclass=MappedClass):
         # Properties (of type Property) can be attached to an object
         # However, we won't require that there even is a property list in this
         # case.
-        try:
+        if hasattr(self, 'properties'):
             for x in self.properties:
                 for y in x.triples(query=query, visited_list=visited_list):
                     yield y
-        except AttributeError:
-            # XXX Is there a way to check what the failed attribute reference was?
-            pass
 
-    tcalled = 0
     def graph_pattern(self,query=False):
         """ Get the graph pattern for this object.
 
         It should be as simple as converting the result of triples() into a BGP
         """
-        return _triples_to_bgp(self.triples(query=query))
+        return triples_to_bgp(self.triples(query=query))
 
     def save(self):
         """ Write in-memory data to the database. Derived classes should call this to update the store. """
@@ -230,6 +243,7 @@ class DataObject(DataUser, metaclass=MappedClass):
         x = u.path.split('/')
         if len(x) >= 4 and x[1] == 'entities':
             return x[3]
+
     def load(self):
         """ Load in data from the database. Derived classes should override this for their own data structures.
 
@@ -237,57 +251,17 @@ class DataObject(DataUser, metaclass=MappedClass):
 
         :param self: An object which limits the set of objects which can be returned. Should have the configuration necessary to do the query
         """
-        # 'loading' an object _always_ means doing a query. When we do the query, we identify all of the result sets that can make objects in the current
-        # graph and convert them into objects of the type of the querying object.
-        #
-        gp = self.graph_pattern(query=True)
-        ident = self.identifier(query=True)
-        varlist = [n.linkName for n in self.properties if isinstance(n, SimpleProperty) ]
-        if DataObject._is_variable(ident):
-            varlist.append(self._graph_variable_to_var(ident)[1:])
-        # Do the query/queries
-        q = "Select distinct "+ " ".join("?" + x for x in varlist)+"  where { "+ gp +".}"
-        L.debug('load_query='+q)
-        qres = self.conf['rdf.graph'].query(q)
-        for g in qres:
-            # attempt to get a value for each of the properties this object has
-            # if there isn't a value for this property
-
-            # XXX: Should distinguish datatype and object properties to set them up accordingly.
-
-            # If our own identifier is a BNode, then the binding we get will be for a distinct object
-            # otherwise, the object we get is really the same as this object
-
-            if DataObject._is_variable(ident):
-                new_ident = g[self._graph_variable_to_var(ident)[1:]]
-            else:
-                new_ident = ident
-
-            new_object = self.object_from_id(new_ident)
-
-            for prop in self.properties:
-                if isinstance(prop, SimpleProperty):
-                    # get the linkName
-                    link_name = prop.linkName
-                    # Check if the name is in the result
-                    if g[link_name] is not None:
-                        new_object_prop = getattr(new_object, link_name)
-                        result_value = g[link_name]
-
-                        if result_value is not None \
-                                and not isinstance(result_value, R.BNode) \
-                                and not DataObject._is_variable(result_value):
-                            # XXX: Maybe should verify that it's an rdflib term?
-                            # Create objects from the bound variables
-                            if isinstance(result_value, R.Literal) \
-                            and new_object_prop.property_type == 'DatatypeProperty':
-                                new_object_prop(result_value)
-                            elif new_object_prop.property_type == 'ObjectProperty':
-                                new_object_prop(self.object_from_id(result_value, new_object_prop.value_rdf_type))
-                    else:
-                        our_value = getattr(self, link_name)
-                        setattr(new_object, link_name, our_value)
-            yield new_object
+        if not DataObject._is_variable(self.identifier(query=True)):
+            yield self
+        else:
+            gp = self.graph_pattern(query=True)
+            ident = self.identifier(query=True)
+            q = "SELECT DISTINCT {0} where {{ {1} .}}".format(ident.n3(), gp)
+            qres = self.conf['rdf.graph'].query(q)
+            for g in qres:
+                new_ident = g[0]
+                new_object = self.object_from_id(new_ident)
+                yield new_object
 
     def retract(self):
         """ Remove this object from the data store. """
@@ -400,7 +374,7 @@ class SimpleProperty(Property):
         if not hasattr(self,'linkName'):
             self.__class__.linkName = self.__class__.__name__ + "property"
         Property.__init__(self, name=self.linkName, **kwargs)
-        self.value_property = SimpleProperty.rdf_namespace['value']
+        self.value_property = self.rdf_namespace['value']
         self.v = []
         if (self.owner==False) and hasattr(self,'owner_type'):
             self.owner = self.owner_type()
@@ -412,49 +386,30 @@ class SimpleProperty(Property):
     def hasValue(self):
         """ Returns true if the ``Property`` has had ``load`` called previously and some value was available or if ``set`` has been called previously """
         return len(self.v) > 0
+    @classmethod
+    def _id_hash(cls, value):
+        assert(isinstance(value, str))
+        return hashlib.md5(value.encode()).hexdigest()
 
     def get(self):
         """ If the ``Property`` has had ``load`` or ``set`` called previously, returns
         the resulting values. Otherwise, queries the configured rdf graph for values
         which are set for the ``Property``'s owner.
         """
-        if len(self.v) > 0:
-            for x in self.v:
-                if isinstance(x, R.Literal):
-                    x = x.toPython()
-                    if isinstance(x, R.Literal):
-                        # toPython just returns its caller when it fails
-                        x = str(x)
-                yield x
-        else:
-            owner_id = self.owner.identifier(query=True)
-            if DataObject._is_variable(owner_id):
-                gp = self.owner.graph_pattern(query=True)
-                print("is variable")
-            else:
-                gp = self.graph_pattern(query=True)
-                print("is not variable")
 
-            var = "?"+self.linkName
-            q = "select distinct " +  var + " where { " + gp + " }"
-            L.debug("get query = " + q)
-            print(q)
-            qres = self.rdf.query(q)
-            for x in qres:
-                if self.property_type == 'DatatypeProperty' \
-                        and not DataObject._is_variable(x[0]) \
-                        and x[0] is not None:
-                    yield str(x[0])
-                elif self.property_type == 'ObjectProperty':
-                    # XXX: We can pull the type from the graph. Just be sure
-                    #   to get the most specific type
-                    print("What is the id? It's this --> " + str(x[0]))
-                    yield self.object_from_id(x[0], self.value_rdf_type)
+        gp = self.graph_pattern(query=True)
+
+        var = R.Variable(self._id_hash(self.identifier(query=True)) +"_value")
+        q = "SELECT DISTINCT " + var.n3() + " WHERE { " + gp + " }"
+        qres = self.rdf.query(q)
+        for x in qres:
+            yield x[0]
 
     def set(self,v):
         import bisect
-        bisect.insort(self.v,v)
-        if isinstance(v,DataObject):
+        v = PropertyValue(self.property_type, v)
+        bisect.insort(self.v, v)
+        if isinstance(v, DataObject):
             DataObject.removeFromOpenSet(v)
 
     def triples(self,*args,**kwargs):
@@ -462,49 +417,22 @@ class SimpleProperty(Property):
         owner_id = self.owner.identifier(query=query)
         ident = self.identifier(query=query)
 
-
-        if len(self.v) > 0:
-
+        if query and (len(self.v) == 0):
+            yield (owner_id, self.link, ident)
+            part = self._id_hash(self.identifier(query=query))
+            yield (ident, self.rdf_namespace['value'], R.Variable(part+"_value") )
+        elif len(self.v) > 0:
             for x in Property.triples(self,*args,**kwargs):
                 yield x
-
-            yield (owner_id, self.link, ident)
-
+            if not query:
+                yield (owner_id, self.link, ident)
             for x in self.v:
                 try:
-                    if self.property_type == 'DatatypeProperty':
-                        yield (ident, self.value_property, R.Literal(x))
-                    elif self.property_type == 'ObjectProperty':
-                        yield (ident, self.value_property, x.identifier(query=query))
-                        for t in x.triples(*args,**kwargs):
-                            yield t
+                    yield (ident, self.value_property, x.identifier(query=query))
+                    for t in x.triples(*args,**kwargs):
+                        yield t
                 except Exception:
                     traceback.print_exc()
-
-    def load(self):
-        """ Loads in values to this ``Property`` which have been set for the associated owner,
-        or if the owner refers to an unspecified member of its class, loads values which could
-        be set based on the constraints on the owner.
-
-        """
-        # This load is way simpler since we just need the values for this property
-        gp = self.graph_pattern(query=True)
-        q = "Select distinct ?"+self.linkName+"  where { "+ gp +" . }"
-        print(q)
-        L.debug('load_query='+q)
-        qres = self.conf['rdf.graph'].query(q)
-        for k in qres:
-            k = k[0]
-            value = False
-            if not self._is_variable(k):
-                if self.property_type == 'ObjectProperty':
-                    value = self.object_from_id(k)
-                elif self.property_type == 'DatatypeProperty':
-                    value = str(k)
-
-                if value:
-                    self.v.append(value)
-        yield self
 
     def identifier(self,query=False):
         """ Return the URI for this object
@@ -514,25 +442,16 @@ class SimpleProperty(Property):
         query: bool
             Indicates whether the identifier is to be used in a query or not
         """
-        ident = DataObject.identifier(self,query=query)
         if self._id_is_set:
-            return ident
+            return DataObject.identifier(self,query=query)
+        owner_id = self.owner.identifier(query=query)
+        vlen = len(self.v)
 
-        if query:
-            # If we're querying then our identifier should be a variable if either our value is empty
-            # or our owner's identifier is a variable
-            owner_id = self.owner.identifier(query=query)
-            vlen = len(self.v)
-            if vlen == 0 or DataObject._is_variable(owner_id):
-                return ident
-        # Intentional fall through from if statement ...
-        value_data = ""
-        if self.property_type == 'DatatypeProperty':
-            value_data = "".join(str(x) for x in self.v)
-        elif self.property_type == 'ObjectProperty':
+        if vlen > 0 and not DataObject._is_variable(owner_id):
             value_data = "".join(str(x.identifier()) for x in self.v if self is not x)
+            return self.make_identifier((self.owner.identifier(query=query), self.link, value_data))
+        return DataObject.identifier(self,query=query)
 
-        return self.make_identifier((self.owner.identifier(query=query), self.link, value_data))
 
     def __str__(self):
         return str(self.linkName + "=" + str(";".join(str(x) for x in self.v)))
@@ -542,6 +461,37 @@ class DatatypeProperty(SimpleProperty):
 
 class ObjectProperty(SimpleProperty):
     pass
+
+class PropertyValue(object):
+    def __init__(self, property_type, value=None):
+        if property_type == 'DatatypeProperty':
+            self.vtype = 'literal'
+            self.value = R.Literal(value)
+        else:
+            self.vtype = 'object'
+            self.value = value
+
+    def triples(self, *args, **kwargs):
+        if self.vtype == 'object':
+            for t in self.value.triples(*args,**kwargs):
+                yield t
+
+    def identifier(self, query=False):
+        if self.vtype == 'object':
+            return self.value.identifier(query=query)
+        elif self.vtype == 'literal':
+            return self.value
+        else:
+            raise Exception("A property's value type must be either 'literal' or 'object'")
+
+    def __str__(self):
+        return "<" + str(self.value) + ">"
+
+    def __repr__(self):
+        return str(self)
+
+    def __lt__(self, other):
+        return self.value < other.value
 
 class ObjectCollection(DataObject):
     """
