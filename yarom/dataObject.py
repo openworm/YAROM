@@ -12,20 +12,34 @@ from .dataUser import DataUser
 def _bnode_to_var(x):
     return "?" + x
 
-def _rdf_literal_to_gp(x):
-    if isinstance(x,R.BNode):
+def _serialize_rdflib_term(x, namespace_manager=None):
+    if isinstance(x, R.BNode):
         return _bnode_to_var(x)
-    elif isinstance(x,R.URIRef) and DataObject._is_variable(x):
+    elif isinstance(x, R.URIRef) and DataObject._is_variable(x):
         return DataObject._graph_variable_to_var(x)
     else:
-        return x.n3()
+        return x.n3(namespace_manager)
 
-def triples_to_bgp(trips):
+def triples_to_bgp(trips, namespace_manager=None):
     # XXX: Collisions could result between the variable names of different objects
-    g = " .\n".join(" ".join(_rdf_literal_to_gp(x) for x in y) for y in trips)
+    g = " .\n".join(" ".join(_serialize_rdflib_term(x, namespace_manager) for x in y) for y in trips)
     return g
 
 # We keep a little tree of properties in here
+
+class IdentifierMissingException(Exception):
+    """ Indicates that an identifier should be set available for the object in question, but there is none """
+    def __init__(self, dataObject="[unspecified object]", query=False, *args, **kwargs):
+        mode = "query mode" if query else "non-query mode"
+        super().__init__("An identifier should be provided for {} when used in {}".format(str(dataObject), mode), *args, **kwargs)
+
+def get_hash_function(method_name):
+    if method_name == "sha224":
+        return hashlib.sha224
+    elif method_name == "md5":
+        return hashlib.md5
+    elif method_name in hashlib.algorithms_available:
+        return (lambda data: hashlib.new(method_name, data))
 
 class DataObject(DataUser, metaclass=MappedClass):
     """ An object backed by the database
@@ -45,6 +59,21 @@ class DataObject(DataUser, metaclass=MappedClass):
     _closedSet = set()
     i = 0
 
+    configuration_variables = {
+            "rdf.namespace" : {
+                "description" : "Namespaces for DataObject sub-classes will be based off of this. For example, a subclass named A would have a namespace '[rdf.namespace]A/'",
+                "type" : R.Namespace,
+                "directly_configureable" : True
+                },
+            "dataObject.identifier_hash" : {
+                "description" : "The hash method used for object identifiers. Defaults to md5.",
+                "type" : "sha224, md5, or one of the types accepted by hashlib.new()",
+                "directly_configureable" : True
+                },
+            }
+
+    identifier_hash_method = get_hash_function(DataUser.conf.get('dataObject.identifier_hash', 'md5'))
+
     @classmethod
     def openSet(self):
         """ The open set contains items that must be saved directly in order for their data to be written out """
@@ -58,7 +87,7 @@ class DataObject(DataUser, metaclass=MappedClass):
 
         self.properties = []
         for x in self.__class__.dataObjectProperties:
-            x(owner=self)
+            self.properties.append(x(owner=self))
 
         if ident:
             self._id = R.URIRef(ident)
@@ -71,7 +100,7 @@ class DataObject(DataUser, metaclass=MappedClass):
             import random
             v = (random.random(), random.random())
             cname = self.__class__.__name__
-            self._id_variable = self._graph_variable(cname + "_" + hashlib.sha224(str(v).encode()).hexdigest())
+            self._id_variable = self._graph_variable(cname + "_" + hashlib.md5(str(v).encode()).hexdigest())
         DataObject.addToOpenSet(self)
 
     @property
@@ -86,12 +115,10 @@ class DataObject(DataUser, metaclass=MappedClass):
         return isinstance(other,DataObject) and (self.identifier() == other.identifier())
 
     def __hash__(self):
-        return id(self)
+        return super().__hash__()
 
     def __lt__(self, other):
-        if (self == other):
-            return False
-        return True
+        return hash(self) < hash(other)
 
     def __str__(self):
         s = self.__class__.__name__ + "("
@@ -169,7 +196,7 @@ class DataObject(DataUser, metaclass=MappedClass):
 
     @classmethod
     def make_identifier(cls, data):
-        return R.URIRef(cls.rdf_namespace["a"+hashlib.sha224(str(data).encode()).hexdigest()])
+        return R.URIRef(cls.rdf_namespace["a"+cls.identifier_hash_method(str(data).encode()).hexdigest()])
 
     def identifier(self,query=False):
         """
@@ -189,7 +216,7 @@ class DataObject(DataUser, metaclass=MappedClass):
             # XXX: Make no mistake: not having an identifier here is an error.
             # You may, however, need to sub-class DataObject to make an
             # appropriate identifier method.
-            raise Exception("No identifier set for "+str(self))
+            raise IdentifierMissingException(self, query)
 
     def triples(self, query=False, visited_list=False):
         """ Should be overridden by derived classes to return appropriate triples
@@ -220,21 +247,40 @@ class DataObject(DataUser, metaclass=MappedClass):
         # case.
         if hasattr(self, 'properties'):
             for x in self.properties:
-                for y in x.triples(query=query, visited_list=visited_list):
-                    yield y
+                if query or x.hasValue():
+                    yield (ident, x.link, x.identifier(query=query))
+                    for y in x.triples(query=query, visited_list=visited_list):
+                        yield y
 
-    def graph_pattern(self,query=False):
+    def graph_pattern(self, query=False, shorten=False):
         """ Get the graph pattern for this object.
 
         It should be as simple as converting the result of triples() into a BGP
+
+        Parameters
+        ----------
+        query : bool
+            Indicates whether or not the graph_pattern is to be used for querying
+            (as in a SPARQL query) or for storage
+        shorten : bool
+            Indicates whether to shorten the URLs with the namespace manager
+            attached to the ``self``
         """
-        return triples_to_bgp(self.triples(query=query))
+
+        nm = None
+        if shorten:
+            nm = self.namespace_manager
+        return triples_to_bgp(self.triples(query=query), namespace_manager=nm)
 
     def save(self):
         """ Write in-memory data to the database. Derived classes should call this to update the store. """
 
         ss = set()
-        self.add_statements(self.triples(visited_list=ss))
+
+        try:
+            self.add_statements(self.triples(visited_list=ss))
+        except IdentifierMissingException as e:
+            Exception("You are attempting to save unresolved values "+str(e))
 
     @classmethod
     def _extract_property_name(self,uri):
@@ -257,7 +303,7 @@ class DataObject(DataUser, metaclass=MappedClass):
             gp = self.graph_pattern(query=True)
             ident = self.identifier(query=True)
             q = "SELECT DISTINCT {0} where {{ {1} .}}".format(ident.n3(), gp)
-            qres = self.conf['rdf.graph'].query(q)
+            qres = self.rdf.query(q)
             for g in qres:
                 new_ident = g[0]
                 new_object = self.object_from_id(new_ident)
@@ -302,7 +348,6 @@ class Property(DataObject):
         DataObject.__init__(self, **kwargs)
         self.owner = owner
         if self.owner:
-            self.owner.properties.append(self)
             if name:
                 setattr(self.owner, name, self)
             DataObject.removeFromOpenSet(self)
@@ -376,11 +421,8 @@ class SimpleProperty(Property):
         Property.__init__(self, name=self.linkName, **kwargs)
         self.value_property = self.rdf_namespace['value']
         self.v = []
-        if (self.owner==False) and hasattr(self,'owner_type'):
-            self.owner = self.owner_type()
 
         if self.owner != False:
-            # XXX: Shouldn't be recreating this here...
             self.link = self.owner_type.rdf_namespace[self.linkName]
 
     def hasValue(self):
@@ -403,7 +445,10 @@ class SimpleProperty(Property):
         q = "SELECT DISTINCT " + var.n3() + " WHERE { " + gp + " }"
         qres = self.rdf.query(q)
         for x in qres:
-            yield x[0]
+            if self.property_type == 'ObjectProperty':
+                yield self.object_from_id(x[0])
+            else:
+                yield x[0]
 
     def set(self,v):
         import bisect
@@ -413,23 +458,39 @@ class SimpleProperty(Property):
             DataObject.removeFromOpenSet(v)
 
     def triples(self,*args,**kwargs):
+        """ Yields the triples for describing a simple property """
+
         query=kwargs.get('query',False)
-        owner_id = self.owner.identifier(query=query)
+
+        if not kwargs.get('visited_list', False):
+            kwargs['visited_list'] = set()
+
+        if self in kwargs['visited_list']:
+            return
+        else:
+            kwargs['visited_list'].add(self)
+
+
+        if not (query or self.hasValue()):
+            return
+
         ident = self.identifier(query=query)
 
         if query and (len(self.v) == 0):
-            yield (owner_id, self.link, ident)
             part = self._id_hash(self.identifier(query=query))
             yield (ident, self.rdf_namespace['value'], R.Variable(part+"_value") )
-        elif len(self.v) > 0:
-            for x in Property.triples(self,*args,**kwargs):
+            # XXX: It may be good to send out the triples for our owner as well so
+            #      that, in some sense, the property is completely specified for
+            #      the purposes of querying.
+            for x in self.owner.triples(*args, **kwargs):
                 yield x
-            if not query:
-                yield (owner_id, self.link, ident)
+        elif len(self.v) > 0:
+            for x in Property.triples(self,*args, **kwargs):
+                yield x
             for x in self.v:
                 try:
                     yield (ident, self.value_property, x.identifier(query=query))
-                    for t in x.triples(*args,**kwargs):
+                    for t in x.triples(*args, **kwargs):
                         yield t
                 except Exception:
                     traceback.print_exc()

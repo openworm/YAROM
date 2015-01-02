@@ -366,7 +366,6 @@ class ZODBSource(RDFSource):
         from ZODB.FileStorage import FileStorage
         self.path = self.conf['rdf.store_conf']
         openstr = os.path.abspath(self.path)
-        print("openstr="+openstr)
         try:
             fs = FileStorage(openstr)
             self.zdb=ZODB.DB(fs)

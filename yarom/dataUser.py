@@ -10,6 +10,29 @@ class DataUser(Configureable):
 
     Classes which use the database should inherit from DataUser.
     """
+
+    # TODO: Make these metadata accessible for configuration managers
+    # TODO: Illustrate how setting variables in a config file translates into these configurations
+    configuration_variables = {
+            "rdf.namespace" : {
+                "description" : "The base namespace for user objects and information.",
+                "type" : Namespace,
+                "directly_configureable" : True
+                },
+            "rdf.store" : {
+                "description" : "Influences how statements are added to the graph.",
+                "type" : str,
+                "directly_configureable" : True
+                },
+            "rdf.graph" : {
+                "description" : "The rdflib graph object used for querying and storage of user objects and information.",
+                "type" : Graph
+                },
+            "rdf.namespace_manager" : {
+                "description" : "The namespace manager associated with the rdf.graph. Stores prefixes that get used by yarom",
+                "type" : NamespaceManager
+                }
+            }
     def __init__(self, **kwargs):
         Configureable.__init__(self, **kwargs)
         if not isinstance(self.conf,Data):
@@ -29,6 +52,10 @@ class DataUser(Configureable):
     @rdf.setter
     def rdf(self, value):
         self.conf['rdf.graph'] = value
+
+    @property
+    def namespace_manager(self):
+        return self.conf['rdf.namespace_manager']
 
     def _remove_from_store(self, g):
         # Note the assymetry with _add_to_store. You must add actual elements, but deletes

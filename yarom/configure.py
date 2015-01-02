@@ -106,6 +106,32 @@ class Configuration(object):
 class Configureable(object):
     """ An object which can accept configuration """
     conf = False
+
+    """ A table of configuration values used by the Configureable object for the
+    purpose of documentation.
+
+    The table is indexed by the configuration value. Among the data included in
+    the table should be:
+
+    - a "description" which describes how the configuration value is used
+      *within the configureable object*: broad generalization about the variable
+      shouldn't be here.
+
+    - a "type" for the value of the config may also be included and may be a
+      Python ``type`` or just a string description. This isn't at all intended
+      to be used for type checking, but *is purely descriptive*.
+
+    - a "directly_configureable" indicator which should be set to ``True`` if the
+      value passed in to the object for configuration variable is used more-or-
+      less directly by the object. Sanitization of the value or translation into
+      a more specific form are acceptable for a variable that is nonetheless
+      directly_configureable. On the other hand, a configuration variable that
+      has its value set within the object should have directly_configureable set
+      to ``False``.
+    """
+
+    configuration_variables = dict()
+
     def __init__(self, conf=False):
         if conf:
             self.conf = conf

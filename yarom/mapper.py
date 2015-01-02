@@ -51,7 +51,8 @@ def _create_property(owner_class, linkName, property_type, value_type=False, mul
             value_rdf_type = False
             x = P.DatatypeProperty
 
-        c = type(property_class_name,(x,),dict(linkName=linkName, property_type=property_type, value_rdf_type=value_rdf_type, owner_type=owner_class, multiple=multiple))
+        link = owner_class.rdf_namespace[linkName]
+        c = type(property_class_name,(x,),dict(linkName=linkName, link=link,  property_type=property_type, value_rdf_type=value_rdf_type, owner_type=owner_class, multiple=multiple))
 
     owner_class.dataObjectProperties.append(c)
 
@@ -107,25 +108,29 @@ class MappedClass(type):
         return issubclass(cls, other)
 
     def register(cls):
-        """ Registers the class as a DataObject to be included in the configured rdf graph
+        """
+        Registers the class as a DataObject to be included in the configured rdf graph.
+
+        Also creates the classes for and registers the properties of this DataObject
         """
         DataObjects[cls.__name__] = cls
         DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, MappedClass)]
         cls.parents = DataObjectsParents[cls.__name__]
+
+        cls.addObjectProperties()
+        cls.addDatatypeProperties()
+
         return cls
 
     def map(cls):
-        """ Performs those actions necessary for storing the class and its instances in the graph
+        """
+        Performs those actions necessary for storing the class and its instances in the graph
         """
         cls._du = DataUser()
         cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
         cls.rdf_namespace = R.Namespace(cls.rdf_type + "/")
 
         cls.addParentsToGraph()
-
-        cls.addObjectProperties()
-        cls.addDatatypeProperties()
-
         cls.addPropertiesToGraph()
         cls.addNamespaceToManager()
 
