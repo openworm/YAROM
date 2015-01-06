@@ -101,7 +101,6 @@ class DataObject(DataUser, metaclass=MappedClass):
             v = (random.random(), random.random())
             cname = self.__class__.__name__
             self._id_variable = self._graph_variable(cname + "_" + hashlib.md5(str(v).encode()).hexdigest())
-        DataObject.addToOpenSet(self)
 
     @property
     def _id_is_set(self):
@@ -115,16 +114,26 @@ class DataObject(DataUser, metaclass=MappedClass):
         return isinstance(other,DataObject) and (self.identifier() == other.identifier())
 
     def __hash__(self):
-        return super().__hash__()
+        return hash(self.identifier())
 
     def __lt__(self, other):
-        return hash(self) < hash(other)
+        return hash(self.identifier()) < hash(other.identifier())
 
     def __str__(self):
-        s = self.__class__.__name__ + "("
-        s +=  ", ".join(str(x) for x in self.properties if x.hasValue())
-        s += ")"
-        return s
+        seen = set()
+        def helper():
+            s = self.__class__.__name__ + "("
+            l = []
+            for x in self.properties:
+                if x.hasValue() and (x not in seen):
+                    seen.add(x)
+                    l.append(str(x))
+                else:
+                    l.append("...")
+            s +=  ", ".join(l)
+            s += ")"
+            return s
+        return helper()
 
     def __repr__(self):
         return self.__str__()
@@ -216,7 +225,7 @@ class DataObject(DataUser, metaclass=MappedClass):
             # XXX: Make no mistake: not having an identifier here is an error.
             # You may, however, need to sub-class DataObject to make an
             # appropriate identifier method.
-            raise IdentifierMissingException(self, query)
+            raise IdentifierMissingException(self.__class__, query)
 
     def triples(self, query=False, visited_list=False):
         """ Should be overridden by derived classes to return appropriate triples
@@ -228,10 +237,10 @@ class DataObject(DataUser, metaclass=MappedClass):
         if visited_list == False:
             visited_list = set()
 
-        if self in visited_list:
+        if self.identifier(query=query) in visited_list:
             return
         else:
-            visited_list.add(self)
+            visited_list.add(self.identifier(query=query))
 
         ident = self.identifier(query=query)
         yield (ident, R.RDF['type'], self.rdf_type)
@@ -247,7 +256,7 @@ class DataObject(DataUser, metaclass=MappedClass):
         # case.
         if hasattr(self, 'properties'):
             for x in self.properties:
-                if query or x.hasValue():
+                if x.hasValue():
                     yield (ident, x.link, x.identifier(query=query))
                     for y in x.triples(query=query, visited_list=visited_list):
                         yield y
@@ -350,7 +359,6 @@ class Property(DataObject):
         if self.owner:
             if name:
                 setattr(self.owner, name, self)
-            DataObject.removeFromOpenSet(self)
         # XXX: Default implementation is a box for a value
         self._value = False
 
@@ -416,10 +424,20 @@ class SimpleProperty(Property):
     """ A property that has one or more links to literals or DataObjects """
 
     def __init__(self,**kwargs):
+
+        # The 'linkName' must be made up from the class name if one isn't set
+        # before initialization (typically in mapper._create_property)
         if not hasattr(self,'linkName'):
             self.__class__.linkName = self.__class__.__name__ + "property"
         Property.__init__(self, name=self.linkName, **kwargs)
+
+        # The 'value_property' is the URI used in the RDF graph pointing
+        # from this property to its value. It is a different value for
+        # each property type.
         self.value_property = self.rdf_namespace['value']
+
+        # 'v' holds values that have been set on this SimpleProperty. It acts
+        # as a sort of staging area before saving the values to the graph.
         self.v = []
 
         if self.owner != False:
@@ -428,6 +446,7 @@ class SimpleProperty(Property):
     def hasValue(self):
         """ Returns true if the ``Property`` has had ``load`` called previously and some value was available or if ``set`` has been called previously """
         return len(self.v) > 0
+
     @classmethod
     def _id_hash(cls, value):
         assert(isinstance(value, str))
@@ -435,9 +454,16 @@ class SimpleProperty(Property):
 
     def get(self):
         """ If the ``Property`` has had ``load`` or ``set`` called previously, returns
-        the resulting values. Otherwise, queries the configured rdf graph for values
+        the resulting values. Also queries the configured rdf graph for values
         which are set for the ``Property``'s owner.
         """
+
+        returned = set() # collection of returned values so we don't send them multiple times
+
+        for x in self.v:
+            if x.value not in returned:
+                returned.add(x.value)
+                yield x.value
 
         gp = self.graph_pattern(query=True)
 
@@ -445,34 +471,37 @@ class SimpleProperty(Property):
         q = "SELECT DISTINCT " + var.n3() + " WHERE { " + gp + " }"
         qres = self.rdf.query(q)
         for x in qres:
-            if self.property_type == 'ObjectProperty':
-                yield self.object_from_id(x[0])
-            else:
-                yield x[0]
+            if x[0] not in returned:
+                returned.add(x[0])
+                if self.property_type == 'ObjectProperty':
+                    yield self.object_from_id(x[0])
+                else:
+                    yield x[0]
 
     def set(self,v):
         import bisect
         v = PropertyValue(self.property_type, v)
-        bisect.insort(self.v, v)
-        if isinstance(v, DataObject):
-            DataObject.removeFromOpenSet(v)
+        if self.multiple:
+            bisect.insort(self.v, v)
+        else:
+            self.v = [v]
 
     def triples(self,*args,**kwargs):
         """ Yields the triples for describing a simple property """
 
         query=kwargs.get('query',False)
 
+        if not (query or self.hasValue()):
+            return
+
         if not kwargs.get('visited_list', False):
             kwargs['visited_list'] = set()
 
-        if self in kwargs['visited_list']:
+        if self.identifier(query=query) in kwargs['visited_list']:
             return
         else:
-            kwargs['visited_list'].add(self)
+            kwargs['visited_list'].add(self.identifier(query=query))
 
-
-        if not (query or self.hasValue()):
-            return
 
         ident = self.identifier(query=query)
 
@@ -487,13 +516,22 @@ class SimpleProperty(Property):
         elif len(self.v) > 0:
             for x in Property.triples(self,*args, **kwargs):
                 yield x
-            for x in self.v:
+
+            def yield_triples_helper(propertyValue):
                 try:
-                    yield (ident, self.value_property, x.identifier(query=query))
-                    for t in x.triples(*args, **kwargs):
+                    yield (ident, self.value_property, propertyValue.identifier(query=query))
+                    for t in propertyValue.triples(*args, **kwargs):
                         yield t
                 except Exception:
                     traceback.print_exc()
+            if self.multiple:
+                for x in self.v:
+                    for triple in yield_triples_helper(x):
+                        yield triple
+            else:
+                for triple in yield_triples_helper(self.v[0]):
+                    yield triple
+
 
     def identifier(self,query=False):
         """ Return the URI for this object
@@ -505,12 +543,11 @@ class SimpleProperty(Property):
         """
         if self._id_is_set:
             return DataObject.identifier(self,query=query)
-        owner_id = self.owner.identifier(query=query)
         vlen = len(self.v)
 
-        if vlen > 0 and not DataObject._is_variable(owner_id):
-            value_data = "".join(str(x.identifier()) for x in self.v if self is not x)
-            return self.make_identifier((self.owner.identifier(query=query), self.link, value_data))
+        if vlen > 0:
+            value_data = "".join(str(x.identifier(query=query)) for x in self.v if self is not x)
+            return self.make_identifier((self.link, value_data))
         return DataObject.identifier(self,query=query)
 
 
@@ -544,6 +581,9 @@ class PropertyValue(object):
             return self.value
         else:
             raise Exception("A property's value type must be either 'literal' or 'object'")
+
+    def __hash__(self):
+        return hash(self.value)
 
     def __str__(self):
         return "<" + str(self.value) + ">"

@@ -170,6 +170,7 @@ class DataObjectTest(_DataTest):
         g = make_graph(20)
         d = Y.DataObject(triples=g, key="id")
         self.assertNotEqual(0,len(d.graph_pattern()))
+        self.assertNotEqual(0,len(d.graph_pattern()))
 
     def test_call_graph_pattern_twice_query(self):
         """ Be sure that we can call graph pattern on the same object multiple times and not have it die on us """
@@ -712,7 +713,8 @@ class SimplePropertyTest(_DataTest):
         # Done dynamically to ensure that all of the yarom setup happens before the class is created
         class K(Y.DataObject):
             datatypeProperties = ['boots']
-            objectProperties = ['bats']
+            objectProperties = ['bats',
+                    {'name':'bits', 'multiple':True}]
         self.k = K
 
     # XXX: auto generate some of these tests...
@@ -758,13 +760,13 @@ class SimplePropertyTest(_DataTest):
         ob = self.k(key="2")
         oc = self.k(key="3")
 
-        do.bats(oa)
-        do.bats(ob)
-        do.bats(oc)
-        do1.bats(oc)
-        do1.bats(oa)
-        do1.bats(ob)
-        self.assertEqual(do.bats.identifier(),do1.bats.identifier())
+        do.bits(oa)
+        do.bits(ob)
+        do.bits(oc)
+        do1.bits(oc)
+        do1.bits(oa)
+        do1.bits(ob)
+        self.assertEqual(do.bits.identifier(), do1.bits.identifier())
 
     def test_triples_with_no_value(self):
         """ Test that when there is no value set for a property, it still yields no triples """
@@ -777,6 +779,16 @@ class SimplePropertyTest(_DataTest):
         sp = T(owner=do)
         self.assertEqual(len(list(sp.triples())), 0)
         self.assertNotEqual(len(list(sp.triples(query=True))), 0)
+    def test_non_multiple_saves_single_values(self):
+        class C(Y.DataObject):
+            datatypeProperties = ['t']
+        do = C(key="s")
+        do.t("value1")
+        do.t("vaule2")
+        do.save()
+        #print(do.graph_pattern(query=True))
+        do1 = C(key="s")
+        self.assertTrue(len(list(do1.t.get())), 1)
 
 class ObjectCollectionTest(_DataTest):
     """ Tests for the simple container class """
