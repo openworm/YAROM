@@ -1,8 +1,3 @@
-# A consolidation of the data sources for the project
-# includes:
-# RDFlib!
-# Other things!
-#
 # Works like Configuration:
 # Inherit from the DataUser class to access data of all kinds (listed above)
 
@@ -83,6 +78,9 @@ class Data(Configuration, Configureable):
             if 'rdf.rules' not in self:
                 raise Exception("You've set `rdf.inference' in your configuration. Please provide n3 rules in your configuration (property name `rdf.rules') as well in order to use rdf inference.")
 
+            import warnings
+            warnings.filterwarnings('ignore', "Missing pydot library") # Filters an obnoxious warning from FuXi
+            warnings.filterwarnings('ignore', ".*unclosed file <_io.BufferedReader .*") # Filters a warning from rdflib not closing its files from a parse
             from FuXi.Rete.RuleStore import SetupRuleStore
             from FuXi.Rete.Util import generateTokenSet
             from FuXi.Horn.HornRules import HornFromN3
@@ -203,7 +201,9 @@ class SerializationSource(RDFSource):
             else:
                 # delete the database and read in the new one
                 # read in the serialized format
-                g0.parse(source_file,format=file_format)
+                import warnings
+                warnings.filterwarnings('ignore', ".*unclosed file <_io.BufferedReader .*") # Filters a warning from rdflib not closing its files from a parse
+                g0.parse(source_file, format=file_format)
 
             self.graph = g0
 
@@ -386,6 +386,7 @@ class ZODBSource(RDFSource):
             transaction.begin()
             self.graph.open(self.path)
         except Exception as e:
+            transaction.abort()
             raise Exception("ZODB format error. This may be a result of using two different version of ZODB, such as between Python 3.x and Python 2.x")
 
     def close(self):

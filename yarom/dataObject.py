@@ -22,10 +22,11 @@ def _serialize_rdflib_term(x, namespace_manager=None):
 
 def triples_to_bgp(trips, namespace_manager=None):
     # XXX: Collisions could result between the variable names of different objects
-    g = " .\n".join(" ".join(_serialize_rdflib_term(x, namespace_manager) for x in y) for y in trips)
+    g = ""
+    for y in trips:
+        g += " ".join(_serialize_rdflib_term(x, namespace_manager) for x in y) + " .\n"
     return g
 
-# We keep a little tree of properties in here
 
 class IdentifierMissingException(Exception):
     """ Indicates that an identifier should be set available for the object in question, but there is none """
@@ -51,8 +52,9 @@ class DataObject(DataUser, metaclass=MappedClass):
     rdf_namespace : rdflib.namespace.Namespace
         The rdflib namespace (prefix for URIs) for objects from this class
     properties : list of Property
-        Properties
-
+        Properties belonging to this object
+    owner_properties : list of Property
+        Properties belonging to parents of this object
     """
 
     _openSet = set()
@@ -80,15 +82,26 @@ class DataObject(DataUser, metaclass=MappedClass):
         return self._openSet
 
     def __init__(self,ident=False,triples=False,key=False,**kwargs):
+        try:
+            DataUser.__init__(self,**kwargs)
+        except BadConf as e:
+            raise Exception("You may need to connect to a database before continuing.")
         if not triples:
             self._triples = []
         else:
             self._triples = triples
 
         self.properties = []
+        self.owner_properties = []
+
         for x in self.__class__.dataObjectProperties:
             self.properties.append(x(owner=self))
 
+        for x in self.properties:
+            if x.linkName in kwargs:
+                x(kwargs[x.linkName])
+
+        self._id = False
         if ident:
             self._id = R.URIRef(ident)
         elif key:
@@ -108,7 +121,7 @@ class DataObject(DataUser, metaclass=MappedClass):
 
         Sub-classes should not override this method.
         """
-        return hasattr(self,"_id")
+        return self._id != False
 
     def __eq__(self,other):
         return isinstance(other,DataObject) and (self.identifier() == other.identifier())
@@ -125,11 +138,14 @@ class DataObject(DataUser, metaclass=MappedClass):
             s = self.__class__.__name__ + "("
             l = []
             for x in self.properties:
-                if x.hasValue() and (x not in seen):
-                    seen.add(x)
-                    l.append(str(x))
+                if x.hasValue():
+                    if x not in seen:
+                        seen.add(x)
+                        l.append(str(x))
+                    else:
+                        l.append("...")
                 else:
-                    l.append("...")
+                    l.append(x.linkName)
             s +=  ", ".join(l)
             s += ")"
             return s
@@ -228,7 +244,8 @@ class DataObject(DataUser, metaclass=MappedClass):
             raise IdentifierMissingException(self.__class__, query)
 
     def triples(self, query=False, visited_list=False):
-        """ Should be overridden by derived classes to return appropriate triples
+        """
+        Should be overridden by derived classes to return appropriate triples
 
         Returns
         --------
@@ -311,7 +328,7 @@ class DataObject(DataUser, metaclass=MappedClass):
         else:
             gp = self.graph_pattern(query=True)
             ident = self.identifier(query=True)
-            q = "SELECT DISTINCT {0} where {{ {1} .}}".format(ident.n3(), gp)
+            q = "SELECT DISTINCT {0} where {{ {1} }}".format(ident.n3(), gp)
             qres = self.rdf.query(q)
             for g in qres:
                 new_ident = g[0]
@@ -327,6 +344,15 @@ class DataObject(DataUser, metaclass=MappedClass):
             return DataUser.__getitem__(self, x)
         except KeyError:
             raise Exception("You attempted to get the value `%s' from `%s'. It isn't here. Perhaps you misspelled the name of a Property?" % (x, self))
+
+    def getOwners(self, property_name):
+        """ Return the owners along a property pointing to this object """
+        res = []
+        for x in self.owner_properties:
+            if isinstance(x, SimpleProperty):
+                if str(x.link) == str(property_name):
+                    res.append(x.owner)
+        return res
 
 # Define a property by writing the get
 class Property(DataObject):
@@ -438,15 +464,18 @@ class SimpleProperty(Property):
 
         # 'v' holds values that have been set on this SimpleProperty. It acts
         # as a sort of staging area before saving the values to the graph.
-        self.v = []
+        self._v = []
 
         if self.owner != False:
             self.link = self.owner_type.rdf_namespace[self.linkName]
 
     def hasValue(self):
         """ Returns true if the ``Property`` has had ``load`` called previously and some value was available or if ``set`` has been called previously """
-        return len(self.v) > 0
+        return len(self._v) > 0
 
+    def _get(self):
+        for x in self._v:
+            yield x
     @classmethod
     def _id_hash(cls, value):
         assert(isinstance(value, str))
@@ -460,7 +489,7 @@ class SimpleProperty(Property):
 
         returned = set() # collection of returned values so we don't send them multiple times
 
-        for x in self.v:
+        for x in self._v:
             if x.value not in returned:
                 returned.add(x.value)
                 yield x.value
@@ -480,11 +509,13 @@ class SimpleProperty(Property):
 
     def set(self,v):
         import bisect
-        v = PropertyValue(self.property_type, v)
+        if not hasattr(v, "identifier"):
+            v = PropertyValue(self.property_type, v)
+
         if self.multiple:
-            bisect.insort(self.v, v)
+            bisect.insort(self._v, v)
         else:
-            self.v = [v]
+            self._v = [v]
 
     def triples(self,*args,**kwargs):
         """ Yields the triples for describing a simple property """
@@ -505,31 +536,32 @@ class SimpleProperty(Property):
 
         ident = self.identifier(query=query)
 
-        if query and (len(self.v) == 0):
+        def yield_triples_helper(propertyValue):
+            try:
+                yield (ident, self.value_property, propertyValue.identifier(query=query))
+                for t in propertyValue.triples(*args, **kwargs):
+                    yield t
+            except Exception:
+                traceback.print_exc()
+
+        if query and (len(self._v) == 0):
             part = self._id_hash(self.identifier(query=query))
-            yield (ident, self.rdf_namespace['value'], R.Variable(part+"_value") )
-            # XXX: It may be good to send out the triples for our owner as well so
-            #      that, in some sense, the property is completely specified for
-            #      the purposes of querying.
+            v = Variable(part+"_value")
+            for t in yield_triples_helper(v):
+                yield t
+
             for x in self.owner.triples(*args, **kwargs):
                 yield x
-        elif len(self.v) > 0:
+        elif len(self._v) > 0:
             for x in Property.triples(self,*args, **kwargs):
                 yield x
 
-            def yield_triples_helper(propertyValue):
-                try:
-                    yield (ident, self.value_property, propertyValue.identifier(query=query))
-                    for t in propertyValue.triples(*args, **kwargs):
-                        yield t
-                except Exception:
-                    traceback.print_exc()
             if self.multiple:
-                for x in self.v:
+                for x in self._v:
                     for triple in yield_triples_helper(x):
                         yield triple
             else:
-                for triple in yield_triples_helper(self.v[0]):
+                for triple in yield_triples_helper(self._v[0]):
                     yield triple
 
 
@@ -543,22 +575,44 @@ class SimpleProperty(Property):
         """
         if self._id_is_set:
             return DataObject.identifier(self,query=query)
-        vlen = len(self.v)
+        vlen = len(self._v)
 
         if vlen > 0:
-            value_data = "".join(str(x.identifier(query=query)) for x in self.v if self is not x)
+            value_data = "".join(str(x.identifier(query=query)) for x in self._v if self is not x)
             return self.make_identifier((self.link, value_data))
         return DataObject.identifier(self,query=query)
 
 
     def __str__(self):
-        return str(self.linkName + "=" + str(";".join(str(x) for x in self.v)))
+        return str(self.linkName + "=" + str(";".join(str(x) for x in self._v)))
 
 class DatatypeProperty(SimpleProperty):
     pass
 
 class ObjectProperty(SimpleProperty):
     pass
+
+class Variable(object):
+    def __init__(self, name):
+        self.var = R.Variable(name)
+
+    def identifier(self, *args, **kwargs):
+        return self.var
+
+    def triples(self, *args, **kwargs):
+        return []
+
+    def __hash__(self):
+        return hash(self.var)
+
+    def __str__(self):
+        return str(self.var)
+
+    def __repr__(self):
+        return str(self)
+
+    def __lt__(self, other):
+        return self.var < other.var
 
 class PropertyValue(object):
     def __init__(self, property_type, value=None):

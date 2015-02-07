@@ -48,6 +48,7 @@ Classes
 __version__ = '0.5.0-alhpa'
 __author__ = 'Mark Watts'
 
+
 import traceback
 from .configure import Configuration,Configureable,ConfigValue,BadConf
 from .data import Data
@@ -89,7 +90,33 @@ def connect(configFile=False,
             do_logging=False,
             data=False,
             dataFormat='n3'):
-    """ Load desired configuration and open the database """
+    """
+     Load desired configuration and open the database
+    Parameters
+    ----------
+    configFile: str, optional
+    conf: string, Data, Configuration or dict, optional
+        The configuration to load.
+
+        If a Data object is provided, then it's used as is for the configuration.
+        If either a Python dict or a Configuration object are provided, then the
+        contents of that object is used to make a Data object for configuration.
+        If a string is provided, then the file is read in as JSON to be parsed as
+        a dict and from there is treated as if you had passed that dict to
+        connect.
+
+        The default action is to attempt to open a file called 'yarom.conf' from
+        your current directory as the configuration. Failing that, an 'empty'
+        config with default values will be loaded.
+    do_logging: bool, optional
+        If True, turn on debug level logging. The default is False.
+    data: str, optional
+        If provided, specifies a file to load into the library.
+    dataFormat: str, optional
+        If provided, specifies the file format of the file pointed specified by `data`.
+
+        The formats available are those accepted by RDFLib's serializer plugins. 'n3' is the default.
+    """
     import logging
     import atexit
     import sys
@@ -103,18 +130,15 @@ def connect(configFile=False,
         logging.basicConfig(level=logging.DEBUG)
 
     if conf:
-        Configureable.conf = conf
-        if not isinstance(conf, Data):
-            # Initializes a Data object with
-            # the Configureable.conf
-            Configureable.conf = Data()
-    elif configFile:
-        loadConfig(configFile)
+        if isinstance(conf, Data):
+            Configureable.conf = conf
+        elif isinstance(conf, (Configuration, dict)):
+            Configureable.conf = Data(conf)
+        elif isinstance(conf, str):
+            Configureable.conf = Data.open(conf)
     else:
         try:
-            from pkg_resources import Requirement, resource_filename
-            filename = resource_filename(Requirement.parse("yarom"),"yarom/default.conf")
-            Configureable.conf = Data.open(filename)
+            Configureable.conf = Data.open("yarom.conf")
         except:
             logging.info("Couldn't load default configuration")
             traceback.print_exc()

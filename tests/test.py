@@ -21,7 +21,11 @@ try:
     import bsddb
     has_bsddb = True
 except ImportError:
-    has_bsddb = False
+    try:
+        import bsddb3
+        has_bsddb = True
+    except:
+        has_bsddb = False
 
 test_ns = "http://github.com/mwatts15/YAROM/tests/"
 

@@ -2,10 +2,15 @@
 # Modules inherit from this class and use their self['expected_configured_property']
 import traceback
 class ConfigValue(object):
+    """ A value to be configured.  Base class intended to be subclassed, as its only method is not implemented
+    """
     def get(self):
         raise NotImplementedError
 
 class _C(ConfigValue):
+    """ A helper class that simply stores a value and can report it back with the get method.
+        Subclasses ConfigValue and implements the get method.
+    """
     def __init__(self, v):
         self.v = v
     def get(self):
@@ -17,9 +22,13 @@ class _C(ConfigValue):
 
 
 class BadConf(Exception):
+    """ Special exception subclass for alerting the user to a bad configuration
+    """
     pass
 
 class _link(ConfigValue):
+    """ Helper class that groups values within a Configuration
+    """
     def __init__(self,members,c):
         self.members = members
         self.conf = c
@@ -27,7 +36,7 @@ class _link(ConfigValue):
         return self.conf[self.members[0]]
 
 class Configuration(object):
-    """ Configuration """
+    """ A simple configuration object.  Enables setting and getting key-value pairs"""
     # conf: is a configure instance to base this one on
     # dependencies are required for this class to be initialized (TODO)
 
@@ -71,23 +80,37 @@ class Configuration(object):
 
     @classmethod
     def open(cls,file_name):
+        """ Open a configuration file and read it to build the internal state.
+
+        Parameters
+        ----------
+        file_name: str
+            The name of a configuration file encoded as JSON
+
+        Returns
+        -------
+        Configuration
+            a Configuration object with the configuration taken from the JSON file
+        """
         import json
         with open(file_name) as f:
             c = Configuration()
             d = json.load(f)
             for k in d:
-                value = d[k]
-                if isinstance(value, str):
-                    if value.startswith("BASE/"):
-                        from pkg_resources import Requirement, resource_filename
-                        value = value[4:]
-                        value = resource_filename(Requirement.parse('yarom'), value)
-                        d[k] = value
                 c[k] = _C(d[k])
         c['configure.file_location'] = file_name
         return c
 
-    def copy(self,other):
+    def copy(self, other):
+        """ Copy configuration values from a different object.
+        Parameters
+        ----------
+        other: dict or Configuration
+            A dict or Configuration object to copy the configuration from
+        Returns
+        -------
+        self
+        """
         if isinstance(other,Configuration):
             self._properties = dict(other._properties)
         elif isinstance(other,dict):
@@ -96,6 +119,23 @@ class Configuration(object):
         return self
 
     def get(self, pname, default=None):
+        """ Retrieve a configuration value.
+        Parameters
+        ----------
+        pname: str
+            The key of the value to return.
+        default: object
+            The value to return if there is no value corresponding to the given key
+        Returns
+        -------
+        object
+            The value corresponding to the key in pname or `default` if none is
+            available and a default is provided.
+        Raises
+        ------
+        KeyError
+            If the given key has no associated value and no default is provided
+        """
         if pname in self._properties:
             return self._properties[pname].get()
         elif (default is not None):
@@ -129,7 +169,6 @@ class Configureable(object):
       has its value set within the object should have directly_configureable set
       to ``False``.
     """
-
     configuration_variables = dict()
 
     def __init__(self, conf=False):
