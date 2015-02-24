@@ -3,7 +3,7 @@ from yarom import DataUser
 import yarom as P
 import traceback
 
-__all__ = [ "MappedClass", "DataObjects", "DataObjectsParents" ]
+__all__ = [ "MappedClass", "DataObjects", "DataObjectsParents", "makeDatatypeProperty", "makeObjectProperty"]
 
 DataObjects = dict()
 DataObjectsParents = dict()

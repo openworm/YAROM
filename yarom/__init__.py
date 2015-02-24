@@ -59,8 +59,11 @@ from .quantity import Quantity
 this_module = __import__('yarom')
 this_module.connected = False
 
-def config():
-    return Configureable.conf
+def config(key=None):
+    if key is None:
+        return Configureable.conf
+    else:
+        return Configureable.conf[key]
 
 def loadConfig(f):
     """ Load configuration for the module """

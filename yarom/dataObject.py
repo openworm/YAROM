@@ -81,7 +81,7 @@ class DataObject(DataUser, metaclass=MappedClass):
         """ The open set contains items that must be saved directly in order for their data to be written out """
         return self._openSet
 
-    def __init__(self,ident=False,triples=False,key=False,**kwargs):
+    def __init__(self,ident=False,var=False,triples=False,key=False,**kwargs):
         try:
             DataUser.__init__(self,**kwargs)
         except BadConf as e:
@@ -103,9 +103,17 @@ class DataObject(DataUser, metaclass=MappedClass):
 
         self._id = False
         if ident:
-            self._id = R.URIRef(ident)
+            if isinstance(ident, R.URIRef):
+                self._id = ident
+            else:
+                self._id = R.URIRef(ident)
+        elif var:
+            self._id_variable = R.Variable(var)
         elif key:
-            self._id = self.make_identifier(key)
+            if isinstance(key, str):
+                self._id = self.make_identifier_direct(key)
+            else:
+                self._id = self.make_identifier(key)
         else:
             # Randomly generate an identifier if the derived class can't
             # come up with one from the start. Ensures we always have something
@@ -123,11 +131,44 @@ class DataObject(DataUser, metaclass=MappedClass):
         """
         return self._id != False
 
+    @property
+    def defined(self):
+        return self._id != False
+
+    @property
+    def idl(self):
+        if self._id:
+            return self._id
+        else:
+            return self._id_variable
+    @property
+    def p(self):
+        return self.owner_properties
+
+    @property
+    def o(self):
+        return self.properties
+
+    def set_parent(self, link, other):
+        cls = type(self)
+        prop = None
+
+        if isinstance(other, DataObject):
+            prop = makeObjectProperty(cls, link, value_type=type(other))
+        else:
+            prop = makeDatatypeProperty(cls, link)
+
+        p = prop(owner=self)
+        p.setValue(other)
+
+        other.owner_properties.append(p)
+        self.properties.append(p)
+
     def __eq__(self,other):
-        return isinstance(other,DataObject) and (self.identifier() == other.identifier())
+        return isinstance(other,DataObject) and self.defined and other.defined and (self.identifier() == other.identifier())
 
     def __hash__(self):
-        return hash(self.identifier())
+        return hash(id(self))
 
     def __lt__(self, other):
         return hash(self.identifier()) < hash(other.identifier())
@@ -222,6 +263,13 @@ class DataObject(DataUser, metaclass=MappedClass):
     @classmethod
     def make_identifier(cls, data):
         return R.URIRef(cls.rdf_namespace["a"+cls.identifier_hash_method(str(data).encode()).hexdigest()])
+
+    @classmethod
+    def make_identifier_direct(cls, string):
+        if not isinstance(string, str):
+            raise Exception("make_identifier_direct only accepts strings")
+        from urllib.parse import quote
+        return R.URIRef(cls.rdf_namespace[quote(string)])
 
     def identifier(self,query=False):
         """
@@ -450,11 +498,13 @@ class SimpleProperty(Property):
     """ A property that has one or more links to literals or DataObjects """
 
     def __init__(self,**kwargs):
+        import random
 
         # The 'linkName' must be made up from the class name if one isn't set
         # before initialization (typically in mapper._create_property)
         if not hasattr(self,'linkName'):
             self.__class__.linkName = self.__class__.__name__ + "property"
+
         Property.__init__(self, name=self.linkName, **kwargs)
 
         # The 'value_property' is the URI used in the RDF graph pointing
@@ -466,6 +516,9 @@ class SimpleProperty(Property):
         # as a sort of staging area before saving the values to the graph.
         self._v = []
 
+        v = (random.random(), random.random())
+        self._value = Variable("_" + hashlib.md5(str(v).encode()).hexdigest())
+
         if self.owner != False:
             self.link = self.owner_type.rdf_namespace[self.linkName]
 
@@ -476,6 +529,14 @@ class SimpleProperty(Property):
     def _get(self):
         for x in self._v:
             yield x
+
+    @property
+    def value(self):
+        return self._value
+
+    def setValue(self, v):
+        self._value = v
+
     @classmethod
     def _id_hash(cls, value):
         assert(isinstance(value, str))
@@ -599,6 +660,22 @@ class Variable(object):
     def identifier(self, *args, **kwargs):
         return self.var
 
+    @property
+    def defined(self):
+        return False
+
+    @property
+    def idl(self):
+        return self.var
+
+    @property
+    def p(self):
+        return []
+
+    @property
+    def o(self):
+        return []
+
     def triples(self, *args, **kwargs):
         return []
 
@@ -635,6 +712,22 @@ class PropertyValue(object):
             return self.value
         else:
             raise Exception("A property's value type must be either 'literal' or 'object'")
+
+    @property
+    def defined(self):
+        if self.vtype == 'object':
+            return self.value.defined
+        elif self.vtype == 'literal':
+            return True
+        else:
+            raise Exception("A property's value type must be either 'literal' or 'object'")
+
+    @property
+    def idl(self):
+        if self.vtype == 'object':
+            return self.value.identifier()
+        else:
+            return self.value
 
     def __hash__(self):
         return hash(self.value)
@@ -698,3 +791,109 @@ class ObjectCollection(DataObject):
 
     def identifier(self, query=False):
         return self.make_identifier(self.group_name)
+
+class QN(tuple):
+    def __new__(cls):
+        return tuple.__new__(cls, ([],[]))
+
+    @property
+    def subpaths(self):
+        return self[0]
+
+    @property
+    def path(self):
+        return self[1]
+
+    #def __str__(self):
+        #s = "N("
+        #s += "path="+str(self.path)+","
+        #s += "subpaths="+str(self.subpaths)
+        #return s
+
+    #def __repr__(self):
+        #return self.__str__()
+
+class QINV(R.URIRef):
+    pass
+
+class QU(object):
+    def __init__(self):
+        self.seen = list()
+
+    def b(self, CUR, LIST, IS_INV):
+        ret = []
+        is_good = False
+        #print("b(", ",".join((str(x) for x in [CUR.idl, LIST, IS_INV])), ")")
+        for e in LIST:
+            if IS_INV:
+                p = e.value
+            else:
+                p = e.owner
+            #print(" "*len(self.seen)*4, p)
+            subpath = self.g(p)
+            if IS_INV:
+                ee = QINV(e.link)
+            else:
+                ee = e.link
+
+            if subpath[0]:
+                is_good = True
+                subpath[1].path.insert(0, (CUR.idl, ee, p.idl))
+                ret.insert(0, subpath[1])
+        return is_good, ret
+
+    def g(self, current_node):
+        print((" "*len(self.seen)*4)+"AT {} WITH {}".format(repr(current_node.idl), [x.idl for x in self.seen]))
+
+        if current_node.defined:
+            return True, QN()
+        else:
+            if current_node in self.seen:
+                return False, QN()
+            else:
+                self.seen.append(current_node)
+
+            retp = self.b(current_node, current_node.p, False)
+            reto = self.b(current_node, current_node.o, True)
+
+            self.seen.pop()
+            subpaths = retp[1]+reto[1]
+            if (len(subpaths) == 1):
+                ret = subpaths[0]
+            else:
+                ret = QN()
+                ret.subpaths = subpaths
+            return (retp[0] or reto[0], ret)
+    def __call__(self, current_node):
+        #print("AT {} WITH {}".format(current_node.idl, [x.idl for x in seen]))
+        return self.g(current_node)
+
+class SV(object):
+    def __init__(self):
+        self.seen = list()
+        self.results = R.Graph()
+
+    def g(self, current_node):
+        if current_node in self.seen:
+            return False
+        else:
+            self.seen.append(current_node)
+
+        if not current_node.defined:
+            return False
+
+        self.results.add((current_node.idl, R.RDF['type'], current_node.rdf_type))
+        for e in current_node.p:
+            p = e.owner
+            if self.g(p):
+                self.results.add((current_node.idl, e.link, p.idl))
+
+        for e in current_node.o:
+            o = e.value
+            if self.g(o):
+                self.results.add((o.idl, e.link, current_node.idl))
+
+        return True
+    def __call__(self, current_node):
+        self.g(current_node)
+        return self.results

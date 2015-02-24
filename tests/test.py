@@ -215,6 +215,7 @@ class DataObjectTest(_DataTest):
         r.save()
         u = r.upload_date()
         self.assertIsNotNone(u)
+
     def test_triples_cycle(self):
         """ Test that no duplicate triples are released when there's a cycle in the graph """
         class T(Y.DataObject):
@@ -230,6 +231,7 @@ class DataObjectTest(_DataTest):
                 self.fail("got a duplicate: "+ str(x))
             else:
                 seen.add(x)
+
     def test_triples_clone_sibling(self):
         """ Test that no duplicate triples are released when there's a clone in the graph.
 
