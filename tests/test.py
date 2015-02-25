@@ -257,8 +257,12 @@ class DataObjectTest(_DataTest):
             else:
                 seen.add(x)
 
-
-
+    def test_property_matching_method_name(self):
+        """ Creating a property with the same name as a method should be disallowed """
+        class T(Y.DataObject):
+            objectProperties = ['load']
+        with self.assertRaises(Exception):
+            T()
 
 class DataUserTest(_DataTest):
 

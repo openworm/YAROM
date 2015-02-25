@@ -30,7 +30,7 @@ def makeObjectProperty(*args,**kwargs):
     """
     return _create_property(*args,property_type='ObjectProperty',**kwargs)
 
-def _create_property(owner_class, linkName, property_type, value_type=False, multiple=False):
+def _create_property(owner_class, linkName, property_type, value_type=False, multiple=False, link=False):
     #XXX This should actually get called for all of the properties when their owner
     #    classes are defined.
     #    The initialization, however, must happen with the owner object's creation
@@ -51,7 +51,10 @@ def _create_property(owner_class, linkName, property_type, value_type=False, mul
             value_rdf_type = False
             x = P.DatatypeProperty
 
-        link = owner_class.rdf_namespace[linkName]
+        if link:
+            link = link
+        else:
+            link = owner_class.rdf_namespace[linkName]
         c = type(property_class_name,(x,),dict(linkName=linkName, link=link,  property_type=property_type, value_rdf_type=value_rdf_type, owner_type=owner_class, multiple=multiple))
 
 

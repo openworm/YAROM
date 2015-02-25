@@ -73,7 +73,6 @@ class DataObject(DataUser, metaclass=MappedClass):
                 "directly_configureable" : True
                 },
             }
-
     identifier_hash_method = get_hash_function(DataUser.conf.get('dataObject.identifier_hash', 'md5'))
 
     @classmethod
@@ -95,11 +94,15 @@ class DataObject(DataUser, metaclass=MappedClass):
         self.owner_properties = []
 
         for x in self.__class__.dataObjectProperties:
-            self.properties.append(x(owner=self))
+            prop = x(owner=self)
+            self.properties.append(prop)
+            if hasattr(self, prop.linkName):
+                raise Exception("Cannot attach property {}. A property must have a different name from any attributes in DataObject".format(prop.linkName))
+            setattr(self, prop.linkName, prop)
 
         for x in self.properties:
             if x.linkName in kwargs:
-                x(kwargs[x.linkName])
+                self.set_parent(x.linkName, kwargs[x.linkName])
 
         self._id = False
         if ident:
@@ -149,20 +152,26 @@ class DataObject(DataUser, metaclass=MappedClass):
     def o(self):
         return self.properties
 
-    def set_parent(self, link, other):
+    def set_parent(self, linkName, other):
         cls = type(self)
         prop = None
 
-        if isinstance(other, DataObject):
-            prop = makeObjectProperty(cls, link, value_type=type(other))
+        if hasattr(self, linkName):
+            p = getattr(self,linkName)
         else:
-            prop = makeDatatypeProperty(cls, link)
+            if isinstance(other, DataObject):
+                prop = makeObjectProperty(cls, linkName, value_type=type(other))
+            else:
+                prop = makeDatatypeProperty(cls, linkName)
+            self.__class__.dataObjectProperties.append(prop)
+            p = prop(owner=self)
 
-        p = prop(owner=self)
         p.setValue(other)
 
         other.owner_properties.append(p)
         self.properties.append(p)
+
+        setattr(self, linkName, p)
 
     def __eq__(self,other):
         return isinstance(other,DataObject) and self.defined and other.defined and (self.identifier() == other.identifier())
@@ -271,7 +280,7 @@ class DataObject(DataUser, metaclass=MappedClass):
         from urllib.parse import quote
         return R.URIRef(cls.rdf_namespace[quote(string)])
 
-    def identifier(self,query=False):
+    def identifier(self, query=False):
         """
         The identifier for this object in the rdf graph.
 
@@ -430,9 +439,6 @@ class Property(DataObject):
     def __init__(self, name=False, owner=False, **kwargs):
         DataObject.__init__(self, **kwargs)
         self.owner = owner
-        if self.owner:
-            if name:
-                setattr(self.owner, name, self)
         # XXX: Default implementation is a box for a value
         self._value = False
 
@@ -502,7 +508,7 @@ class SimpleProperty(Property):
 
         # The 'linkName' must be made up from the class name if one isn't set
         # before initialization (typically in mapper._create_property)
-        if not hasattr(self,'linkName'):
+        if not hasattr(self, 'linkName'):
             self.__class__.linkName = self.__class__.__name__ + "property"
 
         Property.__init__(self, name=self.linkName, **kwargs)
@@ -518,9 +524,6 @@ class SimpleProperty(Property):
 
         v = (random.random(), random.random())
         self._value = Variable("_" + hashlib.md5(str(v).encode()).hexdigest())
-
-        if self.owner != False:
-            self.link = self.owner_type.rdf_namespace[self.linkName]
 
     def hasValue(self):
         """ Returns true if the ``Property`` has had ``load`` called previously and some value was available or if ``set`` has been called previously """
@@ -882,7 +885,6 @@ class SV(object):
         if not current_node.defined:
             return False
 
-        self.results.add((current_node.idl, R.RDF['type'], current_node.rdf_type))
         for e in current_node.p:
             p = e.owner
             if self.g(p):
