@@ -168,8 +168,8 @@ class DataObject(DataUser, metaclass=MappedClass):
 
         p.setValue(other)
 
-        other.owner_properties.append(p)
         self.properties.append(p)
+        other.owner_properties.append(p)
 
         setattr(self, linkName, p)
 
@@ -183,23 +183,7 @@ class DataObject(DataUser, metaclass=MappedClass):
         return hash(self.identifier()) < hash(other.identifier())
 
     def __str__(self):
-        seen = set()
-        def helper():
-            s = self.__class__.__name__ + "("
-            l = []
-            for x in self.properties:
-                if x.hasValue():
-                    if x not in seen:
-                        seen.add(x)
-                        l.append(str(x))
-                    else:
-                        l.append("...")
-                else:
-                    l.append(x.linkName)
-            s +=  ", ".join(l)
-            s += ")"
-            return s
-        return helper()
+        return self.namespace_manager.normalizeUri(self.idl)
 
     def __repr__(self):
         return self.__str__()
@@ -807,15 +791,6 @@ class QN(tuple):
     def path(self):
         return self[1]
 
-    #def __str__(self):
-        #s = "N("
-        #s += "path="+str(self.path)+","
-        #s += "subpaths="+str(self.subpaths)
-        #return s
-
-    #def __repr__(self):
-        #return self.__str__()
-
 class QINV(R.URIRef):
     pass
 
@@ -878,24 +853,27 @@ class SV(object):
 
     def g(self, current_node):
         if current_node in self.seen:
-            return False
+            return
         else:
             self.seen.append(current_node)
 
         if not current_node.defined:
-            return False
+            return
 
         for e in current_node.p:
             p = e.owner
-            if self.g(p):
+            if p.defined:
                 self.results.add((current_node.idl, e.link, p.idl))
+                self.g(p)
 
         for e in current_node.o:
             o = e.value
-            if self.g(o):
+            if o.defined:
                 self.results.add((o.idl, e.link, current_node.idl))
+                self.g(o)
 
-        return True
+        self.seen.pop()
+
     def __call__(self, current_node):
         self.g(current_node)
         return self.results
