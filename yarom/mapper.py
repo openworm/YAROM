@@ -60,7 +60,6 @@ def _create_property(owner_class, linkName, property_type, value_type=False, mul
 
     # This is how we create the RDF predicate that points from the owner
     # to this property
-    owner_class.dataObjectProperties.append(c)
 
     return c
 
@@ -170,17 +169,19 @@ class MappedClass(type):
             if hasattr(cls, 'objectProperties'):
                 assert(isinstance(cls.objectProperties,(tuple,list,set)))
                 for x in cls.objectProperties:
+                    p = None
                     if isinstance(x, tuple):
-                        makeObjectProperty(cls, x[0], value_type=x[1], *x[2:])
+                        p = makeObjectProperty(cls, x[0], value_type=x[1], *x[2:])
                     elif isinstance(x, dict):
                         name = x['name']
                         value_type = x.get('type', False)
                         del x['name']
                         if 'type' in x:
                             del x['type']
-                        makeObjectProperty(cls, name, value_type=value_type, **x)
+                        p = makeObjectProperty(cls, name, value_type=value_type, **x)
                     else:
-                        makeObjectProperty(cls, x)
+                        p = makeObjectProperty(cls, x)
+                    cls.dataObjectProperties.append(p)
         except:
             traceback.print_exc()
 
@@ -190,14 +191,16 @@ class MappedClass(type):
             if hasattr(cls, 'datatypeProperties'):
                 assert(isinstance(cls.datatypeProperties,(tuple,list,set)))
                 for x in cls.datatypeProperties:
+                    p = None
                     if isinstance(x, tuple):
-                        makeDatatypeProperty(cls, x[0], *x[1:])
+                        p = makeDatatypeProperty(cls, x[0], *x[1:])
                     elif isinstance(x, dict):
                         name = x['name']
                         del x['name']
-                        makeDatatypeProperty(cls, name, **x)
+                        p = makeDatatypeProperty(cls, name, **x)
                     else:
-                        makeDatatypeProperty(cls, x)
+                        p = makeDatatypeProperty(cls, x)
+                    cls.dataObjectProperties.append(p)
 
         except:
             traceback.print_exc()

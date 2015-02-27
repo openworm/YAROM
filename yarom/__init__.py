@@ -144,7 +144,6 @@ def connect(configFile=False,
             Configureable.conf = Data.open("yarom.conf")
         except:
             logging.info("Couldn't load default configuration")
-            traceback.print_exc()
             Configureable.conf = Data()
 
     Configureable.conf.openDatabase()

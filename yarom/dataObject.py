@@ -2,6 +2,7 @@ import rdflib as R
 import traceback
 import logging as L
 import hashlib
+import random
 from .mapper import *
 from .dataUser import DataUser
 
@@ -113,15 +114,11 @@ class DataObject(DataUser, metaclass=MappedClass):
         elif var:
             self._id_variable = R.Variable(var)
         elif key:
-            if isinstance(key, str):
-                self._id = self.make_identifier_direct(key)
-            else:
-                self._id = self.make_identifier(key)
+            self.setKey(key)
         else:
             # Randomly generate an identifier if the derived class can't
             # come up with one from the start. Ensures we always have something
             # that functions as an identifier
-            import random
             v = (random.random(), random.random())
             cname = self.__class__.__name__
             self._id_variable = self._graph_variable(cname + "_" + hashlib.md5(str(v).encode()).hexdigest())
@@ -152,18 +149,23 @@ class DataObject(DataUser, metaclass=MappedClass):
     def o(self):
         return self.properties
 
+    def setKey(self, key):
+        if isinstance(key, str):
+            self._id = self.make_identifier_direct(key)
+        else:
+            self._id = self.make_identifier(key)
+
     def set_parent(self, linkName, other):
         cls = type(self)
         prop = None
 
         if hasattr(self, linkName):
-            p = getattr(self,linkName)
+            p = getattr(self, linkName)
         else:
             if isinstance(other, DataObject):
                 prop = makeObjectProperty(cls, linkName, value_type=type(other))
             else:
                 prop = makeDatatypeProperty(cls, linkName)
-            self.__class__.dataObjectProperties.append(prop)
             p = prop(owner=self)
 
         p.setValue(other)
@@ -174,10 +176,10 @@ class DataObject(DataUser, metaclass=MappedClass):
         setattr(self, linkName, p)
 
     def __eq__(self,other):
-        return isinstance(other,DataObject) and self.defined and other.defined and (self.identifier() == other.identifier())
+        return isinstance(other,DataObject) and (self.idl == other.idl)
 
     def __hash__(self):
-        return hash(id(self))
+        return hash(self.idl)
 
     def __lt__(self, other):
         return hash(self.identifier()) < hash(other.identifier())
@@ -488,7 +490,6 @@ class SimpleProperty(Property):
     """ A property that has one or more links to literals or DataObjects """
 
     def __init__(self,**kwargs):
-        import random
 
         # The 'linkName' must be made up from the class name if one isn't set
         # before initialization (typically in mapper._create_property)
@@ -630,9 +631,17 @@ class SimpleProperty(Property):
             return self.make_identifier((self.link, value_data))
         return DataObject.identifier(self,query=query)
 
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and self.link == other.link
+
+    def __hash__(self):
+        return hash(self.link)
+
+    #def __str__(self):
+        #return str(self.linkName + "=" + str(";".join(str(x) for x in self._v)))
 
     def __str__(self):
-        return str(self.linkName + "=" + str(";".join(str(x) for x in self._v)))
+        return str(self.linkName + "=" + "`" + str(self._value) + "'")
 
 class DatatypeProperty(SimpleProperty):
     pass
@@ -786,6 +795,10 @@ class QN(tuple):
     @property
     def subpaths(self):
         return self[0]
+    @subpaths.setter
+    def subpaths(self, toset):
+        del self[0][:]
+        self[0].extend(toset)
 
     @property
     def path(self):
@@ -797,6 +810,8 @@ class QINV(R.URIRef):
 class QU(object):
     def __init__(self):
         self.seen = list()
+        self.lean = list()
+        self.paths = list()
 
     def b(self, CUR, LIST, IS_INV):
         ret = []
@@ -804,15 +819,23 @@ class QU(object):
         #print("b(", ",".join((str(x) for x in [CUR.idl, LIST, IS_INV])), ")")
         for e in LIST:
             if IS_INV:
-                p = e.value
-            else:
                 p = e.owner
-            #print(" "*len(self.seen)*4, p)
-            subpath = self.g(p)
+            else:
+                p = e.value
+
             if IS_INV:
                 ee = QINV(e.link)
             else:
                 ee = e.link
+
+            if isinstance(ee, QINV):
+                self.lean.append((p.idl, e.link, None))
+            else:
+                self.lean.append((None, e.link, p.idl))
+
+            subpath = self.g(p)
+            if len(self.lean) > 0:
+                self.lean.pop()
 
             if subpath[0]:
                 is_good = True
@@ -821,9 +844,12 @@ class QU(object):
         return is_good, ret
 
     def g(self, current_node):
-        print((" "*len(self.seen)*4)+"AT {} WITH {}".format(repr(current_node.idl), [x.idl for x in self.seen]))
+        #print((" "*len(self.seen)*4)+"AT {} WITH {}".format(current_node, [x.idl for x in self.seen]))
 
         if current_node.defined:
+            if len(self.lean) > 0:
+                tmp = list(self.lean)
+                self.paths.append(tmp)
             return True, QN()
         else:
             if current_node in self.seen:
@@ -831,8 +857,8 @@ class QU(object):
             else:
                 self.seen.append(current_node)
 
-            retp = self.b(current_node, current_node.p, False)
-            reto = self.b(current_node, current_node.o, True)
+            retp = self.b(current_node, current_node.p, True)
+            reto = self.b(current_node, current_node.o, False)
 
             self.seen.pop()
             subpaths = retp[1]+reto[1]
@@ -848,14 +874,14 @@ class QU(object):
 
 class SV(object):
     def __init__(self):
-        self.seen = list()
+        self.seen = set()
         self.results = R.Graph()
 
     def g(self, current_node):
         if current_node in self.seen:
             return
         else:
-            self.seen.append(current_node)
+            self.seen.add(current_node)
 
         if not current_node.defined:
             return
@@ -863,16 +889,14 @@ class SV(object):
         for e in current_node.p:
             p = e.owner
             if p.defined:
-                self.results.add((current_node.idl, e.link, p.idl))
+                self.results.add((p.idl, e.link, current_node.idl))
                 self.g(p)
 
         for e in current_node.o:
             o = e.value
             if o.defined:
-                self.results.add((o.idl, e.link, current_node.idl))
+                self.results.add((current_node.idl, e.link, o.idl))
                 self.g(o)
-
-        self.seen.pop()
 
     def __call__(self, current_node):
         self.g(current_node)
