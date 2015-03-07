@@ -377,21 +377,6 @@ class DataObject(DataUser, metaclass=MappedClass):
         """ Write in-memory data to the database. Derived classes should call this to update the store. """
         self.add_statements(self.get_defined_component())
 
-        #ss = set()
-
-        #try:
-            #self.add_statements(self.triples(visited_list=ss))
-        #except IdentifierMissingException as e:
-            #Exception("You are attempting to save unresolved values "+str(e))
-
-    @classmethod
-    def _extract_property_name(self,uri):
-        from urllib.parse import urlparse
-        u = urlparse(uri)
-        x = u.path.split('/')
-        if len(x) >= 4 and x[1] == 'entities':
-            return x[3]
-
     def load(self):
         """ Load in data from the database. Derived classes should override this for their own data structures.
 
@@ -422,7 +407,7 @@ class DataObject(DataUser, metaclass=MappedClass):
 
     def retract(self):
         """ Remove this object from the data store. """
-        self.retract_statements(self.graph_pattern(query=True))
+        self.retract_statements(self.get_defined_component())
 
     def __getitem__(self, x):
         try:
@@ -445,12 +430,7 @@ def get_most_specific_rdf_type(types):
     Returns the URI corresponding to the lowest in the DataObject class hierarchy
     from among the given URIs.
     """
-    most_specific_type = DataObject
-    for x in types:
-        class_object = RDFTypeTable[x] # TODO: Make a table to lookup by the class URI
-        if issubclass(class_object, most_specific_type):
-            most_specific_type = class_object
-    return most_specific_type.rdf_type
+    return sorted([RDFTypeTable[x] for x in types])[0].rdf_type
 
 # Define a property by writing the get
 class Property(DataObject):
