@@ -103,7 +103,7 @@ class DataObject(DataUser, metaclass=MappedClass):
 
         for x in self.properties:
             if x.linkName in kwargs:
-                self.set_parent(x.linkName, kwargs[x.linkName])
+                self.relate(x.linkName, kwargs[x.linkName])
 
         self._id = False
         if ident:
@@ -155,19 +155,24 @@ class DataObject(DataUser, metaclass=MappedClass):
         else:
             self._id = self.make_identifier(key)
 
-    def set_parent(self, linkName, other):
+    def setProperty(self, aProperty, other):
+        if not aProperty in self.properties:
+            return
+        else:
+            aProperty.setValue(other)
+
+    def relate(self, linkName, other, prop=False):
         cls = type(self)
-        prop = None
 
         if hasattr(self, linkName):
             p = getattr(self, linkName)
         else:
-            if isinstance(other, DataObject):
-                prop = makeObjectProperty(cls, linkName, value_type=type(other))
-            else:
-                prop = makeDatatypeProperty(cls, linkName)
+            if not prop:
+                if isinstance(other, DataObject):
+                    prop = makeObjectProperty(cls, linkName, value_type=type(other))
+                else:
+                    prop = makeDatatypeProperty(cls, linkName)
             p = prop(owner=self)
-
         p.setValue(other)
 
         self.properties.append(p)
