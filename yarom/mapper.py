@@ -1,12 +1,14 @@
 import rdflib as R
 from yarom import DataUser
 import yarom as P
+from .rdfType import RDFType
 import traceback
 
-__all__ = [ "MappedClass", "DataObjects", "DataObjectsParents", "makeDatatypeProperty", "makeObjectProperty"]
+__all__ = [ "MappedClass", "DataObjects", "DataObjectsParents", "RDFTypeTable", "makeDatatypeProperty", "makeObjectProperty"]
 
-DataObjects = dict()
-DataObjectsParents = dict()
+DataObjects = dict() # class names to classes
+DataObjectsParents = dict() # class names to parents of the related class
+RDFTypeTable = dict() # class rdf types to classes
 
 def makeDatatypeProperty(*args,**kwargs):
     """ Create a SimpleProperty that has a simple type (string,number,etc) as its value
@@ -133,7 +135,10 @@ class MappedClass(type):
         """
         cls._du = DataUser()
         cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
+        cls.rdf_type_object = RDFType(cls.rdf_type)
         cls.rdf_namespace = R.Namespace(cls.rdf_type + "/")
+
+        RDFTypeTable[cls.rdf_type] = cls
 
         cls.addParentsToGraph()
         cls.addPropertiesToGraph()

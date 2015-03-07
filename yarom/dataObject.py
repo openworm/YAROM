@@ -81,11 +81,12 @@ class DataObject(DataUser, metaclass=MappedClass):
         """ The open set contains items that must be saved directly in order for their data to be written out """
         return self._openSet
 
-    def __init__(self,ident=False,var=False,triples=False,key=False,**kwargs):
+    def __init__(self,ident=False,var=False,triples=False,key=False,generate_key=False,**kwargs):
         try:
             DataUser.__init__(self,**kwargs)
         except BadConf as e:
             raise Exception("You may need to connect to a database before continuing.")
+
         if not triples:
             self._triples = []
         else:
@@ -115,6 +116,8 @@ class DataObject(DataUser, metaclass=MappedClass):
             self._id_variable = R.Variable(var)
         elif key:
             self.setKey(key)
+        elif generate_key:
+            self.setKey(random.random())
         else:
             # Randomly generate an identifier if the derived class can't
             # come up with one from the start. Ensures we always have something
@@ -122,6 +125,9 @@ class DataObject(DataUser, metaclass=MappedClass):
             v = (random.random(), random.random())
             cname = self.__class__.__name__
             self._id_variable = self._graph_variable(cname + "_" + hashlib.md5(str(v).encode()).hexdigest())
+
+        if not isinstance(self, SimpleProperty):
+            self.relate('rdf_type_property', self.rdf_type_object, RDFTypeProperty)
 
     @property
     def _id_is_set(self):
@@ -180,6 +186,11 @@ class DataObject(DataUser, metaclass=MappedClass):
 
         setattr(self, linkName, p)
 
+    def get_defined_component(self):
+        g = SV()(self)
+        g.namespace_manager = self.namespace_manager
+        return g
+
     def __eq__(self,other):
         return isinstance(other,DataObject) and (self.idl == other.idl)
 
@@ -211,6 +222,22 @@ class DataObject(DataUser, metaclass=MappedClass):
         if o not in cls._closedSet:
             cls._openSet.remove(o)
             cls._closedSet.add(o)
+
+    @classmethod
+    def oid2(cls, identifier, rdf_type=False):
+        """ Load an object from the database using its type tag """
+        # XXX: This is a class method because we need to get the conf
+        # We should be able to extract the type from the identifier
+        if rdf_type:
+            uri = rdf_type
+        else:
+            uri = identifier
+
+        c = RDFTypeTable[uri]
+        # if its our class name, then make our own object
+        # if there's a part after that, that's the property name
+        o = c(ident=identifier)
+        return o
 
     @classmethod
     def oid(cls, identifier, rdf_type=False):
@@ -348,13 +375,14 @@ class DataObject(DataUser, metaclass=MappedClass):
 
     def save(self):
         """ Write in-memory data to the database. Derived classes should call this to update the store. """
+        self.add_statements(self.get_defined_component())
 
-        ss = set()
+        #ss = set()
 
-        try:
-            self.add_statements(self.triples(visited_list=ss))
-        except IdentifierMissingException as e:
-            Exception("You are attempting to save unresolved values "+str(e))
+        #try:
+            #self.add_statements(self.triples(visited_list=ss))
+        #except IdentifierMissingException as e:
+            #Exception("You are attempting to save unresolved values "+str(e))
 
     @classmethod
     def _extract_property_name(self,uri):
@@ -383,6 +411,15 @@ class DataObject(DataUser, metaclass=MappedClass):
                 new_object = self.object_from_id(new_ident)
                 yield new_object
 
+    def load2(self):
+        for ident in _QueryDoer(self)():
+            types = set()
+            for rdf_type in self.rdf.objects(ident, R.RDF['type']):
+                types.add(rdf_type)
+            the_type = get_most_specific_rdf_type(types)
+            yield DataObject.oid2(ident, the_type)
+
+
     def retract(self):
         """ Remove this object from the data store. """
         self.retract_statements(self.graph_pattern(query=True))
@@ -398,9 +435,22 @@ class DataObject(DataUser, metaclass=MappedClass):
         res = []
         for x in self.owner_properties:
             if isinstance(x, SimpleProperty):
-                if str(x.link) == str(property_name):
+                if str(x.linkName) == str(property_name):
                     res.append(x.owner)
         return res
+
+def get_most_specific_rdf_type(types):
+    """ Gets the most specific rdf_type.
+
+    Returns the URI corresponding to the lowest in the DataObject class hierarchy
+    from among the given URIs.
+    """
+    most_specific_type = DataObject
+    for x in types:
+        class_object = RDFTypeTable[x] # TODO: Make a table to lookup by the class URI
+        if issubclass(class_object, most_specific_type):
+            most_specific_type = class_object
+    return most_specific_type.rdf_type
 
 # Define a property by writing the get
 class Property(DataObject):
@@ -541,6 +591,9 @@ class SimpleProperty(Property):
         which are set for the ``Property``'s owner.
         """
 
+        if isinstance(self._value, Variable):
+            self._value
+
         returned = set() # collection of returned values so we don't send them multiple times
 
         for x in self._v:
@@ -648,6 +701,13 @@ class SimpleProperty(Property):
     def __str__(self):
         return str(self.linkName + "=" + "`" + str(self._value) + "'")
 
+class RDFTypeProperty(SimpleProperty):
+    link = R.RDF['type']
+    linkName = "rdf_type"
+    property_type = 'ObjectProperty'
+    owner_type = DataObject
+    multiple = True
+
 class DatatypeProperty(SimpleProperty):
     pass
 
@@ -657,6 +717,7 @@ class ObjectProperty(SimpleProperty):
 class Variable(object):
     def __init__(self, name):
         self.var = R.Variable(name)
+        self.object_properties = []
 
     def identifier(self, *args, **kwargs):
         return self.var
@@ -671,7 +732,7 @@ class Variable(object):
 
     @property
     def p(self):
-        return []
+        return self.object_properties
 
     @property
     def o(self):
@@ -813,10 +874,11 @@ class QINV(R.URIRef):
     pass
 
 class QU(object):
-    def __init__(self):
+    def __init__(self, start):
         self.seen = list()
         self.lean = list()
         self.paths = list()
+        self.start = start
 
     def b(self, CUR, LIST, IS_INV):
         ret = []
@@ -873,9 +935,76 @@ class QU(object):
                 ret = QN()
                 ret.subpaths = subpaths
             return (retp[0] or reto[0], ret)
-    def __call__(self, current_node):
+
+    def __call__(self):
         #print("AT {} WITH {}".format(current_node.idl, [x.idl for x in seen]))
-        return self.g(current_node)
+        self.g(self.start)
+        return self.paths
+
+class _QueryDoer(object):
+    def __init__(self, q, graph=False):
+        self.query_object = q
+        if graph:
+            self.graph = graph
+        elif isinstance(q, DataObject):
+            self.graph = q.rdf
+        else:
+            raise Exception("Can't get a graph to query. Either provide one to _QueryDoer or provide a DataObject as the query object.")
+
+    def do_query(self):
+        qu = QU(self.query_object)
+        h = self.hoc(qu())
+        print (h)
+        return self.qpr(self.graph, h)
+
+    def hoc(self,l):
+        res = dict()
+        for x in l:
+            if len(x) > 0:
+                tmp = res.get(x[0], [])
+                tmp.append(x[1:])
+                res[x[0]] = tmp
+
+        for x in res:
+            res[x] = self.hoc(res[x])
+
+        return res
+
+    def qpr(self, g, h, i=0):
+        join_args = []
+        for x in h:
+            sub_answers = set()
+            sub = h[x]
+            idx = x.index(None)
+            if idx == 2:
+                other_idx = 0
+            else:
+                other_idx = 2
+
+            if isinstance(x[other_idx], R.Variable):
+                for z in self.qpr(g, sub, i+1):
+                    if idx == 2:
+                        qx = (z, x[1], None)
+                    else:
+                        qx = (None, x[1], z)
+
+                    for y in g.triples(qx):
+                        sub_answers.add(y[idx])
+            else:
+                for y in g.triples(x):
+                    sub_answers.add(y[idx])
+            join_args.append(sub_answers)
+
+        if len(join_args) > 0:
+            res = join_args[0]
+            for x in join_args[1:]:
+                res = res & x
+            return res
+        else:
+            return set()
+
+    def __call__(self):
+        return self.do_query()
 
 class SV(object):
     def __init__(self):

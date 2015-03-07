@@ -55,6 +55,7 @@ from .data import Data
 from .dataUser import DataUser
 from .mapper import MappedClass
 from .quantity import Quantity
+from .rdfUtils import *
 
 this_module = __import__('yarom')
 this_module.connected = False
