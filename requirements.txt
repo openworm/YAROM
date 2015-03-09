@@ -5,3 +5,4 @@ persistent==4.0.8
 rdflib_zodb==1.0
 transaction==1.4.3
 FuXi
+pint
