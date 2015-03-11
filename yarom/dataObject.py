@@ -95,16 +95,8 @@ class DataObject(DataUser, metaclass=MappedClass):
         self.properties = []
         self.owner_properties = []
 
-        for x in self.__class__.dataObjectProperties:
-            prop = x(owner=self)
-            self.properties.append(prop)
-            if hasattr(self, prop.linkName):
-                raise Exception("Cannot attach property {}. A property must have a different name from any attributes in DataObject".format(prop.linkName))
-            setattr(self, prop.linkName, prop)
-
-        for x in self.properties:
-            if x.linkName in kwargs:
-                self.relate(x.linkName, kwargs[x.linkName])
+        if not isinstance(self, SimpleProperty):
+            self.relate('rdf_type_property', self.rdf_type_object, RDFTypeProperty)
 
         self._id = False
         if ident:
@@ -126,8 +118,16 @@ class DataObject(DataUser, metaclass=MappedClass):
             cname = self.__class__.__name__
             self._id_variable = self._graph_variable(cname + "_" + hashlib.md5(str(v).encode()).hexdigest())
 
-        if not isinstance(self, SimpleProperty):
-            self.relate('rdf_type_property', self.rdf_type_object, RDFTypeProperty)
+        for x in self.__class__.dataObjectProperties:
+            prop = x(owner=self)
+            self.properties.append(prop)
+            if hasattr(self, prop.linkName):
+                raise Exception("Cannot attach property '{}'. A property must have a different name from any attributes in DataObject".format(prop.linkName))
+            setattr(self, prop.linkName, prop)
+
+        for x in self.properties:
+            if x.linkName in kwargs:
+                self.relate(x.linkName, kwargs[x.linkName])
 
     @property
     def _id_is_set(self):
@@ -170,7 +170,8 @@ class DataObject(DataUser, metaclass=MappedClass):
     def relate(self, linkName, other, prop=False):
         cls = type(self)
 
-        if hasattr(self, linkName):
+        existing_property_names = [x.linkName for x in self.properties]
+        if linkName in existing_property_names:
             p = getattr(self, linkName)
         else:
             if not prop:
@@ -179,12 +180,12 @@ class DataObject(DataUser, metaclass=MappedClass):
                 else:
                     prop = makeDatatypeProperty(cls, linkName)
             p = prop(owner=self)
-        p.setValue(other)
+            self.properties.append(p)
+            setattr(self, linkName, p)
+        p.set(other)
 
-        self.properties.append(p)
         other.owner_properties.append(p)
 
-        setattr(self, linkName, p)
 
     def get_defined_component(self):
         g = SV()(self)
@@ -404,9 +405,12 @@ class DataObject(DataUser, metaclass=MappedClass):
             the_type = get_most_specific_rdf_type(types)
             yield DataObject.oid2(ident, the_type)
 
-
     def retract(self):
-        """ Remove this object from the data store. """
+        """ Remove this object from the data store.
+
+        Retract removes an object and everything it points to, transitively,
+        which doesn't have pointers to it by something else.
+        """
         self.retract_statements(self.get_defined_component())
 
     def __getitem__(self, x):
@@ -557,8 +561,12 @@ class SimpleProperty(Property):
     def value(self):
         return self._value
 
+    @property
+    def values(self):
+        return self._v
+
     def setValue(self, v):
-        self._value = v
+        self.set(v)
 
     @classmethod
     def _id_hash(cls, value):
@@ -596,7 +604,7 @@ class SimpleProperty(Property):
 
     def set(self,v):
         import bisect
-        if not hasattr(v, "identifier"):
+        if not hasattr(v, "idl"):
             v = PropertyValue(self.property_type, v)
 
         if self.multiple:
@@ -866,29 +874,28 @@ class QU(object):
         #print("b(", ",".join((str(x) for x in [CUR.idl, LIST, IS_INV])), ")")
         for e in LIST:
             if IS_INV:
-                p = e.owner
+                p = [e.owner]
             else:
-                p = e.value
+                p = e.values
 
-            if IS_INV:
-                ee = QINV(e.link)
-            else:
-                ee = e.link
+            for x in p:
+                if IS_INV:
+                    self.lean.append((x.idl, e.link, None))
+                else:
+                    self.lean.append((None, e.link, x.idl))
 
-            if isinstance(ee, QINV):
-                self.lean.append((p.idl, e.link, None))
-            else:
-                self.lean.append((None, e.link, p.idl))
+                subpath = self.g(x)
+                if len(self.lean) > 0:
+                    self.lean.pop()
 
-            subpath = self.g(p)
-            if len(self.lean) > 0:
-                self.lean.pop()
-
-            if subpath[0]:
-                is_good = True
-                subpath[1].path.insert(0, (CUR.idl, ee, p.idl))
-                ret.insert(0, subpath[1])
+                if subpath[0]:
+                    is_good = True
+                    subpath[1].path.insert(0, (CUR.idl, e, x.idl))
+                    ret.insert(0, subpath[1])
         return is_good, ret
+
+    def k(self):
+        pass
 
     def g(self, current_node):
         #print((" "*len(self.seen)*4)+"AT {} WITH {}".format(current_node, [x.idl for x in self.seen]))
@@ -934,7 +941,7 @@ class _QueryDoer(object):
     def do_query(self):
         qu = QU(self.query_object)
         h = self.hoc(qu())
-        print (h)
+        #print (h)
         return self.qpr(self.graph, h)
 
     def hoc(self,l):
@@ -1007,10 +1014,10 @@ class SV(object):
                 self.g(p)
 
         for e in current_node.o:
-            o = e.value
-            if o.defined:
-                self.results.add((current_node.idl, e.link, o.idl))
-                self.g(o)
+            for val in e.values:
+                if val.defined:
+                    self.results.add((current_node.idl, e.link, val.idl))
+                    self.g(val)
 
     def __call__(self, current_node):
         self.g(current_node)
