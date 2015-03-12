@@ -2,9 +2,13 @@
 
 from setuptools import setup
 import sys
+import os
 
 with open('requirements.txt') as f:
     required = f.read().splitlines()
+    on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
+    if on_rtd:
+        required.append("numpydoc")
 
 import os
 
