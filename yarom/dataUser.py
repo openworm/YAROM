@@ -100,20 +100,6 @@ class DataUser(Configureable):
             # Fire off a new one
             transaction.begin()
 
-        #for group in grouper(g, int(self.conf.get('rdf.upload_block_statement_count',100))):
-            #temp_graph = Graph()
-            #for x in group:
-                #if x is not None:
-                    #temp_graph.add(x)
-                #else:
-                    #break
-            #if graph_name:
-                #s = " INSERT DATA { GRAPH "+graph_name.n3()+" {" + temp_graph.serialize(format="nt") + " } } "
-            #else:
-                #s = " INSERT DATA { " + temp_graph.serialize(format="nt") + " } "
-            #L.debug("update query = " + s)
-            #self.conf['rdf.graph'].update(s)
-
     def add_reference(self, g, reference_iri):
         """
         Add a citation to a set of statements in the database
@@ -127,15 +113,14 @@ class DataUser(Configureable):
 
         self.add_statements(g + new_statements)
 
-    #def _add_unannotated_statements(self, graph):
-    # A UTC class.
-
-    def retract_statements(self, query):
+    def retract_statements(self, statements):
         """
         Remove a set of statements from the database.
         :param query: A SPARQL graph pattern
         """
-        self._remove_from_store_by_query(query)
+        for x in statements:
+            self.rdf.remove(x)
+
     def _remove_from_store_by_query(self, q):
         import logging as L
         s = " DELETE WHERE {" + q + " } "

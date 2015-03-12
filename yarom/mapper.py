@@ -130,9 +130,12 @@ class MappedClass(type):
         return cls
 
     def map(cls):
+        """Performs those actions necessary for storing the class and its instances in the graph.
+
+        ``map`` never touches the graph itself.
         """
-        Performs those actions necessary for storing the class and its instances in the graph
-        """
+        # NOTE: Map should be quick: it runs for every DataObject sub-class created and possibly
+        #       several times in testing
         cls._du = DataUser()
         cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
         cls.rdf_type_object = RDFType(cls.rdf_type)
@@ -140,8 +143,8 @@ class MappedClass(type):
 
         RDFTypeTable[cls.rdf_type] = cls
 
-        cls.addParentsToGraph()
-        cls.addPropertiesToGraph()
+        #cls.addParentsToGraph() # TODO: Make this attach the relevant type objects to our type
+        #cls.addPropertiesToGraph() # XXX: Have properties map themselves
         cls.addNamespaceToManager()
 
         setattr(P, cls.__name__, cls)
@@ -158,6 +161,7 @@ class MappedClass(type):
         cls.conf['rdf.namespace_manager'].bind(cls.__name__, cls.rdf_namespace)
 
     def addPropertiesToGraph(cls):
+        # XXX: Use the rdfs predicate for the domain
         deets = []
         for x in cls.dataObjectProperties:
             deets.append((x.rdf_type, cls.conf['rdf.namespace']['domain'], cls.rdf_type))
@@ -166,7 +170,8 @@ class MappedClass(type):
     def addParentsToGraph(cls):
         deets = []
         for y in cls.parents:
-            deets.append((cls.rdf_type, R.RDFS['subClassOf'], y.rdf_type))
+            t = (cls.rdf_type, R.RDFS['subClassOf'], y.rdf_type)
+            deets.append(t)
         cls.du.add_statements(deets)
 
     def addObjectProperties(cls):
@@ -187,6 +192,8 @@ class MappedClass(type):
                     else:
                         p = makeObjectProperty(cls, x)
                     cls.dataObjectProperties.append(p)
+                cls._objectProperties = cls.objectProperties
+                cls.objectProperties = []
         except:
             traceback.print_exc()
 

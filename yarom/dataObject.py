@@ -21,6 +21,13 @@ def _serialize_rdflib_term(x, namespace_manager=None):
     else:
         return x.n3(namespace_manager)
 
+def _deserialize_rdflib_term(x):
+    if isinstance(x, R.Literal):
+        x = x.toPython()
+        if isinstance(x, R.Literal):
+            x = str(x)
+    return x
+
 def triples_to_bgp(trips, namespace_manager=None):
     # XXX: Collisions could result between the variable names of different objects
     g = ""
@@ -106,7 +113,7 @@ class DataObject(DataUser, metaclass=MappedClass):
                 self._id = R.URIRef(ident)
         elif var:
             self._id_variable = R.Variable(var)
-        elif key:
+        elif key: # TODO: Support a key function that generates the key based on live values of the object (e.g., property values)
             self.setKey(key)
         elif generate_key:
             self.setKey(random.random())
@@ -161,12 +168,6 @@ class DataObject(DataUser, metaclass=MappedClass):
         else:
             self._id = self.make_identifier(key)
 
-    def setProperty(self, aProperty, other):
-        if not aProperty in self.properties:
-            return
-        else:
-            aProperty.setValue(other)
-
     def relate(self, linkName, other, prop=False):
         cls = type(self)
 
@@ -176,15 +177,14 @@ class DataObject(DataUser, metaclass=MappedClass):
         else:
             if not prop:
                 if isinstance(other, DataObject):
-                    prop = makeObjectProperty(cls, linkName, value_type=type(other))
+                    prop = makeObjectProperty(cls, linkName, value_type=type(other), multiple=True)
                 else:
-                    prop = makeDatatypeProperty(cls, linkName)
+                    prop = makeDatatypeProperty(cls, linkName, multiple=True)
             p = prop(owner=self)
             self.properties.append(p)
             setattr(self, linkName, p)
         p.set(other)
 
-        other.owner_properties.append(p)
 
 
     def get_defined_component(self):
@@ -579,33 +579,37 @@ class SimpleProperty(Property):
         which are set for the ``Property``'s owner.
         """
 
-        if isinstance(self._value, Variable):
-            self._value
+        v = Variable("var"+str(id(self)))
+        self.set(v)
+        results = _QueryDoer(v, self.rdf)()
+        self.unset(v)
 
-        returned = set() # collection of returned values so we don't send them multiple times
+        if self.property_type == 'ObjectProperty':
+            for ident in results:
+                types = set()
+                for rdf_type in self.rdf.objects(ident, R.RDF['type']):
+                    types.add(rdf_type)
+                the_type = get_most_specific_rdf_type(types)
+                yield DataObject.oid2(ident, the_type)
+        else:
+            for val in results:
+                yield _deserialize_rdflib_term(val)
 
-        for x in self._v:
-            if x.value not in returned:
-                returned.add(x.value)
-                yield x.value
-
-        gp = self.graph_pattern(query=True)
-
-        var = R.Variable(self._id_hash(self.identifier(query=True)) +"_value")
-        q = "SELECT DISTINCT " + var.n3() + " WHERE { " + gp + " }"
-        qres = self.rdf.query(q)
-        for x in qres:
-            if x[0] not in returned:
-                returned.add(x[0])
-                if self.property_type == 'ObjectProperty':
-                    yield self.object_from_id(x[0])
-                else:
-                    yield x[0]
+    def unset(self, v):
+        idx = self._v.index(v)
+        if idx >= 0:
+            actual_val = self._v[idx]
+            actual_val.p.remove(self)
+            self._v.remove(actual_val)
+        else:
+            raise Exception("Can't find value {}".format(v))
 
     def set(self,v):
         import bisect
         if not hasattr(v, "idl"):
-            v = PropertyValue(self.property_type, v)
+            v = PropertyValue(v)
+
+        v.p.append(self)
 
         if self.multiple:
             bisect.insort(self._v, v)
@@ -683,11 +687,11 @@ class SimpleProperty(Property):
     def __hash__(self):
         return hash(self.link)
 
-    #def __str__(self):
-        #return str(self.linkName + "=" + str(";".join(str(x) for x in self._v)))
-
     def __str__(self):
-        return str(self.linkName + "=" + "`" + str(self._value) + "'")
+        return str(self.linkName + "(" + str(" ".join(repr(x) for x in self._v)) + ")")
+
+    #def __str__(self):
+        #return str(self.linkName + "=" + "`" + str(self._val) + "'")
 
 class RDFTypeProperty(SimpleProperty):
     link = R.RDF['type']
@@ -705,7 +709,8 @@ class ObjectProperty(SimpleProperty):
 class Variable(object):
     def __init__(self, name):
         self.var = R.Variable(name)
-        self.object_properties = []
+        self.p = []
+        self.o = []
 
     def identifier(self, *args, **kwargs):
         return self.var
@@ -717,14 +722,6 @@ class Variable(object):
     @property
     def idl(self):
         return self.var
-
-    @property
-    def p(self):
-        return self.object_properties
-
-    @property
-    def o(self):
-        return []
 
     def triples(self, *args, **kwargs):
         return []
@@ -742,42 +739,25 @@ class Variable(object):
         return self.var < other.var
 
 class PropertyValue(object):
-    def __init__(self, property_type, value=None):
-        if property_type == 'DatatypeProperty':
-            self.vtype = 'literal'
+    """ Holds a literal value for a property """
+    def __init__(self, value=None):
             self.value = R.Literal(value)
-        else:
-            self.vtype = 'object'
-            self.value = value
+            self.p = []
+            self.o = []
 
     def triples(self, *args, **kwargs):
-        if self.vtype == 'object':
-            for t in self.value.triples(*args,**kwargs):
-                yield t
+        return []
 
     def identifier(self, query=False):
-        if self.vtype == 'object':
-            return self.value.identifier(query=query)
-        elif self.vtype == 'literal':
-            return self.value
-        else:
-            raise Exception("A property's value type must be either 'literal' or 'object'")
+        return self.value
 
     @property
     def defined(self):
-        if self.vtype == 'object':
-            return self.value.defined
-        elif self.vtype == 'literal':
-            return True
-        else:
-            raise Exception("A property's value type must be either 'literal' or 'object'")
+        return True
 
     @property
     def idl(self):
-        if self.vtype == 'object':
-            return self.value.identifier()
-        else:
-            return self.value
+        return self.identifier()
 
     def __hash__(self):
         return hash(self.value)
@@ -790,6 +770,14 @@ class PropertyValue(object):
 
     def __lt__(self, other):
         return self.value < other.value
+
+    def __eq__(self, other):
+        if id(self) == id(other):
+            return True
+        elif isinstance(other, PropertyValue):
+            return self.value == other.value
+        else:
+            return self.value == R.Literal(other)
 
 class ObjectCollection(DataObject):
     """
@@ -834,7 +822,7 @@ class ObjectCollection(DataObject):
     objectProperties = ['member']
     datatypeProperties = ['name']
     def __init__(self,group_name,**kwargs):
-        DataObject.__init__(self,**kwargs)
+        DataObject.__init__(self,key=group_name,**kwargs)
         self.add = self.member
         self.group_name = self.name
         self.name(group_name)
@@ -929,9 +917,10 @@ class QU(object):
         return self.paths
 
 class _QueryDoer(object):
-    def __init__(self, q, graph=False):
+    def __init__(self, q, graph=None):
         self.query_object = q
-        if graph:
+
+        if graph is not None:
             self.graph = graph
         elif isinstance(q, DataObject):
             self.graph = q.rdf
@@ -941,7 +930,6 @@ class _QueryDoer(object):
     def do_query(self):
         qu = QU(self.query_object)
         h = self.hoc(qu())
-        #print (h)
         return self.qpr(self.graph, h)
 
     def hoc(self,l):

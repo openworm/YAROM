@@ -697,14 +697,15 @@ class MapperTest(_DataTestB):
         Configureable.conf = self.TestConfig
         Configureable.conf = Data()
         Configureable.conf.openDatabase()
-        from yarom import dataObject
 
     def tearDown(self):
         Configureable.conf.closeDatabase()
         _DataTestB.tearDown(self)
 
+    @unittest.expectedFailure
     def test_addToGraph(self):
         """Test that we can load a descendant of DataObject as a class"""
+        # TODO: See related TODO in mapper.py
         dc = MappedClass("TestDOM", (Y.DataObject,), dict())
         self.assertIn((dc.rdf_type, R.RDFS['subClassOf'], Y.DataObject.rdf_type), dc.du.rdf)
 
@@ -789,6 +790,7 @@ class SimplePropertyTest(_DataTest):
         sp = T(owner=do)
         self.assertEqual(len(list(sp.triples())), 0)
         self.assertNotEqual(len(list(sp.triples(query=True))), 0)
+
     def test_non_multiple_saves_single_values(self):
         class C(Y.DataObject):
             datatypeProperties = ['t']
@@ -796,9 +798,35 @@ class SimplePropertyTest(_DataTest):
         do.t("value1")
         do.t("vaule2")
         do.save()
-        #print(do.graph_pattern(query=True))
+
         do1 = C(key="s")
-        self.assertTrue(len(list(do1.t.get())), 1)
+        self.assertEqual(len(list(do1.t.get())), 1)
+
+    def test_unset_single(self):
+        bats = self.k().bats
+
+        bats.set("l")
+        bats.unset("l")
+        self.assertEqual(len(bats.values), 0)
+
+    def test_unset_multiple(self):
+        bits = self.k().bits
+        bits.set("l")
+        bits.unset("l")
+        self.assertEqual(len(bits.values), 0)
+
+    def test_unset_empty(self):
+        """ Attempting to unset a value that isn't set should raise an error """
+        bits = self.k().bits
+        with self.assertRaises(Exception):
+            bits.unset("random")
+
+    def test_unset_wrong_value(self):
+        """ Attempting to unset a value that isn't set should raise an error """
+        bits = self.k().bits
+        bits.set("l")
+        with self.assertRaises(Exception):
+            bits.unset("random")
 
 class ObjectCollectionTest(_DataTest):
     """ Tests for the simple container class """
@@ -808,7 +836,6 @@ class ObjectCollectionTest(_DataTest):
         do = Y.DataObject(key="s")
         oc.member(do)
         oc.save()
-
         ocr = Y.ObjectCollection('test')
         dor = ocr.member.one()
         self.assertEqual(do, dor)
