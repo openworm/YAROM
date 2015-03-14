@@ -7,6 +7,7 @@ from .mapper import *
 from .dataUser import DataUser
 from .yProperty import SimpleProperty
 from .rdfUtils import *
+from .graphObject import *
 
 # in general it should be possible to recover the entire object from its identifier: the object should be representable as a connected graph.
 # However, this need not be a connected *RDF* graph. Indeed, graph literals may hold information which can yield triples which are not
@@ -14,13 +15,6 @@ from .rdfUtils import *
 
 def _bnode_to_var(x):
     return "?" + x
-
-def triples_to_bgp(trips, namespace_manager=None):
-    # XXX: Collisions could result between the variable names of different objects
-    g = ""
-    for y in trips:
-        g += " ".join(serialize_rdflib_term(x, namespace_manager) for x in y) + " .\n"
-    return g
 
 
 class IdentifierMissingException(Exception):
@@ -148,14 +142,6 @@ class DataObject(DataUser, metaclass=MappedClass):
         else:
             return self._id_variable
 
-    @property
-    def p(self):
-        return self.owner_properties
-
-    @property
-    def o(self):
-        return self.properties
-
     def setKey(self, key):
         if isinstance(key, str):
             self._id = self.make_identifier_direct(key)
@@ -253,16 +239,6 @@ class DataObject(DataUser, metaclass=MappedClass):
             raise Exception("This URI ({}) doesn't start with the appropriate namespace ({})".format(uri, cls.rdf_namespace))
 
     @classmethod
-    def _is_variable(cls, uri):
-        """ Is the uriref a graph variable? """
-        if isinstance(uri, R.Variable):
-            return True
-        from urllib.parse import urlparse
-        u = urlparse(uri)
-        x = u.path.split('/')
-        return len(x) >= 3 and (x[2] == 'variable')
-
-    @classmethod
     def _graph_variable_to_var(cls, uri):
         return uri
 
@@ -305,32 +281,7 @@ class DataObject(DataUser, metaclass=MappedClass):
         --------
         An iterable of triples
         """
-        if visited_list == False:
-            visited_list = set()
-
-        if self.identifier(query=query) in visited_list:
-            return
-        else:
-            visited_list.add(self.identifier(query=query))
-
-        ident = self.identifier(query=query)
-        yield (ident, R.RDF['type'], self.rdf_type)
-
-        # For objects that are defined by triples, we can just release these.
-        # However, they are still data objects, so they must have the above
-        # triples released as well.
-        for x in self._triples:
-            yield x
-
-        # Properties (of type Property) can be attached to an object
-        # However, we won't require that there even is a property list in this
-        # case.
-        if hasattr(self, 'properties'):
-            for x in self.properties:
-                if x.hasValue():
-                    yield (ident, x.link, x.identifier(query=query))
-                    for y in x.triples(query=query, visited_list=visited_list):
-                        yield y
+        return self.get_defined_component()
 
     def graph_pattern(self, query=False, shorten=False):
         """ Get the graph pattern for this object.
@@ -350,7 +301,7 @@ class DataObject(DataUser, metaclass=MappedClass):
         nm = None
         if shorten:
             nm = self.namespace_manager
-        return triples_to_bgp(self.triples(query=query), namespace_manager=nm)
+        return triples_to_bgp(self.get_defined_component(), namespace_manager=nm)
 
     def save(self):
         """ Write in-memory data to the database. Derived classes should call this to update the store. """
@@ -376,7 +327,7 @@ class DataObject(DataUser, metaclass=MappedClass):
                 yield new_object
 
     def load2(self):
-        for ident in _QueryDoer(self)():
+        for ident in GraphObjectQuerier(self)():
             types = set()
             for rdf_type in self.rdf.objects(ident, R.RDF['type']):
                 types.add(rdf_type)
@@ -405,14 +356,6 @@ class DataObject(DataUser, metaclass=MappedClass):
                 if str(x.linkName) == str(property_name):
                     res.append(x.owner)
         return res
-
-def get_most_specific_rdf_type(types):
-    """ Gets the most specific rdf_type.
-
-    Returns the URI corresponding to the lowest in the DataObject class hierarchy
-    from among the given URIs.
-    """
-    return sorted([RDFTypeTable[x] for x in types])[0].rdf_type
 
 class RDFType(DataObject): # This maybe becomes a DataObject later
     pass
@@ -487,183 +430,3 @@ class ObjectCollection(DataObject):
     def identifier(self, query=False):
         return self.make_identifier(self.group_name)
 
-class QN(tuple):
-    def __new__(cls):
-        return tuple.__new__(cls, ([],[]))
-
-    @property
-    def subpaths(self):
-        return self[0]
-    @subpaths.setter
-    def subpaths(self, toset):
-        del self[0][:]
-        self[0].extend(toset)
-
-    @property
-    def path(self):
-        return self[1]
-
-class QINV(R.URIRef):
-    pass
-
-class QU(object):
-    def __init__(self, start):
-        self.seen = list()
-        self.lean = list()
-        self.paths = list()
-        self.start = start
-
-    def b(self, CUR, LIST, IS_INV):
-        ret = []
-        is_good = False
-        #print("b(", ",".join((str(x) for x in [CUR.idl, LIST, IS_INV])), ")")
-        for e in LIST:
-            if IS_INV:
-                p = [e.owner]
-            else:
-                p = e.values
-
-            for x in p:
-                if IS_INV:
-                    self.lean.append((x.idl, e.link, None))
-                else:
-                    self.lean.append((None, e.link, x.idl))
-
-                subpath = self.g(x)
-                if len(self.lean) > 0:
-                    self.lean.pop()
-
-                if subpath[0]:
-                    is_good = True
-                    subpath[1].path.insert(0, (CUR.idl, e, x.idl))
-                    ret.insert(0, subpath[1])
-        return is_good, ret
-
-    def k(self):
-        pass
-
-    def g(self, current_node):
-        #print((" "*len(self.seen)*4)+"AT {} WITH {}".format(current_node, [x.idl for x in self.seen]))
-
-        if current_node.defined:
-            if len(self.lean) > 0:
-                tmp = list(self.lean)
-                self.paths.append(tmp)
-            return True, QN()
-        else:
-            if current_node in self.seen:
-                return False, QN()
-            else:
-                self.seen.append(current_node)
-
-            retp = self.b(current_node, current_node.p, True)
-            reto = self.b(current_node, current_node.o, False)
-
-            self.seen.pop()
-            subpaths = retp[1]+reto[1]
-            if (len(subpaths) == 1):
-                ret = subpaths[0]
-            else:
-                ret = QN()
-                ret.subpaths = subpaths
-            return (retp[0] or reto[0], ret)
-
-    def __call__(self):
-        #print("AT {} WITH {}".format(current_node.idl, [x.idl for x in seen]))
-        self.g(self.start)
-        return self.paths
-
-class _QueryDoer(object):
-    def __init__(self, q, graph=None):
-        self.query_object = q
-
-        if graph is not None:
-            self.graph = graph
-        elif isinstance(q, DataObject):
-            self.graph = q.rdf
-        else:
-            raise Exception("Can't get a graph to query. Either provide one to _QueryDoer or provide a DataObject as the query object.")
-
-    def do_query(self):
-        qu = QU(self.query_object)
-        h = self.hoc(qu())
-        return self.qpr(self.graph, h)
-
-    def hoc(self,l):
-        res = dict()
-        for x in l:
-            if len(x) > 0:
-                tmp = res.get(x[0], [])
-                tmp.append(x[1:])
-                res[x[0]] = tmp
-
-        for x in res:
-            res[x] = self.hoc(res[x])
-
-        return res
-
-    def qpr(self, g, h, i=0):
-        join_args = []
-        for x in h:
-            sub_answers = set()
-            sub = h[x]
-            idx = x.index(None)
-            if idx == 2:
-                other_idx = 0
-            else:
-                other_idx = 2
-
-            if isinstance(x[other_idx], R.Variable):
-                for z in self.qpr(g, sub, i+1):
-                    if idx == 2:
-                        qx = (z, x[1], None)
-                    else:
-                        qx = (None, x[1], z)
-
-                    for y in g.triples(qx):
-                        sub_answers.add(y[idx])
-            else:
-                for y in g.triples(x):
-                    sub_answers.add(y[idx])
-            join_args.append(sub_answers)
-
-        if len(join_args) > 0:
-            res = join_args[0]
-            for x in join_args[1:]:
-                res = res & x
-            return res
-        else:
-            return set()
-
-    def __call__(self):
-        return self.do_query()
-
-class SV(object):
-    def __init__(self):
-        self.seen = set()
-        self.results = R.Graph()
-
-    def g(self, current_node):
-        if current_node in self.seen:
-            return
-        else:
-            self.seen.add(current_node)
-
-        if not current_node.defined:
-            return
-
-        for e in current_node.p:
-            p = e.owner
-            if p.defined:
-                self.results.add((p.idl, e.link, current_node.idl))
-                self.g(p)
-
-        for e in current_node.o:
-            for val in e.values:
-                if val.defined:
-                    self.results.add((current_node.idl, e.link, val.idl))
-                    self.g(val)
-
-    def __call__(self, current_node):
-        self.g(current_node)
-        return self.results

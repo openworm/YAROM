@@ -239,3 +239,12 @@ def _create_property(owner_class, linkName, property_type, value_type=False, mul
     # to this property
 
     return c
+
+def get_most_specific_rdf_type(types):
+    """ Gets the most specific rdf_type.
+
+    Returns the URI corresponding to the lowest in the DataObject class hierarchy
+    from among the given URIs.
+    """
+    return sorted([RDFTypeTable[x] for x in types])[0].rdf_type
+

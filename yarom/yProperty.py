@@ -1,7 +1,7 @@
 from .dataUser import DataUser
 from .rdfUtils import *
 from .variable import Variable
-from .graphObject import GraphObject
+from .graphObject import *
 from random import random
 import hashlib
 
@@ -134,11 +134,11 @@ class SimpleProperty(Property):
         the resulting values. Also queries the configured rdf graph for values
         which are set for the ``Property``'s owner.
         """
-        from .mapper import oid2
+        from .mapper import oid2,get_most_specific_rdf_type
 
         v = Variable("var"+str(id(self)))
         self.set(v)
-        results = _QueryDoer(v, self.rdf)()
+        results = GraphObjectQuerier(v, self.rdf)()
         self.unset(v)
 
         if self.property_type == 'ObjectProperty':
@@ -156,7 +156,7 @@ class SimpleProperty(Property):
         idx = self._v.index(v)
         if idx >= 0:
             actual_val = self._v[idx]
-            actual_val.p.remove(self)
+            actual_val.owner_properties.remove(self)
             self._v.remove(actual_val)
         else:
             raise Exception("Can't find value {}".format(v))
@@ -166,7 +166,7 @@ class SimpleProperty(Property):
         if not hasattr(v, "idl"):
             v = PropertyValue(v)
 
-        v.p.append(self)
+        v.owner_properties.append(self)
 
         if self.multiple:
             bisect.insort(self._v, v)

@@ -10,8 +10,6 @@ def print_graph(g, hide_namespaces=False):
 def serialize_rdflib_term(x, namespace_manager=None):
     if isinstance(x, R.BNode):
         return _bnode_to_var(x)
-    elif isinstance(x, R.URIRef) and DataObject._is_variable(x):
-        return DataObject._graph_variable_to_var(x)
     else:
         return x.n3(namespace_manager)
 
@@ -22,3 +20,10 @@ def deserialize_rdflib_term(x):
             x = str(x)
     return x
 
+def triples_to_bgp(trips, namespace_manager=None):
+    # XXX: Collisions could result between the variable names of different objects
+    g = ""
+    for y in trips:
+        g += " ".join(serialize_rdflib_term(x, namespace_manager) for x in y) + " .\n"
+        print("H")
+    return g

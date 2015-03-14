@@ -56,6 +56,7 @@ from .dataUser import DataUser
 from .mapper import MappedClass
 from .quantity import Quantity
 from .rdfUtils import *
+from .yProperty import Property, SimpleProperty
 
 this_module = __import__('yarom')
 this_module.connected = False
@@ -153,7 +154,6 @@ def connect(configFile=False,
     # have to register the right one to disconnect...
     atexit.register(disconnect)
     from .dataObject import DataObject
-    from .property import Property, SimpleProperty
     MappedClass.remap()
     m.connected = True
     if data:
