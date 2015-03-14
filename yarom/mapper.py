@@ -79,13 +79,13 @@ class MappedClass(type):
         """
         # NOTE: Map should be quick: it runs for every DataObject sub-class created and possibly
         #       several times in testing
-        from .dataObject import RDFType
+        from .dataObject import DataObjectType
         cls._du = DataUser()
-        cls.rdf_type_object = RDFType(cls.rdf_type)
+        cls.rdf_type_object = DataObjectType(cls.rdf_type)
 
         RDFTypeTable[cls.rdf_type] = cls
 
-        #cls.addParentsToGraph() # TODO: Make this attach the relevant type objects to our type
+        cls.addParentsToGraph() # TODO: Make this attach the relevant type objects to our type
         #cls.addPropertiesToGraph() # XXX: Have properties map themselves
         cls.addNamespaceToManager()
 
@@ -95,6 +95,7 @@ class MappedClass(type):
     def remap(metacls):
         """ Calls `map` on all of the registered classes """
         classes = sorted(list(DataObjects.values()))
+        classes.reverse()
         for x in classes:
             x.map()
 
@@ -109,11 +110,9 @@ class MappedClass(type):
         cls.du.add_statements(deets)
 
     def addParentsToGraph(cls):
-        deets = []
+        from .dataObject import RDFSSubClassOfProperty
         for y in cls.parents:
-            t = (cls.rdf_type, R.RDFS['subClassOf'], y.rdf_type)
-            deets.append(t)
-        cls.du.add_statements(deets)
+            cls.rdf_type_object.relate('rdfs_subClassOf', y.rdf_type_object, RDFSSubClassOfProperty)
 
     def addObjectProperties(cls):
         try:

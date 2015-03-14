@@ -25,5 +25,4 @@ def triples_to_bgp(trips, namespace_manager=None):
     g = ""
     for y in trips:
         g += " ".join(serialize_rdflib_term(x, namespace_manager) for x in y) + " .\n"
-        print("H")
     return g

@@ -112,7 +112,7 @@ class DataObject(DataUser, metaclass=MappedClass):
             if x.linkName in kwargs:
                 self.relate(x.linkName, kwargs[x.linkName])
 
-        if isinstance(self, RDFType):
+        if isinstance(self, DataObjectType):
             self.relate('rdf_type_property', RDFSClass.getInstance(), RDFTypeProperty)
         elif isinstance(self, RDFSClass):
             self.relate('rdf_type_property', self, RDFTypeProperty)
@@ -164,8 +164,6 @@ class DataObject(DataUser, metaclass=MappedClass):
             self.properties.append(p)
             setattr(self, linkName, p)
         p.set(other)
-
-
 
     def get_defined_component(self):
         g = SV()(self)
@@ -357,7 +355,7 @@ class DataObject(DataUser, metaclass=MappedClass):
                     res.append(x.owner)
         return res
 
-class RDFType(DataObject): # This maybe becomes a DataObject later
+class DataObjectType(DataObject): # This maybe becomes a DataObject later
     pass
 
 class RDFSClass(DataObject): # This maybe becomes a DataObject later
@@ -378,6 +376,12 @@ class RDFTypeProperty(SimpleProperty):
     owner_type = DataObject
     multiple = True
 
+class RDFSSubClassOfProperty(SimpleProperty):
+    link = R.RDFS['subClassOf']
+    linkName = "rdfs_subClassOf"
+    property_type = 'ObjectProperty'
+    owner_type = RDFSClass
+    multiple = True
 
 class ObjectCollection(DataObject):
     """
