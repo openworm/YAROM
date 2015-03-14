@@ -152,9 +152,9 @@ def connect(configFile=False,
 
     # have to register the right one to disconnect...
     atexit.register(disconnect)
-    from .dataObject import DataObject, Property, SimpleProperty
+    from .dataObject import DataObject
+    from .property import Property, SimpleProperty
     MappedClass.remap()
-    MappedClass.setUpDB()
     m.connected = True
     if data:
         loadData(data, dataFormat)

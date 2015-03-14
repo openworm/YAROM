@@ -1,7 +1,7 @@
 import rdflib as R
 from yarom import DataUser
+from .yProperty import *
 import yarom as P
-from .rdfType import RDFType
 import traceback
 
 __all__ = [ "MappedClass", "DataObjects", "DataObjectsParents", "RDFTypeTable", "makeDatatypeProperty", "makeObjectProperty"]
@@ -9,61 +9,6 @@ __all__ = [ "MappedClass", "DataObjects", "DataObjectsParents", "RDFTypeTable", 
 DataObjects = dict() # class names to classes
 DataObjectsParents = dict() # class names to parents of the related class
 RDFTypeTable = dict() # class rdf types to classes
-
-def makeDatatypeProperty(*args,**kwargs):
-    """ Create a SimpleProperty that has a simple type (string,number,etc) as its value
-
-    Parameters
-    ----------
-    linkName : string
-        The name of this Property.
-    """
-    return _create_property(*args,property_type='DatatypeProperty',**kwargs)
-
-def makeObjectProperty(*args,**kwargs):
-    """ Create a SimpleProperty that has a complex DataObject as its value
-
-    Parameters
-    ----------
-    linkName : string
-        The name of this Property.
-    value_type : type
-        The type of DataObject fro values of this property
-    """
-    return _create_property(*args,property_type='ObjectProperty',**kwargs)
-
-def _create_property(owner_class, linkName, property_type, value_type=False, multiple=False, link=False):
-    #XXX This should actually get called for all of the properties when their owner
-    #    classes are defined.
-    #    The initialization, however, must happen with the owner object's creation
-    owner_class_name = owner_class.__name__
-    property_class_name = owner_class_name + "_" + linkName
-    if value_type == False:
-        value_type = P.DataObject
-
-    c = None
-    if property_class_name in DataObjects:
-        c = DataObjects[property_class_name]
-    else:
-        x = None
-        if property_type == 'ObjectProperty':
-            value_rdf_type = value_type.rdf_type
-            x = P.ObjectProperty
-        else:
-            value_rdf_type = False
-            x = P.DatatypeProperty
-
-        if link:
-            link = link
-        else:
-            link = owner_class.rdf_namespace[linkName]
-        c = type(property_class_name,(x,),dict(linkName=linkName, link=link,  property_type=property_type, value_rdf_type=value_rdf_type, owner_type=owner_class, multiple=multiple))
-
-
-    # This is how we create the RDF predicate that points from the owner
-    # to this property
-
-    return c
 
 class MappedClass(type):
     """A type for DataObjects
@@ -74,17 +19,12 @@ class MappedClass(type):
         type.__init__(cls,name,bases,dct)
 
         cls.dataObjectProperties = []
-        #print 'doing init for', cls
         for x in bases:
             try:
                 cls.dataObjectProperties += x.dataObjectProperties
             except AttributeError:
                 pass
-        cls.register().map()
-
-    @classmethod
-    def setUpDB(self):
-        pass
+        cls.register()
 
     @classmethod
     def makeClass(cls, name, bases, objectProperties=False, datatypeProperties=False):
@@ -107,7 +47,7 @@ class MappedClass(type):
             raise Exception("You should have called `map` to get here")
 
     @du.setter
-    def du_set(self, value):
+    def du(self, value):
         assert(isinstance(value,DataUser))
         self._du = value
 
@@ -123,9 +63,12 @@ class MappedClass(type):
         DataObjects[cls.__name__] = cls
         DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, MappedClass)]
         cls.parents = DataObjectsParents[cls.__name__]
+        cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
+        cls.rdf_namespace = R.Namespace(cls.rdf_type + "/")
 
         cls.addObjectProperties()
         cls.addDatatypeProperties()
+        setattr(P, cls.__name__, cls)
 
         return cls
 
@@ -136,10 +79,9 @@ class MappedClass(type):
         """
         # NOTE: Map should be quick: it runs for every DataObject sub-class created and possibly
         #       several times in testing
+        from .dataObject import RDFType
         cls._du = DataUser()
-        cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
         cls.rdf_type_object = RDFType(cls.rdf_type)
-        cls.rdf_namespace = R.Namespace(cls.rdf_type + "/")
 
         RDFTypeTable[cls.rdf_type] = cls
 
@@ -147,7 +89,6 @@ class MappedClass(type):
         #cls.addPropertiesToGraph() # XXX: Have properties map themselves
         cls.addNamespaceToManager()
 
-        setattr(P, cls.__name__, cls)
         return cls
 
     @classmethod
@@ -229,3 +170,72 @@ class MappedClass(type):
           """
         cls.du.rdf.update(q)
 
+def oid2(identifier, rdf_type=False):
+    """ Load an object from the database using its type tag """
+    # XXX: This is a class method because we need to get the conf
+    # We should be able to extract the type from the identifier
+    if rdf_type:
+        uri = rdf_type
+    else:
+        uri = identifier
+
+    c = RDFTypeTable[uri]
+    # if its our class name, then make our own object
+    # if there's a part after that, that's the property name
+    o = c(ident=identifier)
+    return o
+
+def makeDatatypeProperty(*args,**kwargs):
+    """ Create a SimpleProperty that has a simple type (string,number,etc) as its value
+
+    Parameters
+    ----------
+    linkName : string
+        The name of this Property.
+    """
+    return _create_property(*args,property_type='DatatypeProperty',**kwargs)
+
+def makeObjectProperty(*args,**kwargs):
+    """ Create a SimpleProperty that has a complex DataObject as its value
+
+    Parameters
+    ----------
+    linkName : string
+        The name of this Property.
+    value_type : type
+        The type of DataObject fro values of this property
+    """
+    return _create_property(*args,property_type='ObjectProperty',**kwargs)
+
+def _create_property(owner_class, linkName, property_type, value_type=False, multiple=False, link=False):
+    #XXX This should actually get called for all of the properties when their owner
+    #    classes are defined.
+    #    The initialization, however, must happen with the owner object's creation
+    owner_class_name = owner_class.__name__
+    property_class_name = owner_class_name + "_" + linkName
+    if value_type == False:
+        value_type = P.DataObject
+
+    c = None
+    if property_class_name in DataObjects:
+        c = DataObjects[property_class_name]
+    else:
+        x = None
+        if property_type == 'ObjectProperty':
+            value_rdf_type = value_type.rdf_type
+            x = ObjectProperty
+        else:
+            value_rdf_type = False
+            x = DatatypeProperty
+
+        if link:
+            link = link
+        else:
+            link = owner_class.rdf_namespace[linkName]
+        c = type(property_class_name,(x,),dict(linkName=linkName, link=link,  property_type=property_type, value_rdf_type=value_rdf_type, owner_type=owner_class, multiple=multiple))
+
+
+    # This is how we create the RDF predicate that points from the owner
+    # to this property
+
+    return c

@@ -33,9 +33,12 @@ class DataUser(Configureable):
                 "type" : NamespaceManager
                 }
             }
-    def __init__(self, **kwargs):
-        Configureable.__init__(self, **kwargs)
-        if not isinstance(self.conf,Data):
+    def __init__(self, conf=None, **kwargs):
+        if conf is None:
+            conf = Data()
+        Configureable.__init__(self, conf=conf, **kwargs)
+
+        if not isinstance(self.conf, Data):
             raise BadConf("Not a Data instance: "+ str(self.conf))
     @property
     def base_namespace(self):

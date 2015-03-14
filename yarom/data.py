@@ -29,9 +29,6 @@ class Data(Configuration, Configureable):
         self.copy(self.conf)
         ns_string = self.get('rdf.namespace', 'http://example.org/TestNamespace/entities/')
 
-        if ns_string[-1] != '/':
-            raise Exception("A namespace string must end with a '/'. Got <"+ns_string +">.")
-
         self['rdf.namespace'] = Namespace(ns_string)
         self.namespace = self['rdf.namespace']
 

@@ -5,6 +5,8 @@ import hashlib
 import random
 from .mapper import *
 from .dataUser import DataUser
+from .yProperty import SimpleProperty
+from .rdfUtils import *
 
 # in general it should be possible to recover the entire object from its identifier: the object should be representable as a connected graph.
 # However, this need not be a connected *RDF* graph. Indeed, graph literals may hold information which can yield triples which are not
@@ -13,26 +15,11 @@ from .dataUser import DataUser
 def _bnode_to_var(x):
     return "?" + x
 
-def _serialize_rdflib_term(x, namespace_manager=None):
-    if isinstance(x, R.BNode):
-        return _bnode_to_var(x)
-    elif isinstance(x, R.URIRef) and DataObject._is_variable(x):
-        return DataObject._graph_variable_to_var(x)
-    else:
-        return x.n3(namespace_manager)
-
-def _deserialize_rdflib_term(x):
-    if isinstance(x, R.Literal):
-        x = x.toPython()
-        if isinstance(x, R.Literal):
-            x = str(x)
-    return x
-
 def triples_to_bgp(trips, namespace_manager=None):
     # XXX: Collisions could result between the variable names of different objects
     g = ""
     for y in trips:
-        g += " ".join(_serialize_rdflib_term(x, namespace_manager) for x in y) + " .\n"
+        g += " ".join(serialize_rdflib_term(x, namespace_manager) for x in y) + " .\n"
     return g
 
 
@@ -81,7 +68,6 @@ class DataObject(DataUser, metaclass=MappedClass):
                 "directly_configureable" : True
                 },
             }
-    identifier_hash_method = get_hash_function(DataUser.conf.get('dataObject.identifier_hash', 'md5'))
 
     @classmethod
     def openSet(self):
@@ -101,10 +87,6 @@ class DataObject(DataUser, metaclass=MappedClass):
 
         self.properties = []
         self.owner_properties = []
-
-        if not isinstance(self, SimpleProperty):
-            self.relate('rdf_type_property', self.rdf_type_object, RDFTypeProperty)
-
         self._id = False
         if ident:
             if isinstance(ident, R.URIRef):
@@ -136,6 +118,17 @@ class DataObject(DataUser, metaclass=MappedClass):
             if x.linkName in kwargs:
                 self.relate(x.linkName, kwargs[x.linkName])
 
+        if isinstance(self, RDFType):
+            self.relate('rdf_type_property', RDFSClass.getInstance(), RDFTypeProperty)
+        elif isinstance(self, RDFSClass):
+            self.relate('rdf_type_property', self, RDFTypeProperty)
+        else:
+            self.relate('rdf_type_property', self.rdf_type_object, RDFTypeProperty)
+
+    @classmethod
+    def identifier_hash_method(self, o):
+        return get_hash_function(self.conf.get('dataObject.identifier_hash', 'md5'))(o)
+
     @property
     def _id_is_set(self):
         """ Indicates whether the identifier will return a URI appropriate for use by YAROM
@@ -154,6 +147,7 @@ class DataObject(DataUser, metaclass=MappedClass):
             return self._id
         else:
             return self._id_variable
+
     @property
     def p(self):
         return self.owner_properties
@@ -223,22 +217,6 @@ class DataObject(DataUser, metaclass=MappedClass):
         if o not in cls._closedSet:
             cls._openSet.remove(o)
             cls._closedSet.add(o)
-
-    @classmethod
-    def oid2(cls, identifier, rdf_type=False):
-        """ Load an object from the database using its type tag """
-        # XXX: This is a class method because we need to get the conf
-        # We should be able to extract the type from the identifier
-        if rdf_type:
-            uri = rdf_type
-        else:
-            uri = identifier
-
-        c = RDFTypeTable[uri]
-        # if its our class name, then make our own object
-        # if there's a part after that, that's the property name
-        o = c(ident=identifier)
-        return o
 
     @classmethod
     def oid(cls, identifier, rdf_type=False):
@@ -403,7 +381,7 @@ class DataObject(DataUser, metaclass=MappedClass):
             for rdf_type in self.rdf.objects(ident, R.RDF['type']):
                 types.add(rdf_type)
             the_type = get_most_specific_rdf_type(types)
-            yield DataObject.oid2(ident, the_type)
+            yield oid2(ident, the_type)
 
     def retract(self):
         """ Remove this object from the data store.
@@ -436,262 +414,19 @@ def get_most_specific_rdf_type(types):
     """
     return sorted([RDFTypeTable[x] for x in types])[0].rdf_type
 
-# Define a property by writing the get
-class Property(DataObject):
-    """ Store a value associated with a DataObject
+class RDFType(DataObject): # This maybe becomes a DataObject later
+    pass
 
-    Properties can be be accessed like methods. A method call like::
-
-        a.P()
-
-    for a property ``P`` will return values appropriate to that property for ``a``,
-    the `owner` of the property.
-
-    Parameters
-    ----------
-    owner : yarom.dataObject.DataObject
-        The owner of this property
-    name : string
-        The name of this property. Can be accessed as an attribute like::
-
-            owner.name
-
-    """
-
-    # Indicates whether the Property is multi-valued
-    multiple = False
-
-    def __init__(self, name=False, owner=False, **kwargs):
-        DataObject.__init__(self, **kwargs)
-        self.owner = owner
-        # XXX: Default implementation is a box for a value
-        self._value = False
-
-    def get(self,*args):
-        """ Get the things which are on the other side of this property
-
-        The return value must be iterable. For a ``get`` that just returns
-        a single value, an easy way to make an iterable is to wrap the
-        value in a tuple like ``(value,)``.
-
-        Derived classes must override.
-        """
-        # This should run a query or return a cached value
-        raise NotImplementedError()
-    def set(self,*args,**kwargs):
-        """ Set the value of this property
-
-        Derived classes must override.
-        """
-        # This should set some values and call DataObject.save()
-        raise NotImplementedError()
-
-    def one(self):
-        """ Returns a single value for the ``Property`` whether or not it is multivalued.
-        """
-
-        try:
-            r = self.get()
-            return next(iter(r))
-        except StopIteration:
-            return None
-
-    def hasValue(self):
-        """ Returns true if the Property has any values set on it.
-
-        This may be defined differently for each property
-        """
-        return True
-
-    def __call__(self,*args,**kwargs):
-        """ If arguments are passed to the ``Property``, its ``set`` method
-        is called. Otherwise, the ``get`` method is called. If the ``multiple``
-        member for the ``Property`` is set to ``True``, then a Python set containing
-        the associated values is returned. Otherwise, a single bare value is returned.
-        """
-
-        if len(args) > 0 or len(kwargs) > 0:
-            self.set(*args,**kwargs)
-            return self
-        else:
-            r = self.get(*args,**kwargs)
-            if self.multiple:
-                return set(r)
-            else:
-                try:
-                    return next(iter(r))
-                except StopIteration:
-                    return None
-
-    # Get the property (a relationship) itself
-
-class SimpleProperty(Property):
-    """ A property that has one or more links to literals or DataObjects """
-
-    def __init__(self,**kwargs):
-
-        # The 'linkName' must be made up from the class name if one isn't set
-        # before initialization (typically in mapper._create_property)
-        if not hasattr(self, 'linkName'):
-            self.__class__.linkName = self.__class__.__name__ + "property"
-
-        Property.__init__(self, name=self.linkName, **kwargs)
-
-        # The 'value_property' is the URI used in the RDF graph pointing
-        # from this property to its value. It is a different value for
-        # each property type.
-        self.value_property = self.rdf_namespace['value']
-
-        # 'v' holds values that have been set on this SimpleProperty. It acts
-        # as a sort of staging area before saving the values to the graph.
-        self._v = []
-
-        v = (random.random(), random.random())
-        self._value = Variable("_" + hashlib.md5(str(v).encode()).hexdigest())
-
-    def hasValue(self):
-        """ Returns true if the ``Property`` has had ``load`` called previously and some value was available or if ``set`` has been called previously """
-        return len(self._v) > 0
-
-    def _get(self):
-        for x in self._v:
-            yield x
-
-    @property
-    def value(self):
-        return self._value
-
-    @property
-    def values(self):
-        return self._v
-
-    def setValue(self, v):
-        self.set(v)
+class RDFSClass(DataObject): # This maybe becomes a DataObject later
+    instance = None
+    def __init__(self):
+        DataObject.__init__(self, R.RDFS["Class"])
 
     @classmethod
-    def _id_hash(cls, value):
-        assert(isinstance(value, str))
-        return hashlib.md5(value.encode()).hexdigest()
-
-    def get(self):
-        """ If the ``Property`` has had ``load`` or ``set`` called previously, returns
-        the resulting values. Also queries the configured rdf graph for values
-        which are set for the ``Property``'s owner.
-        """
-
-        v = Variable("var"+str(id(self)))
-        self.set(v)
-        results = _QueryDoer(v, self.rdf)()
-        self.unset(v)
-
-        if self.property_type == 'ObjectProperty':
-            for ident in results:
-                types = set()
-                for rdf_type in self.rdf.objects(ident, R.RDF['type']):
-                    types.add(rdf_type)
-                the_type = get_most_specific_rdf_type(types)
-                yield DataObject.oid2(ident, the_type)
-        else:
-            for val in results:
-                yield _deserialize_rdflib_term(val)
-
-    def unset(self, v):
-        idx = self._v.index(v)
-        if idx >= 0:
-            actual_val = self._v[idx]
-            actual_val.p.remove(self)
-            self._v.remove(actual_val)
-        else:
-            raise Exception("Can't find value {}".format(v))
-
-    def set(self,v):
-        import bisect
-        if not hasattr(v, "idl"):
-            v = PropertyValue(v)
-
-        v.p.append(self)
-
-        if self.multiple:
-            bisect.insort(self._v, v)
-        else:
-            self._v = [v]
-
-    def triples(self,*args,**kwargs):
-        """ Yields the triples for describing a simple property """
-
-        query=kwargs.get('query',False)
-
-        if not (query or self.hasValue()):
-            return
-
-        if not kwargs.get('visited_list', False):
-            kwargs['visited_list'] = set()
-
-        if self.identifier(query=query) in kwargs['visited_list']:
-            return
-        else:
-            kwargs['visited_list'].add(self.identifier(query=query))
-
-
-        ident = self.identifier(query=query)
-
-        def yield_triples_helper(propertyValue):
-            try:
-                yield (ident, self.value_property, propertyValue.identifier(query=query))
-                for t in propertyValue.triples(*args, **kwargs):
-                    yield t
-            except Exception:
-                traceback.print_exc()
-
-        if query and (len(self._v) == 0):
-            part = self._id_hash(self.identifier(query=query))
-            v = Variable(part+"_value")
-            for t in yield_triples_helper(v):
-                yield t
-
-            for x in self.owner.triples(*args, **kwargs):
-                yield x
-        elif len(self._v) > 0:
-            for x in Property.triples(self,*args, **kwargs):
-                yield x
-
-            if self.multiple:
-                for x in self._v:
-                    for triple in yield_triples_helper(x):
-                        yield triple
-            else:
-                for triple in yield_triples_helper(self._v[0]):
-                    yield triple
-
-
-    def identifier(self,query=False):
-        """ Return the URI for this object
-
-        Parameters
-        ----------
-        query: bool
-            Indicates whether the identifier is to be used in a query or not
-        """
-        if self._id_is_set:
-            return DataObject.identifier(self,query=query)
-        vlen = len(self._v)
-
-        if vlen > 0:
-            value_data = "".join(str(x.identifier(query=query)) for x in self._v if self is not x)
-            return self.make_identifier((self.link, value_data))
-        return DataObject.identifier(self,query=query)
-
-    def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.link == other.link
-
-    def __hash__(self):
-        return hash(self.link)
-
-    def __str__(self):
-        return str(self.linkName + "(" + str(" ".join(repr(x) for x in self._v)) + ")")
-
-    #def __str__(self):
-        #return str(self.linkName + "=" + "`" + str(self._val) + "'")
+    def getInstance(cls):
+        if cls.instance is None:
+            cls.instance = RDFSClass()
+        return cls.instance
 
 class RDFTypeProperty(SimpleProperty):
     link = R.RDF['type']
@@ -700,84 +435,6 @@ class RDFTypeProperty(SimpleProperty):
     owner_type = DataObject
     multiple = True
 
-class DatatypeProperty(SimpleProperty):
-    pass
-
-class ObjectProperty(SimpleProperty):
-    pass
-
-class Variable(object):
-    def __init__(self, name):
-        self.var = R.Variable(name)
-        self.p = []
-        self.o = []
-
-    def identifier(self, *args, **kwargs):
-        return self.var
-
-    @property
-    def defined(self):
-        return False
-
-    @property
-    def idl(self):
-        return self.var
-
-    def triples(self, *args, **kwargs):
-        return []
-
-    def __hash__(self):
-        return hash(self.var)
-
-    def __str__(self):
-        return str(self.var)
-
-    def __repr__(self):
-        return str(self)
-
-    def __lt__(self, other):
-        return self.var < other.var
-
-class PropertyValue(object):
-    """ Holds a literal value for a property """
-    def __init__(self, value=None):
-            self.value = R.Literal(value)
-            self.p = []
-            self.o = []
-
-    def triples(self, *args, **kwargs):
-        return []
-
-    def identifier(self, query=False):
-        return self.value
-
-    @property
-    def defined(self):
-        return True
-
-    @property
-    def idl(self):
-        return self.identifier()
-
-    def __hash__(self):
-        return hash(self.value)
-
-    def __str__(self):
-        return "<" + str(self.value) + ">"
-
-    def __repr__(self):
-        return str(self)
-
-    def __lt__(self, other):
-        return self.value < other.value
-
-    def __eq__(self, other):
-        if id(self) == id(other):
-            return True
-        elif isinstance(other, PropertyValue):
-            return self.value == other.value
-        else:
-            return self.value == R.Literal(other)
 
 class ObjectCollection(DataObject):
     """
