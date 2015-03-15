@@ -24,9 +24,14 @@ class Data(Configuration, Configureable):
     """
     def __init__(self, conf=False):
         Configuration.__init__(self)
-        Configureable.__init__(self,conf)
+        Configureable.__init__(self)
+        if conf is not False:
+            self.init_conf = conf
+        else:
+            self.init_conf = self.conf
+
         # We copy over all of the configuration that we were given
-        self.copy(self.conf)
+        self.copy(self.init_conf)
         ns_string = self.get('rdf.namespace', 'http://example.org/TestNamespace/entities/')
 
         self['rdf.namespace'] = Namespace(ns_string)
@@ -35,7 +40,7 @@ class Data(Configuration, Configureable):
     @classmethod
     def open(cls,file_name):
         """ Open a file storing configuration in a JSON format """
-        Configureable.conf = Configuration.open(file_name)
+        Configureable.setConf(Configuration.open(file_name))
         return cls()
 
     def openDatabase(self):
@@ -55,7 +60,7 @@ class Data(Configuration, Configureable):
 
     def _init_rdf_graph(self):
         # Set these in case they were left out
-        c = self.conf
+        c = self.init_conf
         self['rdf.source'] = c['rdf.source'] = c.get('rdf.source', 'default')
         self['rdf.store'] = c['rdf.store'] = c.get('rdf.store', 'default')
         self['rdf.store_conf'] = c['rdf.store_conf'] = c.get('rdf.store_conf', 'default')

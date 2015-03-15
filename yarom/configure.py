@@ -172,12 +172,14 @@ class Configureable(object):
     configuration_variables = dict()
 
     def __init__(self, conf=False):
-        if conf:
-            self.conf = conf
-        elif Configureable.conf:
-            self.conf = Configureable.conf
-        else:
-            self.conf = Configuration()
+        pass
+
+    @classmethod
+    def setConf(cls, conf):
+        cls.conf = conf
+
+    def conf(self):
+        return Configureable.conf
 
     def __getitem__(self,k):
         return self.conf.get(k)

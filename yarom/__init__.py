@@ -69,7 +69,7 @@ def config(key=None):
 
 def loadConfig(f):
     """ Load configuration for the module """
-    Configureable.conf = Data.open(f)
+    Configureable.setConf(Data.open(f))
     return Configureable.conf
 
 def disconnect(c=False):
@@ -136,17 +136,17 @@ def connect(configFile=False,
 
     if conf:
         if isinstance(conf, Data):
-            Configureable.conf = conf
+            Configureable.setConf(conf)
         elif isinstance(conf, (Configuration, dict)):
-            Configureable.conf = Data(conf)
+            Configureable.setConf(Data(conf))
         elif isinstance(conf, str):
-            Configureable.conf = Data.open(conf)
+            Configureable.setConf(Data.open(conf))
     else:
         try:
-            Configureable.conf = Data.open("yarom.conf")
+            Configureable.setConf(Data.open("yarom.conf"))
         except:
             logging.info("Couldn't load default configuration")
-            Configureable.conf = Data()
+            Configureable.setConf(Data())
 
     Configureable.conf.openDatabase()
     logging.info("Connected to database")

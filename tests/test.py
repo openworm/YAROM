@@ -703,10 +703,25 @@ class MapperTest(_DataTestB):
         g = mapper.oid(Configureable.conf['rdf.namespace']['TestDOM'])
         self.assertIsInstance(g,Y.TestDOM)
 
+class RDFPropertyTest(_DataTest):
+    def test_getInstanceTwice(self):
+        from yarom.dataObject import RDFProperty
+        self.assertEqual(RDFProperty.getInstance(), RDFProperty.getInstance())
+
+    def test_init_direct(self):
+        with self.assertRaises(Exception):
+            yarom.dataObject.RDFProperty()
+
+    def test_type_is_class(self):
+        from yarom.dataObject import RDFProperty,RDFSClass
+        types = RDFProperty.getInstance().rdf_type_property.values
+        self.assertIn(RDFSClass.getInstance(), types)
+
 class SimplePropertyTest(_DataTest):
     def __init__(self,*args,**kwargs):
         _DataTest.__init__(self,*args,**kwargs)
         id_tests = []
+
     def setUp(self):
         _DataTest.setUp(self)
 

@@ -396,12 +396,18 @@ class RDFProperty(DataObject):
     """
     instance = None
     def __init__(self):
-        DataObject.__init__(self, R.RDF["Property"])
+        if type(self)._gettingInstance:
+            DataObject.__init__(self, R.RDF["Property"])
+        else:
+            raise Exception("You must call getInstance to get RDFProperty")
 
     @classmethod
     def getInstance(cls):
         if cls.instance is None:
+            cls._gettingInstance = True
             cls.instance = RDFProperty()
+            cls._gettingInstance = False
+
         return cls.instance
 
 class ObjectCollection(DataObject):
