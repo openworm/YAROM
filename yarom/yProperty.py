@@ -134,7 +134,7 @@ class SimpleProperty(Property):
         the resulting values. Also queries the configured rdf graph for values
         which are set for the ``Property``'s owner.
         """
-        from .mapper import oid2,get_most_specific_rdf_type
+        from .mapper import oid,get_most_specific_rdf_type
 
         v = Variable("var"+str(id(self)))
         self.set(v)
@@ -147,7 +147,7 @@ class SimpleProperty(Property):
                 for rdf_type in self.rdf.objects(ident, R.RDF['type']):
                     types.add(rdf_type)
                 the_type = get_most_specific_rdf_type(types)
-                yield oid2(ident, the_type)
+                yield oid(ident, the_type)
         else:
             for val in results:
                 yield deserialize_rdflib_term(val)

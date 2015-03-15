@@ -6,7 +6,7 @@ import traceback
 
 __all__ = [ "MappedClass", "DataObjects", "DataObjectsParents",
             "RDFTypeTable", "makeDatatypeProperty", "makeObjectProperty",
-            "get_most_specific_rdf_type", "oid2"]
+            "get_most_specific_rdf_type", "oid"]
 
 DataObjects = dict() # class names to classes
 DataObjectsParents = dict() # class names to parents of the related class
@@ -175,7 +175,7 @@ class MappedClass(type):
           """
         cls.du.rdf.update(q)
 
-def oid2(identifier, rdf_type=False):
+def oid(identifier, rdf_type=False):
     """ Load an object from the database using its type tag """
     # XXX: This is a class method because we need to get the conf
     # We should be able to extract the type from the identifier

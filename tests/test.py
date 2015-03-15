@@ -195,19 +195,6 @@ class DataObjectTest(_DataTest):
         u = r.uploader()
         self.assertEqual(self.config['user.email'], u)
 
-    def test_object_from_id_class(self):
-        """ Ensure we get an object from just the class name """
-        MappedClass("TestDOM", (Y.DataObject,), dict())
-        g = Y.DataObject.object_from_id(self.config['rdf.namespace']['TestDOM'])
-        self.assertIsInstance(g,Y.TestDOM)
-
-    def test_object_from_id_object(self):
-        """ Ensure we get an object from a full object id """
-        dc = MappedClass("TestDOM", (Y.DataObject,), dict())
-        td = dc(key="the_identifier")
-        g = Y.DataObject.object_from_id(td.identifier())
-        self.assertEqual(g, td)
-
     @unittest.skip("Should be tracked by version control")
     def test_upload_date(self):
         """ Make sure that we're marking a statement with it's upload date """
@@ -708,6 +695,13 @@ class MapperTest(_DataTestB):
         """Test that we can add an object and then access it from the yarom module"""
         dc = MappedClass("TestDOM", (Y.DataObject,), dict())
         self.assertTrue(hasattr(Y,"TestDOM"))
+
+    def test_object_from_id_class(self):
+        """ Ensure we get an object from just the class name """
+        MappedClass("TestDOM", (Y.DataObject,), dict())
+        MappedClass.remap()
+        g = mapper.oid(Configureable.conf['rdf.namespace']['TestDOM'])
+        self.assertIsInstance(g,Y.TestDOM)
 
 class SimplePropertyTest(_DataTest):
     def __init__(self,*args,**kwargs):

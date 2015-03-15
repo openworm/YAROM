@@ -193,10 +193,6 @@ class DataObject(DataUser, metaclass=MappedClass):
         return R.Variable(var_name)
 
     @classmethod
-    def object_from_id(cls,*args,**kwargs):
-        return cls.oid(*args,**kwargs)
-
-    @classmethod
     def addToOpenSet(cls,o):
         cls._openSet.add(o)
 
@@ -205,22 +201,6 @@ class DataObject(DataUser, metaclass=MappedClass):
         if o not in cls._closedSet:
             cls._openSet.remove(o)
             cls._closedSet.add(o)
-
-    @classmethod
-    def oid(cls, identifier, rdf_type=False):
-        """ Load an object from the database using its type tag """
-        # XXX: This is a class method because we need to get the conf
-        # We should be able to extract the type from the identifier
-        if rdf_type:
-            uri = rdf_type
-        else:
-            uri = identifier
-
-        cn = cls.extract_class_name(uri)
-        # if its our class name, then make our own object
-        # if there's a part after that, that's the property name
-        o = DataObjects[cn](ident=identifier)
-        return o
 
     @classmethod
     def extract_class_name(cls, uri):
@@ -305,44 +285,60 @@ class DataObject(DataUser, metaclass=MappedClass):
             nm = self.namespace_manager
         return triples_to_bgp(self.get_defined_component(), namespace_manager=nm)
 
-    def save(self):
-        """ Write in-memory data to the database. Derived classes should call this to update the store. """
-        self.add_statements(self.get_defined_component())
-
     def load(self):
-        """ Load in data from the database. Derived classes should override this for their own data structures.
-
-        ``load()`` returns an iterable object which yields DataObjects which have the same class as the object and have, for the Properties set, the same values
-
-        :param self: An object which limits the set of objects which can be returned. Should have the configuration necessary to do the query
-        """
-        if not DataObject._is_variable(self.identifier(query=True)):
-            yield self
-        else:
-            gp = self.graph_pattern(query=True)
-            ident = self.identifier(query=True)
-            q = "SELECT DISTINCT {0} where {{ {1} }}".format(ident.n3(), gp)
-            qres = self.rdf.query(q)
-            for g in qres:
-                new_ident = g[0]
-                new_object = self.object_from_id(new_ident)
-                yield new_object
-
-    def load2(self):
         for ident in GraphObjectQuerier(self, self.rdf)():
             types = set()
             for rdf_type in self.rdf.objects(ident, R.RDF['type']):
                 types.add(rdf_type)
             the_type = get_most_specific_rdf_type(types)
-            yield oid2(ident, the_type)
+            yield oid(ident, the_type)
+
+    def save(self):
+        """ Write in-memory data to the database. Derived classes should call this to update
+        the store.
+
+        Dual to retract.
+        """
+        self.add_statements(self.get_defined_component())
 
     def retract(self):
         """ Remove this object from the data store.
 
-        Retract removes an object and everything it points to, transitively,
-        which doesn't have pointers to it by something else.
+        Retract removes an object and everything it points to, transitively, and everything
+        which points to it.
+
+        Dual to save.
         """
         self.retract_statements(self.get_defined_component())
+
+    def save_object(self):
+        """ Write in-memory data to the database. Derived classes should call this to update
+        the store.
+
+        Dual to retract_object.
+        """
+        self.add_statements(DescendantTripler(self)())
+
+    def retract_object(self):
+        """ Remove this object from the data store.
+
+        Retract removes an object and everything it points to, transitively, and everything
+        which points to it.
+
+        Dual to save_object.
+        """
+        self.retract_statements(HeroTripler(self)())
+
+    def retract_objectG(self):
+        """ Remove this object from the data store.
+
+        Retract removes an object and everything it points to, transitively, and everything
+        which points to it.
+
+        Dual to save_object.
+        """
+        g = HeroTripler(self, self.rdf)()
+        self.retract_statements(g)
 
     def __getitem__(self, x):
         try:
