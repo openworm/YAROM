@@ -35,15 +35,9 @@ class GraphObject(object):
             return id(self) < id(other)
 
 class GraphObjectQuerier(object):
-    def __init__(self, q, graph=None):
+    def __init__(self, q, graph):
         self.query_object = q
-
-        if graph is not None:
-            self.graph = graph
-        elif isinstance(q, DataObject):
-            self.graph = q.rdf
-        else:
-            raise Exception("Can't get a graph to query. Either provide one to _QueryDoer or provide a DataObject as the query object.")
+        self.graph = graph
 
     def do_query(self):
         qu = QU(self.query_object)

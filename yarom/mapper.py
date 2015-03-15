@@ -4,7 +4,9 @@ from .yProperty import *
 import yarom as P
 import traceback
 
-__all__ = [ "MappedClass", "DataObjects", "DataObjectsParents", "RDFTypeTable", "makeDatatypeProperty", "makeObjectProperty"]
+__all__ = [ "MappedClass", "DataObjects", "DataObjectsParents",
+            "RDFTypeTable", "makeDatatypeProperty", "makeObjectProperty",
+            "get_most_specific_rdf_type", "oid2"]
 
 DataObjects = dict() # class names to classes
 DataObjectsParents = dict() # class names to parents of the related class
@@ -211,7 +213,7 @@ def makeObjectProperty(*args,**kwargs):
     return _create_property(*args,property_type='ObjectProperty',**kwargs)
 
 def _slice_dict(d, s):
-    return {k:v for k,v in d.items() if k==s}
+    return {k:v for k,v in d.items() if k in s}
 
 def _create_property(owner_type, linkName, property_type, value_type=False, multiple=False, link=False):
     #XXX This should actually get called for all of the properties when their owner

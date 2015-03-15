@@ -329,7 +329,7 @@ class DataObject(DataUser, metaclass=MappedClass):
                 yield new_object
 
     def load2(self):
-        for ident in GraphObjectQuerier(self)():
+        for ident in GraphObjectQuerier(self, self.rdf)():
             types = set()
             for rdf_type in self.rdf.objects(ident, R.RDF['type']):
                 types.add(rdf_type)
@@ -448,7 +448,7 @@ class ObjectCollection(DataObject):
         an alias for ``value``
 
     """
-    objectProperties = ['member']
+    objectProperties = [{'name':'member', 'multiple':True}]
     datatypeProperties = ['name']
     def __init__(self,group_name,**kwargs):
         DataObject.__init__(self,key=group_name,**kwargs)
