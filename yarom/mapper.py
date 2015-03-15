@@ -9,7 +9,7 @@ __all__ = [ "MappedClass", "DataObjects", "DataObjectsParents", "RDFTypeTable", 
 DataObjects = dict() # class names to classes
 DataObjectsParents = dict() # class names to parents of the related class
 RDFTypeTable = dict() # class rdf types to classes
-DataObjectProperties = set() # Property classes to
+DataObjectProperties = list() # Property classes to
 
 class MappedClass(type):
     """A type for DataObjects
@@ -53,7 +53,8 @@ class MappedClass(type):
         self._du = value
 
     def __lt__(cls, other):
-        return issubclass(cls, other)
+        from .dataObject import DataObject,DataObjectType
+        return issubclass(cls,other) or ((not issubclass(other, cls)) and cls.__name__ < other.__name__)
 
     def register(cls):
         """
@@ -108,12 +109,14 @@ class MappedClass(type):
         # XXX: Use the rdfs predicate for the domain
         from .dataObject import DataObjectProperty,RDFProperty,RDFTypeProperty
         for x in DataObjectProperties:
-            x.rdf_object = DataObjectProperty(x.link)
+            if not hasattr(x, "rdf_object"):
+                x.rdf_object = DataObjectProperty(x.link)
 
     def addParentsToGraph(cls):
-        from .dataObject import RDFSSubClassOfProperty
-        for y in cls.parents:
-            cls.rdf_type_object.relate('rdfs_subClassOf', y.rdf_type_object, RDFSSubClassOfProperty)
+        from .dataObject import RDFSSubClassOfProperty,DataObject
+        for parent in cls.parents:
+            for ancestor in [x for x in parent.mro() if issubclass(x, DataObject)]:
+                cls.rdf_type_object.relate('rdfs_subClassOf', ancestor.rdf_type_object, RDFSSubClassOfProperty)
 
     def addObjectProperties(cls):
         try:
@@ -245,7 +248,7 @@ def _create_property(owner_type, linkName, property_type, value_type=False, mult
 
     # This is how we create the RDF predicate that points from the owner
     # to this property
-    DataObjectProperties.add(c)
+    DataObjectProperties.append(c)
     return c
 
 def get_most_specific_rdf_type(types):

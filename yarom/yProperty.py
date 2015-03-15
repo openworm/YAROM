@@ -163,9 +163,9 @@ class SimpleProperty(Property):
 
     def set(self,v):
         import bisect
+        from .dataObject import RDFSSubClassOfProperty
         if not hasattr(v, "idl"):
             v = PropertyValue(v)
-
         v.owner_properties.append(self)
 
         if self.multiple:

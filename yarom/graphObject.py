@@ -104,7 +104,7 @@ class SV(object):
         self.seen = set()
         self.results = R.Graph()
 
-    def g(self, current_node):
+    def g(self, current_node, i=0):
         if current_node in self.seen:
             return
         else:
@@ -117,13 +117,13 @@ class SV(object):
             p = e.owner
             if p.defined:
                 self.results.add((p.idl, e.link, current_node.idl))
-                self.g(p)
+                self.g(p,i+1)
 
         for e in current_node.properties:
             for val in e.values:
                 if val.defined:
                     self.results.add((current_node.idl, e.link, val.idl))
-                    self.g(val)
+                    self.g(val,i+1)
 
     def __call__(self, current_node):
         self.g(current_node)
