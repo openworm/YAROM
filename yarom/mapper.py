@@ -9,6 +9,7 @@ __all__ = [ "MappedClass", "DataObjects", "DataObjectsParents", "RDFTypeTable", 
 DataObjects = dict() # class names to classes
 DataObjectsParents = dict() # class names to parents of the related class
 RDFTypeTable = dict() # class rdf types to classes
+DataObjectProperties = set() # Property classes to
 
 class MappedClass(type):
     """A type for DataObjects
@@ -85,8 +86,7 @@ class MappedClass(type):
 
         RDFTypeTable[cls.rdf_type] = cls
 
-        cls.addParentsToGraph() # TODO: Make this attach the relevant type objects to our type
-        #cls.addPropertiesToGraph() # XXX: Have properties map themselves
+        cls.addParentsToGraph()
         cls.addNamespaceToManager()
 
         return cls
@@ -98,16 +98,17 @@ class MappedClass(type):
         classes.reverse()
         for x in classes:
             x.map()
+        metacls.addPropertiesToGraph()
 
     def addNamespaceToManager(cls):
         cls.conf['rdf.namespace_manager'].bind(cls.__name__, cls.rdf_namespace)
 
-    def addPropertiesToGraph(cls):
+    @classmethod
+    def addPropertiesToGraph(metacls):
         # XXX: Use the rdfs predicate for the domain
-        deets = []
-        for x in cls.dataObjectProperties:
-            deets.append((x.rdf_type, cls.conf['rdf.namespace']['domain'], cls.rdf_type))
-        cls.du.add_statements(deets)
+        from .dataObject import DataObjectProperty,RDFProperty,RDFTypeProperty
+        for x in DataObjectProperties:
+            x.rdf_object = DataObjectProperty(x.link)
 
     def addParentsToGraph(cls):
         from .dataObject import RDFSSubClassOfProperty
@@ -206,12 +207,20 @@ def makeObjectProperty(*args,**kwargs):
     """
     return _create_property(*args,property_type='ObjectProperty',**kwargs)
 
-def _create_property(owner_class, linkName, property_type, value_type=False, multiple=False, link=False):
+def _slice_dict(d, s):
+    return {k:v for k,v in d.items() if k==s}
+
+def _create_property(owner_type, linkName, property_type, value_type=False, multiple=False, link=False):
     #XXX This should actually get called for all of the properties when their owner
     #    classes are defined.
     #    The initialization, however, must happen with the owner object's creation
-    owner_class_name = owner_class.__name__
+
+
+    properties = _slice_dict(locals(), ['owner_type', 'linkName', 'property_type', 'multiple'])
+
+    owner_class_name = owner_type.__name__
     property_class_name = owner_class_name + "_" + linkName
+
     if value_type == False:
         value_type = P.DataObject
 
@@ -221,22 +230,22 @@ def _create_property(owner_class, linkName, property_type, value_type=False, mul
     else:
         x = None
         if property_type == 'ObjectProperty':
-            value_rdf_type = value_type.rdf_type
+            properties['value_rdf_type'] = value_type.rdf_type
             x = ObjectProperty
         else:
-            value_rdf_type = False
+            properties['value_rdf_type'] = False
             x = DatatypeProperty
 
         if link:
-            link = link
+            properties['link'] = link
         else:
-            link = owner_class.rdf_namespace[linkName]
-        c = type(property_class_name,(x,),dict(linkName=linkName, link=link,  property_type=property_type, value_rdf_type=value_rdf_type, owner_type=owner_class, multiple=multiple))
+            properties['link'] = owner_type.rdf_namespace[linkName]
+        c = type(property_class_name,(x,), properties)
 
 
     # This is how we create the RDF predicate that points from the owner
     # to this property
-
+    DataObjectProperties.add(c)
     return c
 
 def get_most_specific_rdf_type(types):

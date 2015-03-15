@@ -112,7 +112,11 @@ class DataObject(DataUser, metaclass=MappedClass):
             if x.linkName in kwargs:
                 self.relate(x.linkName, kwargs[x.linkName])
 
-        if isinstance(self, DataObjectType):
+        if isinstance(self, DataObjectProperty):
+            self.relate('rdf_type_property', RDFProperty.getInstance(), RDFTypeProperty)
+        elif isinstance(self, DataObjectType):
+            self.relate('rdf_type_property', RDFSClass.getInstance(), RDFTypeProperty)
+        elif isinstance(self, RDFProperty):
             self.relate('rdf_type_property', RDFSClass.getInstance(), RDFTypeProperty)
         elif isinstance(self, RDFSClass):
             self.relate('rdf_type_property', self, RDFTypeProperty)
@@ -382,6 +386,27 @@ class RDFSSubClassOfProperty(SimpleProperty):
     property_type = 'ObjectProperty'
     owner_type = RDFSClass
     multiple = True
+
+class DataObjectProperty(DataObjectType):
+    """ An represents the property-as-object.
+
+    Try not to confuse this with the Property class
+    """
+
+class RDFProperty(DataObject):
+    """ An RDFProperty represents the property-as-object.
+
+    Try not to confuse this with the Property class
+    """
+    instance = None
+    def __init__(self):
+        DataObject.__init__(self, R.RDF["Property"])
+
+    @classmethod
+    def getInstance(cls):
+        if cls.instance is None:
+            cls.instance = RDFProperty()
+        return cls.instance
 
 class ObjectCollection(DataObject):
     """
