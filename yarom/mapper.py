@@ -64,10 +64,11 @@ class MappedClass(type):
 
         Also creates the classes for and registers the properties of this DataObject
         """
+        cls._du = DataUser()
         DataObjects[cls.__name__] = cls
         DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, MappedClass)]
         cls.parents = DataObjectsParents[cls.__name__]
-        cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
+        cls.rdf_type = cls.du['rdf.namespace'][cls.__name__]
         cls.rdf_namespace = R.Namespace(cls.rdf_type + "/")
 
         cls.addObjectProperties()
@@ -84,7 +85,6 @@ class MappedClass(type):
         # NOTE: Map should be quick: it runs for every DataObject sub-class created and possibly
         #       several times in testing
         from .dataObject import DataObjectType
-        cls._du = DataUser()
         cls.rdf_type_object = DataObjectType(cls.rdf_type)
 
         RDFTypeTable[cls.rdf_type] = cls
@@ -104,7 +104,7 @@ class MappedClass(type):
         metacls.addPropertiesToGraph()
 
     def addNamespaceToManager(cls):
-        cls.conf['rdf.namespace_manager'].bind(cls.__name__, cls.rdf_namespace)
+        cls.du['rdf.namespace_manager'].bind(cls.__name__, cls.rdf_namespace)
 
     @classmethod
     def addPropertiesToGraph(metacls):

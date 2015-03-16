@@ -103,10 +103,12 @@ class Configuration(object):
 
     def copy(self, other):
         """ Copy configuration values from a different object.
+
         Parameters
         ----------
         other: dict or Configuration
             A dict or Configuration object to copy the configuration from
+
         Returns
         -------
         self
@@ -120,17 +122,20 @@ class Configuration(object):
 
     def get(self, pname, default=None):
         """ Retrieve a configuration value.
+
         Parameters
         ----------
         pname: str
             The key of the value to return.
         default: object
             The value to return if there is no value corresponding to the given key
+
         Returns
         -------
         object
             The value corresponding to the key in pname or `default` if none is
             available and a default is provided.
+
         Raises
         ------
         KeyError
@@ -145,8 +150,11 @@ class Configuration(object):
 
 class Configureable(object):
     """ An object which can accept configuration """
-    conf = False
 
+    conf = Configuration()
+    """ The configuration """
+
+    configuration_variables = dict()
     """ A table of configuration values used by the Configureable object for the
     purpose of documentation.
 
@@ -169,7 +177,6 @@ class Configureable(object):
       has its value set within the object should have directly_configureable set
       to ``False``.
     """
-    configuration_variables = dict()
 
     def __init__(self, conf=False):
         pass
@@ -177,9 +184,6 @@ class Configureable(object):
     @classmethod
     def setConf(cls, conf):
         cls.conf = conf
-
-    def conf(self):
-        return Configureable.conf
 
     def __getitem__(self,k):
         return self.conf.get(k)

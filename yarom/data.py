@@ -28,7 +28,7 @@ class Data(Configuration, Configureable):
         if conf is not False:
             self.init_conf = conf
         else:
-            self.init_conf = self.conf
+            self.init_conf = Configureable.conf
 
         # We copy over all of the configuration that we were given
         self.copy(self.init_conf)

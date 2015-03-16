@@ -95,8 +95,8 @@ def connect(configFile=False,
             do_logging=False,
             data=False,
             dataFormat='n3'):
-    """
-     Load desired configuration and open the database
+    """Load desired configuration and open the database
+
     Parameters
     ----------
     configFile: str, optional
