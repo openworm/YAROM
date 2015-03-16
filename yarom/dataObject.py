@@ -343,16 +343,34 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
 class DataObjectType(DataObject): # This maybe becomes a DataObject later
     pass
 
-class RDFSClass(DataObject): # This maybe becomes a DataObject later
+class DataObjectSingleton(DataObject):
+    """ The DataObject corresponding to rdf:Property """
     instance = None
-    def __init__(self):
-        DataObject.__init__(self, R.RDFS["Class"])
+    def __init__(self, *args, **kwargs):
+        if type(self)._gettingInstance:
+            DataObject.__init__(self, *args, **kwargs)
+        else:
+            raise Exception("You must call getInstance to get "+type(self).__name__)
 
     @classmethod
     def getInstance(cls):
         if cls.instance is None:
-            cls.instance = RDFSClass()
+            cls._gettingInstance = True
+            cls.instance = cls()
+            cls._gettingInstance = False
+
         return cls.instance
+
+class RDFSClass(DataObjectSingleton): # This maybe becomes a DataObject later
+    """ The DataObject corresponding to rdfs:Class """
+    def __init__(self):
+        super().__init__(R.RDFS["Class"])
+
+class RDFProperty(DataObjectSingleton):
+    """ The DataObject corresponding to rdf:Property """
+    def __init__(self):
+        super().__init__(R.RDF["Property"])
+
 
 class RDFTypeProperty(SimpleProperty):
     link = R.RDF['type']
@@ -369,31 +387,10 @@ class RDFSSubClassOfProperty(SimpleProperty):
     multiple = True
 
 class DataObjectProperty(DataObjectType):
-    """ An represents the property-as-object.
+    """ A DataObjectProperty represents the property-as-object.
 
     Try not to confuse this with the Property class
     """
-
-class RDFProperty(DataObject):
-    """ An RDFProperty represents the property-as-object.
-
-    Try not to confuse this with the Property class
-    """
-    instance = None
-    def __init__(self):
-        if type(self)._gettingInstance:
-            DataObject.__init__(self, R.RDF["Property"])
-        else:
-            raise Exception("You must call getInstance to get RDFProperty")
-
-    @classmethod
-    def getInstance(cls):
-        if cls.instance is None:
-            cls._gettingInstance = True
-            cls.instance = RDFProperty()
-            cls._gettingInstance = False
-
-        return cls.instance
 
 class ObjectCollection(DataObject):
     """
@@ -401,7 +398,7 @@ class ObjectCollection(DataObject):
 
     Example::
 
-        v = values('unc-13 neurons and muscles')
+        v = ObjectCollection('unc-13 neurons and muscles')
         n = P.Neuron()
         m = P.Muscle()
         n.receptor('UNC-13')
@@ -414,7 +411,7 @@ class ObjectCollection(DataObject):
         v.save()
         ...
         # get the list back
-        u = values('unc-13 neurons and muscles')
+        u = ObjectCollection('unc-13 neurons and muscles')
         nm = list(u.value())
 
 
