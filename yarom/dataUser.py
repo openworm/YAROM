@@ -3,6 +3,7 @@ from rdflib.namespace import RDFS, RDF, NamespaceManager
 from .configure import Configureable,BadConf
 import transaction
 from .data import Data
+from .rdfUtils import triples_to_bgp
 
 __all__ = ["DataUser"]
 class DataUser(Configureable):
@@ -33,13 +34,12 @@ class DataUser(Configureable):
                 "type" : NamespaceManager
                 }
             }
-    def __init__(self, conf=None, **kwargs):
-        if conf is None:
-            conf = Data()
-        Configureable.__init__(self, conf=conf, **kwargs)
+    def __init__(self, **kwargs):
+        Configureable.__init__(self)
 
         if not isinstance(self.conf, Data):
-            raise BadConf("Not a Data instance: "+ str(self.conf))
+            Configureable.setConf(Data())
+
     @property
     def base_namespace(self):
         return self.conf['rdf.namespace']
@@ -82,7 +82,7 @@ class DataUser(Configureable):
             try:
                 gs = g.serialize(format="nt")
             except:
-                gs = _triples_to_bgp(g)
+                gs = triples_to_bgp(g)
 
             if graph_name:
                 s = " INSERT DATA { GRAPH "+graph_name.n3()+" {" + gs + " } } "
@@ -103,23 +103,14 @@ class DataUser(Configureable):
             # Fire off a new one
             transaction.begin()
 
-    def add_reference(self, g, reference_iri):
-        """
-        Add a citation to a set of statements in the database
-        :param triples: A set of triples to annotate
-        """
-        new_statements = Graph()
-        ns = self.conf['rdf.namespace']
-        for statement in g:
-            statement_node = self._reify(new_statements,statement)
-            new_statements.add((URIRef(reference_iri), ns['asserts'], statement_node))
-
-        self.add_statements(g + new_statements)
-
     def retract_statements(self, statements):
         """
         Remove a set of statements from the database.
-        :param query: A SPARQL graph pattern
+
+        Parameters
+        ----------
+        triples: iter of (URIRef, URIRef, URIRef)
+            A set of triples to remove
         """
         for x in statements:
             self.rdf.remove(x)
@@ -133,8 +124,13 @@ class DataUser(Configureable):
     def add_statements(self, graph):
         """
         Add a set of statements to the database.
+
         Annotates the addition with uploader name, etc
-        :param graph: An iterable of triples
+
+        Parameters
+        ----------
+        triples: iter of (URIRef, URIRef, URIRef)
+            A set of triples to add to the graph
         """
         self._add_to_store(graph)
 
@@ -148,11 +144,6 @@ class DataUser(Configureable):
         g.add((n, RDF['predicate'], s[1]))
         g.add((n, RDF['object'], s[2]))
         return n
-
-def _triples_to_bgp(trips):
-    # XXX: Collisions could result between the variable names of different objects
-    g = " .\n".join(" ".join(_rdf_literal_to_gp(x) for x in y) for y in trips)
-    return g
 
 def grouper(iterable, n, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
@@ -168,7 +159,3 @@ def grouper(iterable, n, fillvalue=None):
         yield l
         if len(l) < n:
             break
-
-def _rdf_literal_to_gp(x):
-    return x.n3()
-

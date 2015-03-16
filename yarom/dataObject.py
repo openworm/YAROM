@@ -16,13 +16,6 @@ from .graphObject import *
 def _bnode_to_var(x):
     return "?" + x
 
-
-class IdentifierMissingException(Exception):
-    """ Indicates that an identifier should be set available for the object in question, but there is none """
-    def __init__(self, dataObject="[unspecified object]", query=False, *args, **kwargs):
-        mode = "query mode" if query else "non-query mode"
-        super().__init__("An identifier should be provided for {} when used in {}".format(str(dataObject), mode), *args, **kwargs)
-
 def get_hash_function(method_name):
     if method_name == "sha224":
         return hashlib.sha224
@@ -31,7 +24,7 @@ def get_hash_function(method_name):
     elif method_name in hashlib.algorithms_available:
         return (lambda data: hashlib.new(method_name, data))
 
-class DataObject(DataUser, metaclass=MappedClass):
+class DataObject(DataUser, GraphObject, metaclass=MappedClass):
     """ An object backed by the database
 
     Attributes
@@ -48,7 +41,6 @@ class DataObject(DataUser, metaclass=MappedClass):
 
     _openSet = set()
     _closedSet = set()
-    i = 0
 
     configuration_variables = {
             "rdf.namespace" : {
@@ -102,11 +94,7 @@ class DataObject(DataUser, metaclass=MappedClass):
             self._id_variable = self._graph_variable(cname + "_" + hashlib.md5(str(v).encode()).hexdigest())
 
         for x in self.__class__.dataObjectProperties:
-            prop = x(owner=self)
-            self.properties.append(prop)
-            if hasattr(self, prop.linkName):
-                raise Exception("Cannot attach property '{}'. A property must have a different name from any attributes in DataObject".format(prop.linkName))
-            setattr(self, prop.linkName, prop)
+            self.attachProperty(x)
 
         for x in self.properties:
             if x.linkName in kwargs:
@@ -128,23 +116,14 @@ class DataObject(DataUser, metaclass=MappedClass):
         return get_hash_function(self.conf.get('dataObject.identifier_hash', 'md5'))(o)
 
     @property
-    def _id_is_set(self):
-        """ Indicates whether the identifier will return a URI appropriate for use by YAROM
-
-        Sub-classes should not override this method.
-        """
-        return self._id != False
-
-    @property
     def defined(self):
         return self._id != False
 
-    @property
-    def idl(self):
-        if self._id:
-            return self._id
-        else:
+    def variable(self):
+        if self._id_variable is not None:
             return self._id_variable
+        else:
+            raise IdentifierMissingException(self)
 
     def setKey(self, key):
         if isinstance(key, str):
@@ -164,10 +143,16 @@ class DataObject(DataUser, metaclass=MappedClass):
                     prop = makeObjectProperty(cls, linkName, value_type=type(other), multiple=True)
                 else:
                     prop = makeDatatypeProperty(cls, linkName, multiple=True)
-            p = prop(owner=self)
-            self.properties.append(p)
-            setattr(self, linkName, p)
+            p = self.attachProperty(prop)
         p.set(other)
+
+    def attachProperty(self, prop):
+        p = prop(owner=self)
+        if hasattr(self, prop.linkName):
+            raise Exception("Cannot attach property '{}'. A property must have a different name from any attributes in DataObject".format(prop.linkName))
+        self.properties.append(p)
+        setattr(self, p.linkName, p)
+        return p
 
     def get_defined_component(self):
         g = SV()(self)
@@ -235,29 +220,29 @@ class DataObject(DataUser, metaclass=MappedClass):
         from urllib.parse import quote
         return R.URIRef(cls.rdf_namespace[quote(string)])
 
-    def identifier(self, query=False):
-        """
-        The identifier for this object in the rdf graph.
+    def identifier(self):
+        """ The identifier for this object in the rdf graph.
 
         This identifier may be randomly generated, but an identifier returned from the
         graph can be used to retrieve the specific object that it refers to.
 
         Sub-classes of DataObject may override this to construct identifiers based
         on some other key.
+
+        Returns
+        -------
         """
-        if query and not self._id_is_set:
-            return self._id_variable
-        elif self._id_is_set:
+        if self.defined:
             return self._id
         else:
             # XXX: Make no mistake: not having an identifier here is an error.
             # You may, however, need to sub-class DataObject to make an
             # appropriate identifier method.
-            raise IdentifierMissingException(self.__class__, query)
+            raise IdentifierMissingException(self)
 
     def triples(self, query=False, visited_list=False):
-        """
-        Should be overridden by derived classes to return appropriate triples
+        """ Returns 3-tuples of the connected component of the object graph
+            starting from this object.
 
         Returns
         --------
@@ -371,7 +356,7 @@ class RDFSClass(DataObject): # This maybe becomes a DataObject later
 
 class RDFTypeProperty(SimpleProperty):
     link = R.RDF['type']
-    linkName = "rdf_type"
+    linkName = "rdf_type_property"
     property_type = 'ObjectProperty'
     owner_type = DataObject
     multiple = True

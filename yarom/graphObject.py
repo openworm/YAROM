@@ -2,17 +2,20 @@ import rdflib as R
 
 class GraphObject(object):
     def identifier(self):
+        """ Must return an rdflib.term.URIRef object representing this object
+            or else raise an Exception. """
         raise NotImplementedError()
 
     def defined(self):
+        """ Returns true if """
         raise NotImplementedError()
 
     @property
     def idl(self):
         if self.defined:
-            return self.identifier
+            return self.identifier()
         else:
-            return self.variable
+            return self.variable()
 
     def owner_properties(self):
         raise NotImplementedError()
@@ -315,3 +318,9 @@ class HeroTripler(object):
         self.heros(self.start)
         self.hero(self.start)
         return self.results
+
+class IdentifierMissingException(Exception):
+    """ Indicates that an identifier should be set available for the object in
+        question, but there is none """
+    def __init__(self, dataObject="[unspecified object]", *args, **kwargs):
+        super().__init__("An identifier should be provided for {}".format(str(dataObject)), *args, **kwargs)
