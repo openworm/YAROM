@@ -727,9 +727,9 @@ class SimplePropertyTest(_DataTest):
 
         # Done dynamically to ensure that all of the yarom setup happens before the class is created
         class K(Y.DataObject):
-            datatypeProperties = ['boots']
-            objectProperties = ['bats',
-                    {'name':'bits', 'multiple':True}]
+            datatypeProperties = [{'name':'boots', 'multiple':False}, 'bets']
+
+            objectProperties = [{'name':'bats', 'multiple':False}, 'bits']
         self.k = K
 
     # XXX: auto generate some of these tests...
@@ -793,7 +793,7 @@ class SimplePropertyTest(_DataTest):
 
     def test_non_multiple_saves_single_values(self):
         class C(Y.DataObject):
-            datatypeProperties = ['t']
+            datatypeProperties = [{'name':'t', 'multiple':False}]
         do = C(key="s")
         do.t("value1")
         do.t("vaule2")
@@ -803,17 +803,34 @@ class SimplePropertyTest(_DataTest):
         self.assertEqual(len(list(do1.t.get())), 1)
 
     def test_unset_single(self):
+        boots = self.k().boots
+
+        boots.set("l")
+        boots.unset("l")
+        self.assertEqual(len(boots.values), 0)
+
+    def test_unset_single_property_value(self):
+        from yarom.yProperty import PropertyValue
+        boots = self.k().boots
+
+        boots.set("l")
+        boots.unset(PropertyValue("l"))
+        self.assertEqual(len(boots.values), 0)
+
+    def test_unset_single_by_identifier(self):
+        from yarom.yProperty import PropertyValue
         bats = self.k().bats
 
-        bats.set("l")
-        bats.unset("l")
+        o = self.k(key='blah')
+        bats.set(o)
+        bats.unset(o.identifier())
         self.assertEqual(len(bats.values), 0)
 
     def test_unset_multiple(self):
-        bits = self.k().bits
-        bits.set("l")
-        bits.unset("l")
-        self.assertEqual(len(bits.values), 0)
+        bets = self.k().bets
+        bets.set("l")
+        bets.unset("l")
+        self.assertEqual(len(bets.values), 0)
 
     def test_unset_empty(self):
         """ Attempting to unset a value that isn't set should raise an error """
@@ -824,7 +841,7 @@ class SimplePropertyTest(_DataTest):
     def test_unset_wrong_value(self):
         """ Attempting to unset a value that isn't set should raise an error """
         bits = self.k().bits
-        bits.set("l")
+        bits.set(self.k(key='roger'))
         with self.assertRaises(Exception):
             bits.unset("random")
 

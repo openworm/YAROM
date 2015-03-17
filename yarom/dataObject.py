@@ -62,7 +62,7 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
 
     def __init__(self,ident=False,var=False,triples=False,key=False,generate_key=False,**kwargs):
         try:
-            DataUser.__init__(self,**kwargs)
+            super().__init__()
         except BadConf as e:
             raise Exception("You may need to connect to a database before continuing.")
 
@@ -74,6 +74,7 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
         self.properties = []
         self.owner_properties = []
         self._id = False
+
         if ident:
             if isinstance(ident, R.URIRef):
                 self._id = ident
@@ -160,7 +161,7 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
         return g
 
     def __eq__(self,other):
-        return isinstance(other,DataObject) and (self.idl == other.idl)
+        return (isinstance(other,DataObject) and (self.idl == other.idl)) or (isinstance(other, R.URIRef) and self.idl == other)
 
     def __hash__(self):
         return hash(self.idl)
@@ -432,8 +433,8 @@ class ObjectCollection(DataObject):
         an alias for ``value``
 
     """
-    objectProperties = [{'name':'member', 'multiple':True}]
-    datatypeProperties = ['name']
+    objectProperties = ['member']
+    datatypeProperties = [{'name':'name', 'multiple':False}]
     def __init__(self,group_name,**kwargs):
         DataObject.__init__(self,key=group_name,**kwargs)
         self.add = self.member

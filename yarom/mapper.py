@@ -121,6 +121,7 @@ class MappedClass(type):
                 cls.rdf_type_object.relate('rdfs_subClassOf', ancestor.rdf_type_object, RDFSSubClassOfProperty)
 
     def addObjectProperties(cls):
+        # TODO: Make an option string to appreviate these options
         try:
             if hasattr(cls, 'objectProperties'):
                 assert(isinstance(cls.objectProperties,(tuple,list,set)))
@@ -159,7 +160,8 @@ class MappedClass(type):
                     else:
                         p = makeDatatypeProperty(cls, x)
                     cls.dataObjectProperties.append(p)
-
+                cls._datatypeProperties = cls.datatypeProperties
+                cls.datatypeProperties = []
         except:
             traceback.print_exc()
 
@@ -215,7 +217,7 @@ def makeObjectProperty(*args,**kwargs):
 def _slice_dict(d, s):
     return {k:v for k,v in d.items() if k in s}
 
-def _create_property(owner_type, linkName, property_type, value_type=False, multiple=False, link=False):
+def _create_property(owner_type, linkName, property_type, value_type=False, multiple=True, link=False):
     #XXX This should actually get called for all of the properties when their owner
     #    classes are defined.
     #    The initialization, however, must happen with the owner object's creation

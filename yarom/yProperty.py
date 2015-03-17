@@ -3,7 +3,11 @@ from .rdfUtils import *
 from .variable import Variable
 from .graphObject import *
 from random import random
+import rdflib
+import logging
 import hashlib
+
+L = logging.getLogger(__name__)
 
 # Define a property by writing the get
 class Property(DataUser):
@@ -134,23 +138,11 @@ class SimpleProperty(Property):
         the resulting values. Also queries the configured rdf graph for values
         which are set for the ``Property``'s owner.
         """
-        from .mapper import oid,get_most_specific_rdf_type
-
         v = Variable("var"+str(id(self)))
         self.set(v)
         results = GraphObjectQuerier(v, self.rdf)()
         self.unset(v)
-
-        if self.property_type == 'ObjectProperty':
-            for ident in results:
-                types = set()
-                for rdf_type in self.rdf.objects(ident, R.RDF['type']):
-                    types.add(rdf_type)
-                the_type = get_most_specific_rdf_type(types)
-                yield oid(ident, the_type)
-        else:
-            for val in results:
-                yield deserialize_rdflib_term(val)
+        return results
 
     def unset(self, v):
         idx = self._v.index(v)
@@ -163,9 +155,6 @@ class SimpleProperty(Property):
 
     def set(self,v):
         import bisect
-        from .dataObject import RDFSSubClassOfProperty
-        if not hasattr(v, "idl"):
-            v = PropertyValue(v)
         v.owner_properties.append(self)
 
         if self.multiple:
@@ -182,11 +171,46 @@ class SimpleProperty(Property):
     def __str__(self):
         return str(self.linkName + "(" + str(" ".join(repr(x) for x in self._v)) + ")")
 
+    def __repr__(self):
+        return str(self)
+
 class DatatypeProperty(SimpleProperty):
-    pass
+    def set(self, v):
+        from .dataObject import DataObject
+        if isinstance(v, DataObject):
+            L.warn('You are attempting to set a DataObject where a literal is expected.')
+        if not hasattr(v, "idl"):
+            v = PropertyValue(v)
+        return super().set(v)
+
+    def get(self):
+        for val in super().get():
+            yield deserialize_rdflib_term(val)
 
 class ObjectProperty(SimpleProperty):
-    pass
+    def set(self, v):
+        from .dataObject import DataObject
+        if not isinstance(v, (DataObject, Variable)):
+            raise Exception("An ObjectProperty only accepts DataObject instances")
+        return super().set(v)
+
+    def get(self):
+        from .mapper import oid,get_most_specific_rdf_type
+
+        for ident in super().get():
+            if not isinstance(ident, rdflib.URIRef):
+                L.warn('ObjectProperty.get: Skipping non-URI term, "'+ident+'", returned for a data object.')
+                continue
+            types = set()
+            for rdf_type in self.rdf.objects(ident, R.RDF['type']):
+                types.add(rdf_type)
+            if len(types) == 0:
+                L.warn('ObjectProperty.get: Retrieved untypped URI, "'+ident+'", for a DataObject. Creating a default-typed object')
+                the_type = DataObject.rdf_type
+            else:
+                the_type = get_most_specific_rdf_type(types)
+
+            yield oid(ident, the_type)
 
 class PropertyValue(GraphObject):
     """ Holds a literal value for a property """
