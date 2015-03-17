@@ -46,7 +46,7 @@ class GraphObjectQuerier(object):
     def do_query(self):
         qu = QU(self.query_object)
         h = self.hoc(qu())
-        return self.qpr(self.graph, h)
+        return self.qpr(h)
 
     def hoc(self,l):
         res = dict()
@@ -61,7 +61,7 @@ class GraphObjectQuerier(object):
 
         return res
 
-    def qpr(self, g, h, i=0):
+    def qpr(self, h, i=0):
         join_args = []
         for x in h:
             sub_answers = set()
@@ -73,16 +73,16 @@ class GraphObjectQuerier(object):
                 other_idx = 2
 
             if isinstance(x[other_idx], R.Variable):
-                for z in self.qpr(g, sub, i+1):
+                for z in self.qpr(sub, i+1):
                     if idx == 2:
                         qx = (z, x[1], None)
                     else:
                         qx = (None, x[1], z)
 
-                    for y in g.triples(qx):
+                    for y in self.graph.triples(qx):
                         sub_answers.add(y[idx])
             else:
-                for y in g.triples(x):
+                for y in self.graph.triples(x):
                     sub_answers.add(y[idx])
             join_args.append(sub_answers)
 
@@ -95,7 +95,8 @@ class GraphObjectQuerier(object):
             return set()
 
     def __call__(self):
-        return self.do_query()
+        res = self.do_query()
+        return res
 
 class SV(object):
     def __init__(self):

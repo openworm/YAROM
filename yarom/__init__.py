@@ -72,6 +72,9 @@ def loadConfig(f):
     Configureable.setConf(Data.open(f))
     return Configureable.conf
 
+def remap():
+    MappedClass.remap()
+
 def disconnect(c=False):
     """ Close the database """
     m = this_module
@@ -90,8 +93,7 @@ def loadData(data, dataFormat):
     if data:
         config()['rdf.graph'].parse(data, format=dataFormat)
 
-def connect(configFile=False,
-            conf=False,
+def connect(conf=False,
             do_logging=False,
             data=False,
             dataFormat='n3'):
@@ -99,7 +101,6 @@ def connect(configFile=False,
 
     Parameters
     ----------
-    configFile: str, optional
     conf: string, Data, Configuration or dict, optional
         The configuration to load.
 
