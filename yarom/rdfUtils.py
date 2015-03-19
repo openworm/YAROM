@@ -5,6 +5,7 @@ def print_graph(g, hide_namespaces=False):
     if hide_namespaces:
         lines = s.splitlines()
         s = "\n".join(l for l in lines if not l.startswith("@prefix"))
+    print(s)
 
 def serialize_rdflib_term(x, namespace_manager=None):
     if isinstance(x, R.BNode):

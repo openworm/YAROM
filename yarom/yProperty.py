@@ -2,15 +2,18 @@ from .dataUser import DataUser
 from .rdfUtils import *
 from .variable import Variable
 from .graphObject import *
+from .mapper import MappedPropertyClass
 from random import random
 import rdflib
 import logging
 import hashlib
 
+__all__ = [ "Property", "SimpleProperty", "DatatypeProperty", "ObjectProperty"]
+
 L = logging.getLogger(__name__)
 
 # Define a property by writing the get
-class Property(DataUser):
+class Property(DataUser, metaclass=MappedPropertyClass):
     """ Store a value associated with a DataObject
 
     Properties can be be accessed like methods. A method call like::

@@ -5,7 +5,7 @@ import hashlib
 import random
 from .mapper import *
 from .dataUser import DataUser
-from .yProperty import SimpleProperty
+from .yProperty import *
 from .rdfUtils import *
 from .graphObject import *
 
@@ -101,7 +101,7 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
             if x.linkName in kwargs:
                 self.relate(x.linkName, kwargs[x.linkName])
 
-        if isinstance(self, DataObjectProperty):
+        if isinstance(self, PropertyDataObject):
             self.relate('rdf_type_property', RDFProperty.getInstance(), RDFTypeProperty)
         elif isinstance(self, DataObjectType):
             self.relate('rdf_type_property', RDFSClass.getInstance(), RDFTypeProperty)
@@ -140,10 +140,13 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
             p = getattr(self, linkName)
         else:
             if not prop:
+                property_type = None
                 if isinstance(other, DataObject):
-                    prop = makeObjectProperty(cls, linkName, value_type=type(other), multiple=True)
+                    property_type = ObjectProperty
                 else:
-                    prop = makeDatatypeProperty(cls, linkName, multiple=True)
+                    property_type = DatatypeProperty
+                link = type(self).rdf_namespace[linkName]
+                prop = MappedPropertyClass(linkName, (property_type,), dict(link=link))
             p = self.attachProperty(prop)
         p.set(other)
 
@@ -205,10 +208,6 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
             return uri[:len(cls.rdf_namespace)]
         else:
             raise Exception("This URI ({}) doesn't start with the appropriate namespace ({})".format(uri, cls.rdf_namespace))
-
-    @classmethod
-    def _graph_variable_to_var(cls, uri):
-        return uri
 
     @classmethod
     def make_identifier(cls, data):
@@ -341,11 +340,10 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
                     res.append(x.owner)
         return res
 
-class DataObjectType(DataObject): # This maybe becomes a DataObject later
+class DataObjectType(DataObject):
     pass
 
 class DataObjectSingleton(DataObject):
-    """ The DataObject corresponding to rdf:Property """
     instance = None
     def __init__(self, *args, **kwargs):
         if type(self)._gettingInstance:
@@ -364,34 +362,52 @@ class DataObjectSingleton(DataObject):
 
 class RDFSClass(DataObjectSingleton): # This maybe becomes a DataObject later
     """ The DataObject corresponding to rdfs:Class """
+    # XXX: This class may be changed from a singleton later to facilitate dumping
+    #      and reloading the object graph
+    rdf_type = R.RDFS['Class']
     def __init__(self):
         super().__init__(R.RDFS["Class"])
 
 class RDFProperty(DataObjectSingleton):
     """ The DataObject corresponding to rdf:Property """
+    rdf_type = R.RDF['Property']
     def __init__(self):
         super().__init__(R.RDF["Property"])
 
 
-class RDFTypeProperty(SimpleProperty):
+class RDFTypeProperty(ObjectProperty):
     link = R.RDF['type']
     linkName = "rdf_type_property"
-    property_type = 'ObjectProperty'
     owner_type = DataObject
+    value_type = RDFSClass
     multiple = True
 
-class RDFSSubClassOfProperty(SimpleProperty):
+class RDFSSubClassOfProperty(ObjectProperty):
     link = R.RDFS['subClassOf']
     linkName = "rdfs_subClassOf"
-    property_type = 'ObjectProperty'
     owner_type = RDFSClass
+    value_type = RDFSClass
     multiple = True
 
-class DataObjectProperty(DataObjectType):
-    """ A DataObjectProperty represents the property-as-object.
+class PropertyDataObject(DataObjectType):
+    """ A PropertyDataObject represents the property-as-object.
 
     Try not to confuse this with the Property class
     """
+
+class RDFSDomainProperty(ObjectProperty):
+    link = R.RDFS['domain']
+    linkName = "rdfs_domain"
+    owner_type = RDFProperty
+    value_type = RDFSClass
+    multiple = True
+
+class RDFSRangeProperty(ObjectProperty):
+    link = R.RDFS['range']
+    linkName = "rdfs_range"
+    owner_type = RDFProperty
+    value_type = RDFSClass
+    multiple = True
 
 class ObjectCollection(DataObject):
     """
@@ -427,7 +443,7 @@ class ObjectCollection(DataObject):
         The name of the group of objects
     group_name : DataObject
         an alias for ``name``
-    value : ObjectProperty
+    member : ObjectProperty
         An object in the group
     add : ObjectProperty
         an alias for ``value``

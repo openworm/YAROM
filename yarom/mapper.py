@@ -1,25 +1,28 @@
 import rdflib as R
 from yarom import DataUser
-from .yProperty import *
 import yarom as P
 import traceback
 
-__all__ = [ "MappedClass", "DataObjects", "DataObjectsParents",
+__all__ = [ "MappedClass", "MappedPropertyClass", "MappedClasses", "DataObjectsParents",
             "RDFTypeTable", "makeDatatypeProperty", "makeObjectProperty",
             "get_most_specific_rdf_type", "oid"]
 
-DataObjects = dict() # class names to classes
+MappedClasses = dict() # class names to classes
 DataObjectsParents = dict() # class names to parents of the related class
 RDFTypeTable = dict() # class rdf types to classes
-DataObjectProperties = list() # Property classes to
+DataObjectProperties = dict() # Property classes to
 
 class MappedClass(type):
-    """A type for DataObjects
+    """A type for MappedClasses
 
-    Sets up the graph with things needed for DataObjects
+    Sets up the graph with things needed for MappedClasses
     """
     def __init__(cls, name, bases, dct):
         type.__init__(cls,name,bases,dct)
+        if 'rdf_type' in dct:
+            cls.rdf_type = dct['rdf_type']
+        else:
+            cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
 
         cls.dataObjectProperties = []
         for x in bases:
@@ -55,7 +58,8 @@ class MappedClass(type):
         self._du = value
 
     def __lt__(cls, other):
-        from .dataObject import DataObject,DataObjectType
+        if isinstance(other, MappedPropertyClass):
+            return False
         return issubclass(cls,other) or ((not issubclass(other, cls)) and cls.__name__ < other.__name__)
 
     def register(cls):
@@ -65,10 +69,9 @@ class MappedClass(type):
         Also creates the classes for and registers the properties of this DataObject
         """
         cls._du = DataUser()
-        DataObjects[cls.__name__] = cls
+        MappedClasses[cls.__name__] = cls
         DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, MappedClass)]
         cls.parents = DataObjectsParents[cls.__name__]
-        cls.rdf_type = cls.du['rdf.namespace'][cls.__name__]
         cls.rdf_namespace = R.Namespace(cls.rdf_type + "/")
 
         cls.addObjectProperties()
@@ -78,9 +81,9 @@ class MappedClass(type):
         return cls
 
     def map(cls):
-        """Performs those actions necessary for storing the class and its instances in the graph.
+        """Sets up the object graph related to this class
 
-        ``map`` never touches the graph itself.
+        ``map`` never touches the RDF graph itself.
         """
         # NOTE: Map should be quick: it runs for every DataObject sub-class created and possibly
         #       several times in testing
@@ -97,22 +100,13 @@ class MappedClass(type):
     @classmethod
     def remap(metacls):
         """ Calls `map` on all of the registered classes """
-        classes = sorted(list(DataObjects.values()))
+        classes = sorted(list(MappedClasses.values()))
         classes.reverse()
         for x in classes:
             x.map()
-        metacls.addPropertiesToGraph()
 
     def addNamespaceToManager(cls):
         cls.du['rdf.namespace_manager'].bind(cls.__name__, cls.rdf_namespace)
-
-    @classmethod
-    def addPropertiesToGraph(metacls):
-        # XXX: Use the rdfs predicate for the domain
-        from .dataObject import DataObjectProperty,RDFProperty,RDFTypeProperty
-        for x in DataObjectProperties:
-            if not hasattr(x, "rdf_object"):
-                x.rdf_object = DataObjectProperty(x.link)
 
     def addParentsToGraph(cls):
         from .dataObject import RDFSSubClassOfProperty,DataObject
@@ -167,6 +161,7 @@ class MappedClass(type):
 
     def _cleanupGraph(cls):
         """ Cleans up the graph by removing statements that can't be connected to typed statement. """
+        # XXX: This might belong in DataUser instead
         q = """
         DELETE { ?b ?x ?y }
         WHERE
@@ -176,6 +171,42 @@ class MappedClass(type):
         }
           """
         cls.du.rdf.update(q)
+
+class MappedPropertyClass(type):
+    def __init__(cls, name, bases, dct):
+        type.__init__(cls,name,bases,dct)
+        if 'link' not in dct:
+            cls.link = cls.conf['rdf.namespace'][cls.__name__]
+        else:
+            cls.link = dct['link']
+
+        cls.register()
+
+    def register(cls):
+        #
+        # This is how we create the RDF predicate that points from the owner
+        # to this property
+        MappedClasses[cls.__name__] = cls
+        #DataObjectProperties[cls.__name__] = cls
+        # XXX: Maybe have sub-properties set-up here?
+        #DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, MappedClass)]
+        #cls.parents = DataObjectsParents[cls.__name__]
+
+        setattr(P, cls.__name__, cls)
+
+        return cls
+
+    def map(cls):
+        from .dataObject import PropertyDataObject,RDFSDomainProperty,RDFSRangeProperty
+        cls.rdf_object = PropertyDataObject(cls.link)
+        if hasattr(cls, 'owner_type'):
+            cls.rdf_object.relate('rdfs_domain', cls.owner_type.rdf_type_object, RDFSDomainProperty)
+        if hasattr(cls, 'value_type'):
+            cls.rdf_object.relate('rdfs_range', cls.value_type.rdf_type_object, RDFSRangeProperty)
+
+    def __lt__(cls, other):
+        return issubclass(cls,other) or isinstance(other, MappedClass) or ((not issubclass(other, cls)) and cls.__name__ < other.__name__)
+
 
 def oid(identifier, rdf_type=False):
     """ Load an object from the database using its type tag """
@@ -221,9 +252,10 @@ def _create_property(owner_type, linkName, property_type, value_type=False, mult
     #XXX This should actually get called for all of the properties when their owner
     #    classes are defined.
     #    The initialization, however, must happen with the owner object's creation
+    from .yProperty import ObjectProperty, DatatypeProperty
 
 
-    properties = _slice_dict(locals(), ['owner_type', 'linkName', 'property_type', 'multiple'])
+    properties = _slice_dict(locals(), ['owner_type', 'linkName', 'multiple'])
 
     owner_class_name = owner_type.__name__
     property_class_name = owner_class_name + "_" + linkName
@@ -231,28 +263,18 @@ def _create_property(owner_type, linkName, property_type, value_type=False, mult
     if value_type == False:
         value_type = P.DataObject
 
-    c = None
-    if property_class_name in DataObjects:
-        c = DataObjects[property_class_name]
+    x = None
+    if property_type == 'ObjectProperty':
+        properties['value_type'] = value_type
+        x = ObjectProperty
     else:
-        x = None
-        if property_type == 'ObjectProperty':
-            properties['value_rdf_type'] = value_type.rdf_type
-            x = ObjectProperty
-        else:
-            properties['value_rdf_type'] = False
-            x = DatatypeProperty
+        x = DatatypeProperty
 
-        if link:
-            properties['link'] = link
-        else:
-            properties['link'] = owner_type.rdf_namespace[linkName]
-        c = type(property_class_name,(x,), properties)
-
-
-    # This is how we create the RDF predicate that points from the owner
-    # to this property
-    DataObjectProperties.append(c)
+    if link:
+        properties['link'] = link
+    else:
+        properties['link'] = owner_type.rdf_namespace[linkName]
+    c = MappedPropertyClass(property_class_name,(x,), properties)
     return c
 
 def get_most_specific_rdf_type(types):

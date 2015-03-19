@@ -56,7 +56,6 @@ from .dataUser import DataUser
 from .mapper import MappedClass
 from .quantity import Quantity
 from .rdfUtils import *
-from .yProperty import Property, SimpleProperty
 
 this_module = __import__('yarom')
 this_module.connected = False
