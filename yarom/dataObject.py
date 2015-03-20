@@ -5,7 +5,7 @@ import hashlib
 import random
 from .mapper import *
 from .dataUser import DataUser
-from .yProperty import *
+from .simpleProperty import *
 from .rdfUtils import *
 from .graphObject import *
 

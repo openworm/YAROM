@@ -12,6 +12,10 @@ DataObjectsParents = dict() # class names to parents of the related class
 RDFTypeTable = dict() # class rdf types to classes
 DataObjectProperties = dict() # Property classes to
 
+ProplistToProptype = { "datatypeProperties" : "DatatypeProperty",
+                       "objectProperties"   : "ObjectProperty",
+                       "simpleProperties"   : "SimpleProperty" }
+
 class MappedClass(type):
     """A type for MappedClasses
 
@@ -114,50 +118,43 @@ class MappedClass(type):
             for ancestor in [x for x in parent.mro() if issubclass(x, DataObject)]:
                 cls.rdf_type_object.relate('rdfs_subClassOf', ancestor.rdf_type_object, RDFSSubClassOfProperty)
 
-    def addObjectProperties(cls):
-        # TODO: Make an option string to appreviate these options
+    def addProperties(cls, listName):
+        # TODO: Make an option string to abbreviate these options
         try:
-            if hasattr(cls, 'objectProperties'):
-                assert(isinstance(cls.objectProperties,(tuple,list,set)))
-                for x in cls.objectProperties:
+            if hasattr(cls, listName):
+                propList = getattr(cls, listName)
+                propType = ProplistToProptype[listName]
+
+                assert(isinstance(propList, (tuple,list,set)))
+                for x in propList:
+                    value_type = False
                     p = None
                     if isinstance(x, tuple):
-                        p = makeObjectProperty(cls, x[0], value_type=x[1], *x[2:])
+                        if len(x) > 2:
+                            value_type = x[2]
+                        p = _create_property(cls, x[0], propType, value_type=value_type)
                     elif isinstance(x, dict):
                         name = x['name']
-                        value_type = x.get('type', False)
                         del x['name']
+
                         if 'type' in x:
+                            value_type = x['type']
                             del x['type']
-                        p = makeObjectProperty(cls, name, value_type=value_type, **x)
+
+                        p = _create_property(cls, name, propType, value_type=value_type, **x)
                     else:
-                        p = makeObjectProperty(cls, x)
+                        p = _create_property(cls, x, propType)
                     cls.dataObjectProperties.append(p)
-                cls._objectProperties = cls.objectProperties
-                cls.objectProperties = []
+                setattr(cls, '_'+listName, propList)
+                setattr(cls, listName, [])
         except:
             traceback.print_exc()
 
+    def addObjectProperties(cls):
+        cls.addProperties('objectProperties')
+
     def addDatatypeProperties(cls):
-        # Also get all of the properites
-        try:
-            if hasattr(cls, 'datatypeProperties'):
-                assert(isinstance(cls.datatypeProperties,(tuple,list,set)))
-                for x in cls.datatypeProperties:
-                    p = None
-                    if isinstance(x, tuple):
-                        p = makeDatatypeProperty(cls, x[0], *x[1:])
-                    elif isinstance(x, dict):
-                        name = x['name']
-                        del x['name']
-                        p = makeDatatypeProperty(cls, name, **x)
-                    else:
-                        p = makeDatatypeProperty(cls, x)
-                    cls.dataObjectProperties.append(p)
-                cls._datatypeProperties = cls.datatypeProperties
-                cls.datatypeProperties = []
-        except:
-            traceback.print_exc()
+        cls.addProperties('datatypeProperties')
 
     def _cleanupGraph(cls):
         """ Cleans up the graph by removing statements that can't be connected to typed statement. """
@@ -248,11 +245,12 @@ def makeObjectProperty(*args,**kwargs):
 def _slice_dict(d, s):
     return {k:v for k,v in d.items() if k in s}
 
+
 def _create_property(owner_type, linkName, property_type, value_type=False, multiple=True, link=False):
     #XXX This should actually get called for all of the properties when their owner
     #    classes are defined.
     #    The initialization, however, must happen with the owner object's creation
-    from .yProperty import ObjectProperty, DatatypeProperty
+    from .simpleProperty import ObjectProperty, DatatypeProperty
 
 
     properties = _slice_dict(locals(), ['owner_type', 'linkName', 'multiple'])
@@ -267,8 +265,10 @@ def _create_property(owner_type, linkName, property_type, value_type=False, mult
     if property_type == 'ObjectProperty':
         properties['value_type'] = value_type
         x = ObjectProperty
-    else:
+    elif property_type == 'DatatypeProperty':
         x = DatatypeProperty
+    else:
+        x = SimpleProperty
 
     if link:
         properties['link'] = link

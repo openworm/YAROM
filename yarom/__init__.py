@@ -55,6 +55,7 @@ from .data import Data
 from .dataUser import DataUser
 from .mapper import MappedClass
 from .quantity import Quantity
+from .yProperty import Property
 from .rdfUtils import *
 
 this_module = __import__('yarom')

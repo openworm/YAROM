@@ -660,9 +660,9 @@ class DataTest(unittest.TestCase):
 class PropertyTest(_DataTest):
     def test_one(self):
         """ `one` should return None if there isn't a value or just the value if there is one """
-        class T(Y.Property):
+        class T(Property):
             def __init__(self):
-                Y.Property.__init__(self)
+                Property.__init__(self)
                 self.b = False
 
             def get(self):
@@ -810,7 +810,7 @@ class SimplePropertyTest(_DataTest):
         self.assertEqual(len(boots.values), 0)
 
     def test_unset_single_property_value(self):
-        from yarom.yProperty import PropertyValue
+        from yarom.simpleProperty import PropertyValue
         boots = self.k().boots
 
         boots.set("l")
@@ -818,7 +818,7 @@ class SimplePropertyTest(_DataTest):
         self.assertEqual(len(boots.values), 0)
 
     def test_unset_single_by_identifier(self):
-        from yarom.yProperty import PropertyValue
+        from yarom.simpleProperty import PropertyValue
         bats = self.k().bats
 
         o = self.k(key='blah')
