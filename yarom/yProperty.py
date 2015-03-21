@@ -1,6 +1,9 @@
 from .dataUser import DataUser
 
-__all__ = ["Property"]
+__all__ = ["Property", 'NoRelationshipException']
+
+class NoRelationshipException(Exception):
+    """ Indicates that a Relationship was asked for but one could not be given. """
 
 # Define a property by writing the get
 class Property(DataUser):
@@ -69,6 +72,9 @@ class Property(DataUser):
         This may be defined differently for each property
         """
         return True
+
+    def rel(self):
+        raise NoRelationshipException()
 
     def __call__(self,*args,**kwargs):
         """ If arguments are passed to the ``Property``, its ``set`` method

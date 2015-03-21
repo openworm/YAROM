@@ -4,8 +4,7 @@ import yarom as P
 import traceback
 
 __all__ = [ "MappedClass", "MappedPropertyClass", "MappedClasses", "DataObjectsParents",
-            "RDFTypeTable", "makeDatatypeProperty", "makeObjectProperty",
-            "get_most_specific_rdf_type", "oid"]
+            "RDFTypeTable", "get_most_specific_rdf_type", "oid"]
 
 MappedClasses = dict() # class names to classes
 DataObjectsParents = dict() # class names to parents of the related class
@@ -80,6 +79,7 @@ class MappedClass(type):
 
         cls.addObjectProperties()
         cls.addDatatypeProperties()
+        cls.addSimpleProperties()
         setattr(P, cls.__name__, cls)
 
         return cls
@@ -156,6 +156,14 @@ class MappedClass(type):
     def addDatatypeProperties(cls):
         cls.addProperties('datatypeProperties')
 
+    def addSimpleProperties(cls):
+        # XXX: These are intended to hold either objects or literals,
+        #      but such properties return un-converted rdflib Identifiers
+        #      from a `get' rather than DataObjects or strings. The actual
+        #      thing to do is make a 'union-property' that correctly
+        #      resolves the different kinds.
+        cls.addProperties('simpleProperties')
+
     def _cleanupGraph(cls):
         """ Cleans up the graph by removing statements that can't be connected to typed statement. """
         # XXX: This might belong in DataUser instead
@@ -220,28 +228,6 @@ def oid(identifier, rdf_type=False):
     o = c(ident=identifier)
     return o
 
-def makeDatatypeProperty(*args,**kwargs):
-    """ Create a SimpleProperty that has a simple type (string,number,etc) as its value
-
-    Parameters
-    ----------
-    linkName : string
-        The name of this Property.
-    """
-    return _create_property(*args,property_type='DatatypeProperty',**kwargs)
-
-def makeObjectProperty(*args,**kwargs):
-    """ Create a SimpleProperty that has a complex DataObject as its value
-
-    Parameters
-    ----------
-    linkName : string
-        The name of this Property.
-    value_type : type
-        The type of DataObject fro values of this property
-    """
-    return _create_property(*args,property_type='ObjectProperty',**kwargs)
-
 def _slice_dict(d, s):
     return {k:v for k,v in d.items() if k in s}
 
@@ -250,7 +236,7 @@ def _create_property(owner_type, linkName, property_type, value_type=False, mult
     #XXX This should actually get called for all of the properties when their owner
     #    classes are defined.
     #    The initialization, however, must happen with the owner object's creation
-    from .simpleProperty import ObjectProperty, DatatypeProperty
+    from .simpleProperty import ObjectProperty, DatatypeProperty, SimpleProperty
 
 
     properties = _slice_dict(locals(), ['owner_type', 'linkName', 'multiple'])
@@ -274,6 +260,7 @@ def _create_property(owner_type, linkName, property_type, value_type=False, mult
         properties['link'] = link
     else:
         properties['link'] = owner_type.rdf_namespace[linkName]
+
     c = MappedPropertyClass(property_class_name,(x,), properties)
     return c
 

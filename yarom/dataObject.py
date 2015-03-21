@@ -116,9 +116,26 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
     def identifier_hash_method(self, o):
         return get_hash_function(self.conf.get('dataObject.identifier_hash', 'md5'))(o)
 
+    def make_identifier_from_properties(self, *properties):
+        if len(properties) == 0:
+            raise Exception("No properties provided to make identifier")
+        data = ""
+        for propName in properties:
+            for value in getattr(self, propName).values:
+                data += value.idl.n3()
+        if len(data) == 0:
+            raise Exception("No properties to make identifier")
+        return self.make_identifier(data)
+
     @property
     def defined(self):
-        return self._id != False
+        if self._id != False:
+            return True
+        else:
+            return self.defined_augment()
+
+    def defined_augment(self):
+        return False
 
     def variable(self):
         if self._id_variable is not None:
@@ -168,9 +185,6 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
 
     def __hash__(self):
         return hash(self.idl)
-
-    def __lt__(self, other):
-        return hash(self.identifier()) < hash(other.identifier())
 
     def __str__(self):
         return self.namespace_manager.normalizeUri(self.idl)
@@ -232,13 +246,13 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
         Returns
         -------
         """
-        if self.defined:
+        if self._id != False:
             return self._id
         else:
-            # XXX: Make no mistake: not having an identifier here is an error.
-            # You may, however, need to sub-class DataObject to make an
-            # appropriate identifier method.
-            raise IdentifierMissingException(self)
+            return self.identifier_augment()
+
+    def identifier_augment(self):
+        raise IdentifierMissingException(self)
 
     def triples(self, query=False, visited_list=False):
         """ Returns 3-tuples of the connected component of the object graph

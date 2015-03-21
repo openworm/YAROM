@@ -155,6 +155,7 @@ def connect(conf=False,
     # have to register the right one to disconnect...
     atexit.register(disconnect)
     from .dataObject import DataObject
+    from .relationship import Relationship
     MappedClass.remap()
     m.connected = True
     if data:

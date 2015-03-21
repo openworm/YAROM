@@ -70,12 +70,21 @@ class SimpleProperty(Property, metaclass=MappedPropertyClass):
         import bisect
         if not hasattr(v, "idl"):
             v = PropertyValue(v)
-        v.owner_properties.append(self)
+
+        if self not in v.owner_properties:
+            v.owner_properties.append(self)
 
         if self.multiple:
             bisect.insort(self._v, v)
         else:
             self._v = [v]
+
+    def rel(self):
+        from .relationship import Relationship
+        rel =  Relationship(subject=self.owner, property=self.rdf_object)
+        for x in self.values:
+            rel.object(x)
+        return rel
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.link == other.link
@@ -94,10 +103,10 @@ class DatatypeProperty(SimpleProperty):
         from .dataObject import DataObject
         if isinstance(v, DataObject):
             L.warn('You are attempting to set a DataObject where a literal is expected.')
-        return super().set(v)
+        return SimpleProperty.set(self,v)
 
     def get(self):
-        for val in super().get():
+        for val in SimpleProperty.get(self):
             yield deserialize_rdflib_term(val)
 
 class ObjectProperty(SimpleProperty):
@@ -105,12 +114,13 @@ class ObjectProperty(SimpleProperty):
         from .dataObject import DataObject
         if not isinstance(v, (DataObject, Variable)):
             raise Exception("An ObjectProperty only accepts DataObject instances")
-        return super().set(v)
+        return SimpleProperty.set(self, v)
 
     def get(self):
+        from .dataObject import DataObject
         from .mapper import oid,get_most_specific_rdf_type
 
-        for ident in super().get():
+        for ident in SimpleProperty.get(self):
             if not isinstance(ident, rdflib.URIRef):
                 L.warn('ObjectProperty.get: Skipping non-URI term, "'+ident+'", returned for a data object.')
                 continue
@@ -118,7 +128,7 @@ class ObjectProperty(SimpleProperty):
             for rdf_type in self.rdf.objects(ident, R.RDF['type']):
                 types.add(rdf_type)
             if len(types) == 0:
-                L.warn('ObjectProperty.get: Retrieved untypped URI, "'+ident+'", for a DataObject. Creating a default-typed object')
+                L.warn('ObjectProperty.get: Retrieved un-typed URI, "'+ident+'", for a DataObject. Creating a default-typed object')
                 the_type = DataObject.rdf_type
             else:
                 the_type = get_most_specific_rdf_type(types)
