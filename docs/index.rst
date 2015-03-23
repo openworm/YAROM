@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 Welcome to |pow|'s documentation!
-======================================
+==================================
 
 Contents:
 
@@ -17,16 +17,18 @@ Contents:
    rdf_format
    rdf_semantics
 
-Modules
--------
+API
+---
 
 .. automodule:: yarom
    :members:
 
-Issues
-------
+Questions/concerns?
+===================
 
-.. _github issue: https://github.com/mwatts15/YAROM/issues
+Bug reports and questions can be posted to the `issue tracker`_ on Github.
+
+.. _issue tracker: https://github.com/mwatts15/YAROM/issues
 
 Indices and tables
 ==================

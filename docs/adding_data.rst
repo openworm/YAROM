@@ -1,6 +1,6 @@
 .. _adding_data:
 
-Adding Data to *YOUR* YAROM Database
+Adding Data to *YOUR* |pow| Database
 ====================================
 
 So, you've got some data about the and you'd like to save it with |pow|,
