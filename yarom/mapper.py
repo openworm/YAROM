@@ -27,6 +27,10 @@ class MappedClass(type):
             cls.rdf_type = dct['rdf_type']
         else:
             cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
+        if 'rdf_namespace' in dct:
+            cls.rdf_namespace = dct['rdf_namespace']
+        else:
+            cls.rdf_namespace = R.Namespace(cls.conf['rdf.namespace'][cls.__name__] + "/")
 
         cls.dataObjectProperties = []
         for x in bases:
@@ -76,7 +80,6 @@ class MappedClass(type):
         MappedClasses[cls.__name__] = cls
         DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, MappedClass)]
         cls.parents = DataObjectsParents[cls.__name__]
-        cls.rdf_namespace = R.Namespace(cls.rdf_type + "/")
 
         cls.addObjectProperties()
         cls.addDatatypeProperties()

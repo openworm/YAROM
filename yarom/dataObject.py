@@ -9,6 +9,10 @@ from .simpleProperty import *
 from .rdfUtils import *
 from .graphObject import *
 
+"""
+.. autoclass:: DataObject
+"""
+
 # in general it should be possible to recover the entire object from its identifier: the object should be representable as a connected graph.
 # However, this need not be a connected *RDF* graph. Indeed, graph literals may hold information which can yield triples which are not
 # connected by an actual node
@@ -24,8 +28,9 @@ def get_hash_function(method_name):
     elif method_name in hashlib.algorithms_available:
         return (lambda data: hashlib.new(method_name, data))
 
-class DataObject(DataUser, GraphObject, metaclass=MappedClass):
-    """ An object backed by the database
+class DataObject(GraphObject, DataUser, metaclass=MappedClass):
+    """
+    An object backed by the database
 
     Attributes
     -----------
@@ -37,6 +42,8 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
         Properties belonging to this object
     owner_properties : list of Property
         Properties belonging to parents of this object
+
+
     """
 
     _openSet = set()
@@ -61,9 +68,7 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
         return self._openSet
 
     def __init__(self,ident=False,var=False,key=False,generate_key=False,**kwargs):
-        """
-
-        A subclass of DataObject cannot have any positional arguments.
+        """A subclass of DataObject cannot have any positional arguments.
 
         Parameters
         ----------
@@ -220,17 +225,6 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
             cls._openSet.remove(o)
             cls._closedSet.add(o)
 
-    @classmethod
-    def extract_class_name(cls, uri):
-        ns = str(cls.conf['rdf.namespace'])
-        if uri.startswith(ns):
-            class_name = uri[len(ns):]
-            name_end_idx = class_name.find('/')
-            if name_end_idx > 0:
-                class_name = class_name[:name_end_idx]
-            return class_name
-        else:
-            raise ValueError("URI must be like '"+ns+"<className>' optionally followed by a hash code")
     @classmethod
     def extract_unique_part(cls, uri):
         if uri.startswith(cls.rdf_namespace):

@@ -91,7 +91,7 @@ def disconnect(c=False):
 
 def loadData(data, dataFormat):
     if data:
-        config()['rdf.graph'].parse(data, format=dataFormat)
+        config('rdf.graph').parse(data, format=dataFormat)
 
 def connect(conf=False,
             do_logging=False,

@@ -435,6 +435,22 @@ class RDFLibTest(unittest.TestCase):
         b = rdflib.BNode()
         self.assertNotEqual(a, b)
 
+    def test_datatyped_Literal_equality(self):
+        """
+        From http://www.w3.org/TR/rdf11-concepts/#section-Datatypes::
+
+            Literal term equality: Two literals are term-equal (the same
+            RDF literal) if and only if the two lexical forms, the two datatype
+            IRIs, and the two language tags (if any) compare equal, character by
+            character. Thus, two literals can have the same value without being
+            the same RDF term. For example::
+
+               "1"^^xs:integer
+               "01"^^xs:integer
+        __eq__ for literals in rdflib do not follow this.
+        """
+        self.assertTrue(R.Literal("1", datatype=R.XSD['integer']), R.Literal("01", datatype=R.XSD['integer']))
+
 #class TimeTest(unittest.TestCase):
     #def test_datetime_isoformat_has_timezone(self):
         #time_stamp = now(utc).isoformat()

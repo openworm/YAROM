@@ -11,10 +11,8 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-   evidence
    making_dataObjects
    adding_data
-   sharing
    docs
    rdf_format
    rdf_semantics
