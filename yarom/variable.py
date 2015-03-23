@@ -5,8 +5,6 @@ class Variable(GraphObject):
     def __init__(self, name):
         GraphObject.__init__(self)
         self.var = rdflib.Variable(name)
-        self.properties = []
-        self.owner_properties = []
 
     def identifier(self):
         raise IdentifierMissingException(self)

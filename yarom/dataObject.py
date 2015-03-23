@@ -84,8 +84,6 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
         except BadConf as e:
             raise Exception("You may need to connect to a database before continuing.")
 
-        self.properties = []
-        self.owner_properties = []
         self._id = False
 
         if ident:

@@ -16,7 +16,6 @@ class SimpleProperty(Property, metaclass=MappedPropertyClass):
     """ A property that has one or more links to literals or DataObjects """
 
     def __init__(self,**kwargs):
-
         # The 'linkName' must be made up from the class name if one isn't set
         # before initialization (typically in mapper._create_property)
         if not hasattr(self, 'linkName'):
@@ -169,10 +168,9 @@ class UnionProperty(SimpleProperty):
 class PropertyValue(GraphObject):
     """ Holds a literal value for a property """
     def __init__(self, value):
+        super().__init__()
         if not isinstance(value, rdflib.term.Identifier):
             self.value = R.Literal(value)
-        self.owner_properties = []
-        self.properties = []
 
     def triples(self, *args, **kwargs):
         return []

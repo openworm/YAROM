@@ -1,6 +1,10 @@
 import rdflib as R
 
 class GraphObject(object):
+    def __init__(self):
+        self.properties = []
+        self.owner_properties = []
+
     def identifier(self):
         """ Must return an rdflib.term.URIRef object representing this object
             or else raise an Exception. """
@@ -16,12 +20,6 @@ class GraphObject(object):
             return self.identifier()
         else:
             return self.variable()
-
-    def owner_properties(self):
-        raise NotImplementedError()
-
-    def properties(self):
-        raise NotImplementedError()
 
     def __hash__(self):
         raise NotImplementedError()
