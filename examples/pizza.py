@@ -6,16 +6,16 @@ import logging as L
 Y.connect(conf={'rdf.namespace' : 'http://mark-watts.tk/entities/',
     'rdf.source' : 'default'})
 
-class Pizza(Y.DataObject):
-    """ A single pizza """
-    objectProperties = [{'name':"topped_with", 'multiple':True}]
+class ToppingAmount(Y.DataObject):
+    """ An amount of a topping """
 
 class Topping(Y.DataObject):
     """ A pluralization of a topping type. Represents a topping that can be added to
     pizza rather than a single item in the set of toppings (like, it's not a single
     mushroom, but a collection of mushrooms on a pizza)
     """
-    objectProperties = [{'name' : "amount"}]
+
+    objectProperties = [{'name' : "amount", 'type' : ToppingAmount, 'multiple':False}]
 
 class Meat(Topping):
     pass
@@ -33,9 +33,10 @@ class Tomato(Veggie):
     pass
 class BlackOlive(Veggie):
     pass
-class ToppingAmount(Y.DataObject):
-    """ An amount of a topping """
-    pass
+
+class Pizza(Y.DataObject):
+    """ A single pizza """
+    objectProperties = [{'name':"topped_with", 'type' : Topping}]
 
 Y.mapper.MappedClass.remap()
 

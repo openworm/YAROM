@@ -1,8 +1,7 @@
 
 class Quantity:
-    # Unit registry
+    _ur = None # Unit registry
 
-    _ur = None
     @classmethod
     def ur(cls):
         import pint as Q
@@ -32,3 +31,5 @@ class Quantity:
     def value(self):
         return self._quant.magnitude
 
+    def __str__(self):
+        return str(self._quant)

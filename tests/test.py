@@ -525,6 +525,15 @@ class QuantityTest(unittest.TestCase):
         self.assertEqual("milliliter", q.unit)
         self.assertEqual(23, q.value)
 
+    def test_quantity_from_literal(self):
+        rdf_datatype = rdflib.URIRef("http://example.com/datatypes/quantity")
+        rdflib.term.bind(rdf_datatype, Quantity, Quantity.parse)
+        q_rdf = rdflib.Literal("23 mL", datatype=rdf_datatype)
+        q = Quantity(23, "milliliter")
+        self.assertEqual("23 milliliter", str(q_rdf))
+
+#class QuantityDataTest(_DataTest):
+
 class DataTest(unittest.TestCase):
     def test_namespace_manager(self):
         c = Configuration()

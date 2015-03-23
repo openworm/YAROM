@@ -4,8 +4,10 @@
 
 import hashlib
 import re
+import rdflib
 from rdflib import URIRef, Literal, Graph, Namespace, ConjunctiveGraph
 from rdflib.namespace import RDFS, RDF, NamespaceManager
+from .quantity import Quantity
 from datetime import datetime as DT
 import datetime
 import transaction
@@ -15,6 +17,8 @@ import logging as L
 from .configure import Configureable, Configuration, ConfigValue, BadConf
 
 __all__ = ["Data", "RDFSource", "SerializationSource", "TrixSource", "SPARQLSource", "SleepyCatSource", "DefaultSource", "ZODBSource"]
+
+
 
 class Data(Configuration, Configureable):
     """
@@ -36,6 +40,11 @@ class Data(Configuration, Configureable):
 
         self['rdf.namespace'] = Namespace(ns_string)
         self.namespace = self['rdf.namespace']
+
+        # TODO: Add support for defining additional data types from the configs
+        quant_datatype = self.namespace["datatypes/quantity"]
+        if quant_datatype not in rdflib.term._toPythonMapping:
+            rdflib.term.bind(quant_datatype, Quantity, Quantity.parse)
 
     @classmethod
     def open(cls,file_name):
