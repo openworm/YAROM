@@ -845,6 +845,33 @@ class SimplePropertyTest(_DataTest):
         with self.assertRaises(Exception):
             bits.unset("random")
 
+class UnionPropertyTest(_DataTest):
+    def setUp(self):
+        _DataTest.setUp(self)
+
+        # Done dynamically to ensure that all of the yarom setup happens before the class is created
+        class K(Y.DataObject):
+            _ = ['name']
+        Y.remap()
+        self.k = K
+
+    def test_get_literal(self):
+        k=self.k(generate_key=True)
+        k.name('val')
+        k.save()
+        k.name.unset('val')
+        self.assertIn('val', k.name(), "stored literal is returned")
+
+    def test_get_DataObject(self):
+        j=self.k(generate_key=True)
+        k=self.k(generate_key=True)
+        k.name(j)
+        k.save()
+        k.name.unset(j)
+        val = k.name.one()
+        self.assertIsInstance(val, self.k, "stored DataObject is of the correct type")
+        self.assertEqual(val, j, "returned value equals stored value")
+
 class ObjectCollectionTest(_DataTest):
     """ Tests for the simple container class """
     def test_member_can_be_restored(self):

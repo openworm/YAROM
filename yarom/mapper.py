@@ -13,7 +13,8 @@ DataObjectProperties = dict() # Property classes to
 
 ProplistToProptype = { "datatypeProperties" : "DatatypeProperty",
                        "objectProperties"   : "ObjectProperty",
-                       "simpleProperties"   : "SimpleProperty" }
+                       "_" : "UnionProperty"
+                     }
 
 class MappedClass(type):
     """A type for MappedClasses
@@ -157,12 +158,7 @@ class MappedClass(type):
         cls.addProperties('datatypeProperties')
 
     def addSimpleProperties(cls):
-        # XXX: These are intended to hold either objects or literals,
-        #      but such properties return un-converted rdflib Identifiers
-        #      from a `get' rather than DataObjects or strings. The actual
-        #      thing to do is make a 'union-property' that correctly
-        #      resolves the different kinds.
-        cls.addProperties('simpleProperties')
+        cls.addProperties('_')
 
     def _cleanupGraph(cls):
         """ Cleans up the graph by removing statements that can't be connected to typed statement. """
@@ -236,7 +232,7 @@ def _create_property(owner_type, linkName, property_type, value_type=False, mult
     #XXX This should actually get called for all of the properties when their owner
     #    classes are defined.
     #    The initialization, however, must happen with the owner object's creation
-    from .simpleProperty import ObjectProperty, DatatypeProperty, SimpleProperty
+    from .simpleProperty import ObjectProperty, DatatypeProperty, UnionProperty
 
 
     properties = _slice_dict(locals(), ['owner_type', 'linkName', 'multiple'])
@@ -244,24 +240,23 @@ def _create_property(owner_type, linkName, property_type, value_type=False, mult
     owner_class_name = owner_type.__name__
     property_class_name = owner_class_name + "_" + linkName
 
-    if value_type == False:
-        value_type = P.DataObject
-
     x = None
     if property_type == 'ObjectProperty':
-        properties['value_type'] = value_type
         x = ObjectProperty
+        if value_type == False:
+            value_type = P.DataObject
+        properties['value_type'] = value_type
     elif property_type == 'DatatypeProperty':
         x = DatatypeProperty
     else:
-        x = SimpleProperty
+        x = UnionProperty
 
     if link:
         properties['link'] = link
     else:
         properties['link'] = owner_type.rdf_namespace[linkName]
 
-    c = MappedPropertyClass(property_class_name,(x,), properties)
+    c = MappedPropertyClass(property_class_name, (x,), properties)
     return c
 
 def get_most_specific_rdf_type(types):
@@ -271,4 +266,3 @@ def get_most_specific_rdf_type(types):
     from among the given URIs.
     """
     return sorted([RDFTypeTable[x] for x in types])[0].rdf_type
-

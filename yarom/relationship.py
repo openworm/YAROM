@@ -6,9 +6,9 @@ class Relationship(DataObject):
 
         For SimpleProperty objects, this acts like a RDF Reified triple.
         """
-    simpleProperties = [{'name':'subject', 'multiple': False},
-                        {'name':'property', 'multiple': False},
-                        {'name':'object', 'multiple': True}]
+    _ = [{'name':'subject', 'multiple': False},
+         {'name':'property', 'multiple': False},
+         {'name':'object', 'multiple': True}]
     def _ident_data(self):
         return [self.subject.values,
                 self.property.values,
@@ -21,5 +21,5 @@ class Relationship(DataObject):
         return True
 
     def identifier_augment(self):
-        x =  self.make_identifier_from_properties('subject','property','object')
+        x = self.make_identifier_from_properties('subject','property','object')
         return x

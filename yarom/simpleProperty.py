@@ -135,6 +135,37 @@ class ObjectProperty(SimpleProperty):
 
             yield oid(ident, the_type)
 
+class UnionProperty(SimpleProperty):
+    """ A Property that can handle either DataObjects or basic types """
+    def set(self, v):
+        from .dataObject import DataObject
+        return SimpleProperty.set(self, v)
+
+    def get(self):
+        from .dataObject import DataObject
+        from .mapper import oid,get_most_specific_rdf_type
+
+        for ident in SimpleProperty.get(self):
+            if isinstance(ident, rdflib.Literal):
+                yield deserialize_rdflib_term(ident)
+            elif isinstance(ident, rdflib.BNode):
+                L.warn('UnionProperty.get: Retrieved BNode, "'+ident+'". BNodes are not supported in yarom')
+            else:
+                types = set()
+                for rdf_type in self.rdf.objects(ident, R.RDF['type']):
+                    types.add(rdf_type)
+
+                if len(types) == 0:
+                    L.warn('ObjectProperty.get: Retrieved un-typed URI, "'+ident+'", for a DataObject. Creating a default-typed object')
+                    the_type = DataObject.rdf_type
+                else:
+                    try:
+                        the_type = get_most_specific_rdf_type(types)
+                    except:
+                        the_type = DataObject.rdf_type
+
+                yield oid(ident, the_type)
+
 class PropertyValue(GraphObject):
     """ Holds a literal value for a property """
     def __init__(self, value):

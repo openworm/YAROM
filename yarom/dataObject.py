@@ -60,16 +60,29 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
         """ The open set contains items that must be saved directly in order for their data to be written out """
         return self._openSet
 
-    def __init__(self,ident=False,var=False,triples=False,key=False,generate_key=False,**kwargs):
+    def __init__(self,ident=False,var=False,key=False,generate_key=False,**kwargs):
+        """
+
+        A subclass of DataObject cannot have any positional arguments.
+
+        Parameters
+        ----------
+        ident : rdflib.term.URIRef or str
+            The identifier for this DataObject
+        var : str
+            In lieu of `ident`, sets the variable for this object
+        key : str or object
+            In lieu of `ident` or `var`, sets the identifier for this DataObject using the key value.
+            For a namespace `ex:` and key `a`, the identifier would be `ex:a`.
+        generate_key : bool
+            If true generates a random key value
+        kwargs : dict
+            Values to set for named properties
+        """
         try:
             super().__init__()
         except BadConf as e:
             raise Exception("You may need to connect to a database before continuing.")
-
-        if not triples:
-            self._triples = []
-        else:
-            self._triples = triples
 
         self.properties = []
         self.owner_properties = []
@@ -135,6 +148,10 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
             return self.defined_augment()
 
     def defined_augment(self):
+        """ This fuction must return False if identifier_augment would raise an
+            IdentifierMissingException. Override it when defining a non-standard
+            identifier for subclasses of DataObjects.
+        """
         return False
 
     def variable(self):
@@ -252,6 +269,7 @@ class DataObject(DataUser, GraphObject, metaclass=MappedClass):
             return self.identifier_augment()
 
     def identifier_augment(self):
+        """ Override this method to define an identifier in lieu of one explicity set. """
         raise IdentifierMissingException(self)
 
     def triples(self, query=False, visited_list=False):
@@ -463,9 +481,9 @@ class ObjectCollection(DataObject):
         an alias for ``value``
 
     """
-    objectProperties = ['member']
+    _ = ['member']
     datatypeProperties = [{'name':'name', 'multiple':False}]
-    def __init__(self,group_name,**kwargs):
+    def __init__(self,group_name=False,**kwargs):
         DataObject.__init__(self,key=group_name,**kwargs)
         self.add = self.member
         self.group_name = self.name
