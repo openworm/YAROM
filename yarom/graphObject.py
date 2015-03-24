@@ -1,6 +1,7 @@
 import rdflib as R
 
 class GraphObject(object):
+    """ An object which can be included in the object graph. """
     def __init__(self):
         self.properties = []
         self.owner_properties = []
@@ -11,7 +12,7 @@ class GraphObject(object):
         raise NotImplementedError()
 
     def defined(self):
-        """ Returns true if """
+        """ Returns true if an :meth:`identifier` would return an identifier """
         raise NotImplementedError()
 
     @property
@@ -319,7 +320,7 @@ class HeroTripler(object):
         return self.results
 
 class IdentifierMissingException(Exception):
-    """ Indicates that an identifier should be set available for the object in
+    """ Indicates that an identifier should be available for the object in
         question, but there is none """
     def __init__(self, dataObject="[unspecified object]", *args, **kwargs):
         super().__init__("An identifier should be provided for {}".format(str(dataObject)), *args, **kwargs)

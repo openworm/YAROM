@@ -138,14 +138,17 @@ class MappedClass(type):
                             value_type = x[2]
                         p = _create_property(cls, x[0], propType, value_type=value_type)
                     elif isinstance(x, dict):
-                        name = x['name']
-                        del x['name']
+                        if 'prop' in x:
+                            p = DataObjectProperties[x['prop']]
+                        else:
+                            name = x['name']
+                            del x['name']
 
-                        if 'type' in x:
-                            value_type = x['type']
-                            del x['type']
+                            if 'type' in x:
+                                value_type = x['type']
+                                del x['type']
 
-                        p = _create_property(cls, name, propType, value_type=value_type, **x)
+                            p = _create_property(cls, name, propType, value_type=value_type, **x)
                     else:
                         p = _create_property(cls, x, propType)
                     cls.dataObjectProperties.append(p)
@@ -191,7 +194,7 @@ class MappedPropertyClass(type):
         # This is how we create the RDF predicate that points from the owner
         # to this property
         MappedClasses[cls.__name__] = cls
-        #DataObjectProperties[cls.__name__] = cls
+        DataObjectProperties[cls.__name__] = cls
         # XXX: Maybe have sub-properties set-up here?
         #DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, MappedClass)]
         #cls.parents = DataObjectsParents[cls.__name__]

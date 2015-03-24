@@ -152,11 +152,6 @@ class ConfigureableTest(unittest.TestCase):
         i = Configureable()
         self.assertEqual(Configureable.conf,i.conf)
 
-    def test_init_False(self):
-        """Ensure Configureable gets init'd with the defalut if False is given"""
-        i = Configureable(conf=False)
-        self.assertEqual(Configureable.conf, i.conf)
-
 class DataObjectTest(_DataTest):
 
     def test_DataUser(self):

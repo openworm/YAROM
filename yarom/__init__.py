@@ -1,11 +1,6 @@
 # -*- coding: utf-8 -*-
 
 """
-yarom
-==========
-
-OpenWorm Unified Data Abstract Layer.
-
 Most statements correspond to some action on the database.
 Some of these actions may be complex, but intuitively ``a.B()``, the Query form,
 will query against the database for the value or values that are related to ``a`` through ``B``;
@@ -24,10 +19,6 @@ and::
 
 The get() method also allows for parameterizing the query in ways specific to the Property.
 
-Relationship objects are key to the :class:`Evidence class <.Evidence>` for sourcing statements.
-Relationships can themselves be members in a relationship, allowing for fairly complex hierarchical statements to
-be made about entities.
-
 Notes:
 
 - Of course, when these methods communicate with an external database, they may fail due to the database being
@@ -43,6 +34,7 @@ Classes
 .. automodule:: yarom.dataUser
 .. automodule:: yarom.data
 .. automodule:: yarom.configure
+.. automodule:: yarom.graphObject
 """
 
 __version__ = '0.5.0-alhpa'
@@ -101,7 +93,7 @@ def connect(conf=False,
 
     Parameters
     ----------
-    conf: string, Data, Configuration or dict, optional
+    conf : str, Data, Configuration or dict, optional
         The configuration to load.
 
         If a Data object is provided, then it's used as is for the configuration.
@@ -114,11 +106,11 @@ def connect(conf=False,
         The default action is to attempt to open a file called 'yarom.conf' from
         your current directory as the configuration. Failing that, an 'empty'
         config with default values will be loaded.
-    do_logging: bool, optional
+    do_logging : bool, optional
         If True, turn on debug level logging. The default is False.
-    data: str, optional
+    data : str, optional
         If provided, specifies a file to load into the library.
-    dataFormat: str, optional
+    dataFormat : str, optional
         If provided, specifies the file format of the file pointed specified by `data`.
 
         The formats available are those accepted by RDFLib's serializer plugins. 'n3' is the default.

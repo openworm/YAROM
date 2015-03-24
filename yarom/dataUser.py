@@ -109,7 +109,7 @@ class DataUser(Configureable):
 
         Parameters
         ----------
-        triples: iter of (URIRef, URIRef, URIRef)
+        triples : iter of (URIRef, URIRef, URIRef)
             A set of triples to remove
         """
         for x in statements:
@@ -129,7 +129,7 @@ class DataUser(Configureable):
 
         Parameters
         ----------
-        triples: iter of (URIRef, URIRef, URIRef)
+        triples : iter of (URIRef, URIRef, URIRef)
             A set of triples to add to the graph
         """
         self._add_to_store(graph)
@@ -146,7 +146,7 @@ class DataUser(Configureable):
         return n
 
 def grouper(iterable, n, fillvalue=None):
-    "Collect data into fixed-length chunks or blocks"
+    """Collect data into fixed-length chunks or blocks"""
     # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx
     args = [iter(iterable)] * n
     while True:

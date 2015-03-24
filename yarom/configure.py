@@ -2,9 +2,14 @@
 # Modules inherit from this class and use their self['expected_configured_property']
 import traceback
 class ConfigValue(object):
-    """ A value to be configured.  Base class intended to be subclassed, as its only method is not implemented
+    """ A value to be configured.
+
+    Elements of a :class:`Configuration` are, in fact, :class:`ConfigValue` objects. They
+    can be resolved an arbitrary time after the :class:`Configuration` object is created
+    by calling :meth:`get`.
     """
     def get(self):
+        """ Override this method to return a value when a configuration variable is accessed"""
         raise NotImplementedError
 
 class _C(ConfigValue):
@@ -84,7 +89,7 @@ class Configuration(object):
 
         Parameters
         ----------
-        file_name: str
+        file_name : str
             The name of a configuration file encoded as JSON
 
         Returns
@@ -106,7 +111,7 @@ class Configuration(object):
 
         Parameters
         ----------
-        other: dict or Configuration
+        other : dict or Configuration
             A dict or Configuration object to copy the configuration from
 
         Returns
@@ -125,9 +130,9 @@ class Configuration(object):
 
         Parameters
         ----------
-        pname: str
+        pname : str
             The key of the value to return.
-        default: object
+        default : object
             The value to return if there is no value corresponding to the given key
 
         Returns
@@ -149,7 +154,15 @@ class Configuration(object):
             raise KeyError(pname)
 
 class Configureable(object):
-    """ An object which can accept configuration """
+    """ An object which can be configured.
+
+    A ``Configureable`` object can access a :class:`Configuration` object,
+    ``Configureable.conf``, which is shared among all ``Configureable`` objects.
+
+    The configuration variables which can affect the behavior of a class should
+    be documented in the ``configuration_variables`` class variable. This table
+    will be checked on each access of ``Configureable.conf``
+    """
 
     conf = Configuration()
     """ The configuration """
@@ -178,7 +191,7 @@ class Configureable(object):
       to ``False``.
     """
 
-    def __init__(self, conf=False):
+    def __init__(self):
         pass
 
     @classmethod

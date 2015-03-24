@@ -6,16 +6,14 @@
 Welcome to |pow|'s documentation!
 ==================================
 
-Contents:
-
+Contents
+--------
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    making_dataObjects
    adding_data
    docs
-   rdf_format
-   rdf_semantics
 
 API
 ---
