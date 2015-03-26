@@ -168,7 +168,9 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
 
         Raises
         ------
-        :exc:`IdentifierMissingException`
+
+        IdentifierMissingException
+
         """
         if self._id_variable is not None:
             return self._id_variable
@@ -282,7 +284,7 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
 
         Raises
         ------
-        :exc:`IdentifierMissingException`
+        IdentifierMissingException
 
         """
         raise IdentifierMissingException(self)
@@ -367,7 +369,7 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         Retract removes an object and everything it points to, transitively, and everything
         which points to it.
 
-        Dual to save_object.
+        Dual to save_objectG.
         """
         g = HeroTripler(self, self.rdf)()
         self.retract_statements(g)
