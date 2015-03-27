@@ -42,7 +42,8 @@ class Data(Configuration, Configureable):
         self.namespace = self['rdf.namespace']
 
         # TODO: Add support for defining additional data types from the configs
-        quant_datatype = self.namespace["datatypes/quantity"]
+        self.dt_ns = Namespace(self.namespace["datatypes"]+"/")
+        quant_datatype = self.dt_ns["quantity"]
         if quant_datatype not in rdflib.term._toPythonMapping:
             rdflib.term.bind(quant_datatype, Quantity, Quantity.parse)
 
@@ -61,6 +62,7 @@ class Data(Configuration, Configureable):
         self['rdf.namespace_manager'] = nm
         self['rdf.graph'].namespace_manager = nm
 
+        nm.bind("dt", self.dt_ns)
         nm.bind("", self['rdf.namespace'])
 
     def closeDatabase(self):

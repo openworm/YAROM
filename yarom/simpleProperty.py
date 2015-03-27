@@ -77,13 +77,7 @@ class SimpleProperty(Property, metaclass=MappedPropertyClass):
             bisect.insort(self._v, v)
         else:
             self._v = [v]
-
-    def rel(self):
-        from .relationship import Relationship
-        rel =  Relationship(subject=self.owner, property=self.rdf_object)
-        for x in self.values:
-            rel.object(x)
-        return rel
+        return Rel(self.owner, self, v)
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.link == other.link
@@ -206,3 +200,15 @@ class PropertyValue(GraphObject):
         else:
             return self.value == R.Literal(other)
 
+class Rel(tuple):
+    _map=dict(s=0,p=1,o=2)
+    def __new__(cls, s, p, o):
+        return super(Rel, cls).__new__(cls, (s,p,o))
+
+    def __getattr__(self, n):
+        return self[Rel._map[n]]
+
+
+    def rel(self):
+        from .relationship import Relationship
+        return Relationship(subject=self.s, property=self.p.rdf_object, object=self.o)

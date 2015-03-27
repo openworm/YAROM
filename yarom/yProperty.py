@@ -73,9 +73,6 @@ class Property(DataUser):
         """
         return True
 
-    def rel(self):
-        raise NoRelationshipException()
-
     def __call__(self,*args,**kwargs):
         """ If arguments are passed to the ``Property``, its ``set`` method
         is called. Otherwise, the ``get`` method is called. If the ``multiple``
@@ -84,8 +81,7 @@ class Property(DataUser):
         """
 
         if len(args) > 0 or len(kwargs) > 0:
-            self.set(*args,**kwargs)
-            return self
+            return self.set(*args,**kwargs)
         else:
             r = self.get(*args,**kwargs)
             if self.multiple:

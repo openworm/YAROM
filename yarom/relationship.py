@@ -8,7 +8,7 @@ class Relationship(DataObject):
         """
     _ = [{'name':'subject', 'multiple': False},
          {'name':'property', 'multiple': False},
-         {'name':'object', 'multiple': True}]
+         {'name':'object', 'multiple': False}]
     def _ident_data(self):
         return [self.subject.values,
                 self.property.values,

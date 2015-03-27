@@ -197,9 +197,9 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
                 else:
                     property_type = DatatypeProperty
                 link = type(self).rdf_namespace[linkName]
-                prop = MappedPropertyClass(linkName, (property_type,), dict(link=link))
+                prop = MappedPropertyClass(linkName, (property_type,), dict(link=link, linkName=linkName, multiple=True))
             p = self.attachProperty(prop)
-        p.set(other)
+        return p.set(other)
 
     def attachProperty(self, prop):
         p = prop(owner=self)
