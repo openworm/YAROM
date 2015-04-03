@@ -45,7 +45,7 @@ class DataUser(Configureable):
         return self.conf['rdf.namespace']
 
     @base_namespace.setter
-    def base_namespace_set(self, value):
+    def base_namespace(self, value):
         self.conf['rdf.namespace'] = value
 
     @property

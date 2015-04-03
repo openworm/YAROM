@@ -18,14 +18,16 @@ import sys, os
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath('../'))
 
-import yarom
-# General information about the project.
-version = yarom.__version__
-release = yarom.__version__
-project = 'yarom'
-copyright = u'2015' + yarom.__author__
-yarom.connect()
+def setup(self):
+    import yarom
+    # General information about the project.
+    print(self,type(self))
+    self.version = yarom.__version__
+    self.release = yarom.__version__
+    self.copyright = u'2015' + yarom.__author__
+    yarom.connect()
 
+project = 'yarom'
 
 
 # -- General configuration -----------------------------------------------------
