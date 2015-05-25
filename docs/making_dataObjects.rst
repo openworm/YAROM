@@ -2,7 +2,7 @@
 
 Making data objects
 ====================
-To make new objects like, for the most part, you just need to make a Python class.
+To make new objects, for the most part, you just need to make a Python class and subclass it from :class:`yarom.dataObject.DataObject`.
 Say, for example, that I want to record some information about drug reactions in C. elegans. I make
 ``Drug`` and ``Experiment`` classes to describe C. elegans drug reactions::
 
