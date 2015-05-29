@@ -165,6 +165,8 @@ class PropertyValue(GraphObject):
         super().__init__()
         if not isinstance(value, rdflib.term.Identifier):
             self.value = R.Literal(value)
+        else:
+            self.value = value
 
     def triples(self, *args, **kwargs):
         return []

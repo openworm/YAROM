@@ -77,6 +77,7 @@ class _DataTestB(unittest.TestCase):
 
 class _DataTest(_DataTestB):
     def setUp(self):
+        self.TestConfig['rdf.namespace'] = test_ns
         _DataTestB.setUp(self)
         # Set do_logging to True if you like walls of text
         yarom.connect(conf=self.TestConfig, do_logging=False)
@@ -719,7 +720,7 @@ class MapperTest(_DataTestB):
     def test_object_from_id_class(self):
         """ Ensure we get an object from just the class name """
         MappedClass("TestDOM", (Y.DataObject,), dict())
-        MappedClass.remap()
+        remap()
         g = mapper.oid(Configureable.conf['rdf.namespace']['TestDOM'])
         self.assertIsInstance(g,Y.TestDOM)
 
@@ -864,6 +865,14 @@ class SimplePropertyTest(_DataTest):
         bits.set(self.k(key='roger'))
         with self.assertRaises(Exception):
             bits.unset("random")
+
+class PropertyValueTest(unittest.TestCase):
+
+    def test_init_identifier(self):
+        from yarom.simpleProperty import PropertyValue
+        pv = PropertyValue(R.URIRef("http://example.com"))
+        self.assertTrue(hasattr(pv, "value"))
+        self.assertIsNotNone(getattr(pv, "value"))
 
 class UnionPropertyTest(_DataTest):
     def setUp(self):
