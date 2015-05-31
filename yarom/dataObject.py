@@ -51,7 +51,7 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
 
     configuration_variables = {
             "rdf.namespace" : {
-                "description" : "Namespaces for DataObject sub-classes will be based off of this. For example, a subclass named A would have a namespace '[rdf.namespace]A/'",
+                "description" : "Namespaces for DataObject sub-classes will, by default, be based off of this. For example, a subclass named A would have a namespace '[rdf.namespace]A/'",
                 "type" : R.Namespace,
                 "directly_configureable" : True
                 },
@@ -119,7 +119,7 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
 
         if isinstance(self, PropertyDataObject):
             self.relate('rdf_type_property', RDFProperty.getInstance(), RDFTypeProperty)
-        elif isinstance(self, DataObjectType):
+        elif isinstance(self, TypeDataObject):
             self.relate('rdf_type_property', RDFSClass.getInstance(), RDFTypeProperty)
         elif isinstance(self, RDFProperty):
             self.relate('rdf_type_property', RDFSClass.getInstance(), RDFTypeProperty)
@@ -389,7 +389,7 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
                     res.append(x.owner)
         return res
 
-class DataObjectType(DataObject):
+class TypeDataObject(DataObject):
     pass
 
 class DataObjectSingleton(DataObject):
@@ -438,7 +438,7 @@ class RDFSSubClassOfProperty(ObjectProperty):
     value_type = RDFSClass
     multiple = True
 
-class PropertyDataObject(DataObjectType):
+class PropertyDataObject(DataObject):
     """ A PropertyDataObject represents the property-as-object.
 
     Try not to confuse this with the Property class

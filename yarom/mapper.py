@@ -1,10 +1,13 @@
 import rdflib as R
 from yarom import DataUser
-import yarom as P
+import logging
+import yarom as Y
 import traceback
 
 __all__ = [ "MappedClass", "MappedPropertyClass", "MappedClasses", "DataObjectsParents",
             "RDFTypeTable", "get_most_specific_rdf_type", "oid"]
+
+L = logging.getLogger(__name__)
 
 MappedClasses = dict() # class names to classes
 DataObjectsParents = dict() # class names to parents of the related class
@@ -27,6 +30,7 @@ class MappedClass(type):
             cls.rdf_type = dct['rdf_type']
         else:
             cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
+
         if 'rdf_namespace' in dct:
             cls.rdf_namespace = dct['rdf_namespace']
         else:
@@ -41,14 +45,14 @@ class MappedClass(type):
         cls.register()
 
     @classmethod
-    def makeClass(cls, name, bases, objectProperties=False, datatypeProperties=False):
+    def make_class(cls, name, bases, objectProperties=False, datatypeProperties=False):
         """ Intended to be used for setting up a class from the RDF graph, for instance. """
         # Need to distinguish datatype and object properties...
         if not datatypeProperties:
             datatypeProperties = []
         if not objectProperties:
             objectProperties = []
-        MappedClass(name, bases, dict(objectProperties=objectProperties, datatypeProperties=datatypeProperties))
+        cls(name, bases, dict(objectProperties=objectProperties, datatypeProperties=datatypeProperties))
 
     @property
     def du(self):
@@ -84,7 +88,7 @@ class MappedClass(type):
         cls.addObjectProperties()
         cls.addDatatypeProperties()
         cls.addSimpleProperties()
-        setattr(P, cls.__name__, cls)
+        setattr(Y, cls.__name__, cls)
 
         return cls
 
@@ -95,8 +99,8 @@ class MappedClass(type):
         """
         # NOTE: Map should be quick: it runs for every DataObject sub-class created and possibly
         #       several times in testing
-        from .dataObject import DataObjectType
-        cls.rdf_type_object = DataObjectType(cls.rdf_type)
+        from .dataObject import TypeDataObject
+        cls.rdf_type_object = TypeDataObject(cls.rdf_type)
 
         RDFTypeTable[cls.rdf_type] = cls
 
@@ -104,14 +108,6 @@ class MappedClass(type):
         cls.addNamespaceToManager()
 
         return cls
-
-    @classmethod
-    def remap(metacls):
-        """ Calls `map` on all of the registered classes """
-        classes = sorted(list(MappedClasses.values()))
-        classes.reverse()
-        for x in classes:
-            x.map()
 
     def addNamespaceToManager(cls):
         cls.du['rdf.namespace_manager'].bind(cls.__name__, cls.rdf_namespace)
@@ -190,16 +186,12 @@ class MappedPropertyClass(type):
         cls.register()
 
     def register(cls):
-        #
         # This is how we create the RDF predicate that points from the owner
         # to this property
         MappedClasses[cls.__name__] = cls
         DataObjectProperties[cls.__name__] = cls
-        # XXX: Maybe have sub-properties set-up here?
-        #DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, MappedClass)]
-        #cls.parents = DataObjectsParents[cls.__name__]
 
-        setattr(P, cls.__name__, cls)
+        setattr(Y, cls.__name__, cls)
 
         return cls
 
@@ -208,26 +200,110 @@ class MappedPropertyClass(type):
         cls.rdf_object = PropertyDataObject(cls.link)
         if hasattr(cls, 'owner_type'):
             cls.rdf_object.relate('rdfs_domain', cls.owner_type.rdf_type_object, RDFSDomainProperty)
+
         if hasattr(cls, 'value_type'):
             cls.rdf_object.relate('rdfs_range', cls.value_type.rdf_type_object, RDFSRangeProperty)
 
     def __lt__(cls, other):
         return issubclass(cls,other) or isinstance(other, MappedClass) or ((not issubclass(other, cls)) and cls.__name__ < other.__name__)
 
+def remap():
+    """ Calls `map` on all of the registered classes """
+    classes = sorted(list(MappedClasses.values()))
+    classes.reverse()
+    for x in classes:
+        x.map()
 
-def oid(identifier, rdf_type=False):
-    """ Load an object from the database using its type tag """
-    # XXX: This is a class method because we need to get the conf
-    # We should be able to extract the type from the identifier
-    if rdf_type:
-        uri = rdf_type
+def resolve_classes_from_rdf(graph):
+    """ Gathers Python classes from the RDF graph.
+
+    If there is a remote Python module registered in the RDF graph then an
+    import of the module is attempted. If no remote module can be found (i.e.,
+    none has been registered or the registered module cannot be retrieved) then
+    a subclass of DataObject is generated from data available in the graph
+    """
+    # get the DataObject class resource
+    # get the subclasses of DataObject, transitively
+    # take the list of subclasses and resolve them into Python classes
+    for x in graph.transitive_subjects( R.RDFS['subClassOf'],Y.DataObject.rdf_type ):
+        L.debug("RESOLVING {}".format(x))
+        resolve_class(x)
+
+def resolve_class(uri):
+    from .classRegistry import RegistryEntry
+    # look up the class in the registryCache
+    if uri in RDFTypeTable:
+        # if it is in the regCache, then return the class;
+        return RDFTypeTable[uri]
     else:
-        uri = identifier
+        # otherwise, attempt to load into the cache by
+        # reading the RDF graph.
+        re = RegistryEntry()
+        re.rdfClass(uri)
+        for cd in get_class_descriptions(re):
+            # TODO: if load fails, attempt to construct the class
+            return load_class_from_description(cd)
 
-    c = RDFTypeTable[uri]
+def load_class_from_description(cd):
+    # TODO: Undo the effects to YAROM of loading a class when the
+    #       module doesn't, in fact, have the class being searched
+    #       for.
+    mod_name = cd.moduleName.one()
+    class_name = cd.className.one()
+    load_module(mod_name)
+    mod = Y
+    if mod is not None:
+        if hasattr(mod, class_name):
+            cls = getattr(mod, class_name)
+            if cls is not None:
+                return cls
+        else:
+            raise Exception("Cannot find class "+class_name)
+
+def get_class_descriptions(re):
+    mod_data = []
+    for x in re.load():
+        for y in x.pythonClass():
+            mod_data.append(y)
+    return mod_data
+
+def load_module(module_name):
+    import importlib as I
+    a = I.import_module(module_name)
+    return a
+
+def oid(identifier_or_rdf_type, rdf_type=False):
+    """ Create an object from its rdf type
+
+    Parameters
+    ----------
+    identifier_or_rdf_type : :class:`str` or :class:`rdflib.term.URIRef`
+        If `rdf_type` is provided, then this value is used as the identifier
+        for the newly created object. Otherwise, this value will be the
+        :attr:`rdf_type` of the object used to determine the Python type and the
+        object's identifier will be randomly generated.
+    rdf_type : :class:`str`, :class:`rdflib.term.URIRef`, :const:`False`
+        If provided, this will be the :attr:`rdf_type` of the newly created object.
+
+    Returns
+    -------
+       The newly created object
+
+    """
+    identifier = identifier_or_rdf_type
+    if not rdf_type:
+        rdf_type = identifier_or_rdf_type
+        identifier = False
+
+    L.debug("oid making a {} with ident {}".format(rdf_type, identifier))
+    c = RDFTypeTable[rdf_type]
     # if its our class name, then make our own object
     # if there's a part after that, that's the property name
-    o = c(ident=identifier)
+    o = None
+    if identifier:
+        o = c(ident=identifier)
+    else:
+        o = c(generate_key=True)
     return o
 
 def _slice_dict(d, s):
@@ -250,7 +326,7 @@ def _create_property(owner_type, linkName, property_type, value_type=False, mult
     if property_type == 'ObjectProperty':
         x = ObjectProperty
         if value_type == False:
-            value_type = P.DataObject
+            value_type = Y.DataObject
         properties['value_type'] = value_type
     elif property_type == 'DatatypeProperty':
         x = DatatypeProperty
@@ -271,4 +347,13 @@ def get_most_specific_rdf_type(types):
     Returns the URI corresponding to the lowest in the DataObject class hierarchy
     from among the given URIs.
     """
-    return sorted([RDFTypeTable[x] for x in types])[0].rdf_type
+    from .dataObject import DataObject
+    least = DataObject
+    for x in types:
+        try:
+            if RDFTypeTable[x] < least:
+                least = RDFTypeTable[x]
+        except KeyError as e:
+            pass
+    return least.rdf_type
+

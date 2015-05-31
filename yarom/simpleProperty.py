@@ -120,6 +120,7 @@ class ObjectProperty(SimpleProperty):
             types = set()
             for rdf_type in self.rdf.objects(ident, R.RDF['type']):
                 types.add(rdf_type)
+
             if len(types) == 0:
                 L.warn('ObjectProperty.get: Retrieved un-typed URI, "'+ident+'", for a DataObject. Creating a default-typed object')
                 the_type = DataObject.rdf_type
@@ -147,15 +148,16 @@ class UnionProperty(SimpleProperty):
                 types = set()
                 for rdf_type in self.rdf.objects(ident, R.RDF['type']):
                     types.add(rdf_type)
-
+                L.debug("{} <- types, {} <- ident".format(types,ident))
+                the_type = DataObject.rdf_type
                 if len(types) == 0:
-                    L.warn('ObjectProperty.get: Retrieved un-typed URI, "'+ident+'", for a DataObject. Creating a default-typed object')
-                    the_type = DataObject.rdf_type
+                    L.warn('UnionProperty.get: Retrieved un-typed URI, "'+ident+'", for a DataObject. Creating a default-typed object')
                 else:
                     try:
                         the_type = get_most_specific_rdf_type(types)
+                        L.debug("the_type = {}".format(the_type))
                     except:
-                        the_type = DataObject.rdf_type
+                        L.warn('UnionProperty.get: Couldn\'t resolve types for `{}\'. Defaulting to a DataObject typed object'.format(ident))
 
                 yield oid(ident, the_type)
 

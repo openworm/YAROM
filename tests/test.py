@@ -405,7 +405,6 @@ class RDFLibTest(unittest.TestCase):
             self.fail("Doesn't actually fail...which is weird")
     def test_uriref_not_id(self):
         """ Test that rdflib throws up a warning when we do something bad """
-        #XXX: capture the logged warning
         import io
         import logging
         out = io.StringIO()
@@ -715,13 +714,14 @@ class MapperTest(_DataTestB):
     def test_access_created_from_module(self):
         """Test that we can add an object and then access it from the yarom module"""
         dc = MappedClass("TestDOM", (Y.DataObject,), dict())
-        self.assertTrue(hasattr(Y,"TestDOM"))
+        self.assertTrue(hasattr(Y, "TestDOM"))
+        u
 
     def test_object_from_id_class(self):
         """ Ensure we get an object from just the class name """
-        MappedClass("TestDOM", (Y.DataObject,), dict())
+        dc = MappedClass("TestDOM", (Y.DataObject,), dict())
         remap()
-        g = mapper.oid(Configureable.conf['rdf.namespace']['TestDOM'])
+        g = mapper.oid(dc.rdf_type)
         self.assertIsInstance(g,Y.TestDOM)
 
 class RDFPropertyTest(_DataTest):

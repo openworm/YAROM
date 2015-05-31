@@ -35,6 +35,7 @@ Classes
 .. automodule:: yarom.data
 .. automodule:: yarom.configure
 .. automodule:: yarom.graphObject
+.. automodule:: yarom.mapper
 """
 
 __version__ = '0.5.0-alhpa'
@@ -42,16 +43,19 @@ __author__ = 'Mark Watts'
 
 
 import traceback
+import logging
 from .configure import Configuration,Configureable,ConfigValue,BadConf
 from .data import Data
 from .dataUser import DataUser
-from .mapper import MappedClass
+from .mapper import MappedClass, remap, resolve_classes_from_rdf
 from .quantity import Quantity
 from .yProperty import Property
 from .rdfUtils import *
 
 this_module = __import__('yarom')
 this_module.connected = False
+
+L = logging.getLogger(__name__)
 
 def config(key=None):
     if key is None:
@@ -63,9 +67,6 @@ def loadConfig(f):
     """ Load configuration for the module """
     Configureable.setConf(Data.open(f))
     return Configureable.conf
-
-def remap():
-    MappedClass.remap()
 
 def disconnect(c=False):
     """ Close the database """
@@ -93,6 +94,51 @@ def connect(conf=False,
 
     Parameters
     ----------
+    conf : :class:`str`, :class:`Data <yarom.data.Data>`, :class:`Configuration <yarom.configure.Configuration>` or :class:`dict`, optional
+        The configuration for the YAROM connection
+    do_logging : bool, optional
+        If True, turn on debug level logging. The default is False.
+    data : str, optional
+        If provided, specifies a file to load into the library.
+    dataFormat : str, optional
+        If provided, specifies the file format of the file pointed specified by `data`.
+
+        The formats available are those accepted by RDFLib's serializer plugins. 'n3' is the default.
+    """
+    import atexit
+    import sys
+    import importlib
+    m = this_module
+    if m.connected == True:
+        print("yarom already connected")
+        return
+
+    if do_logging:
+        logging.basicConfig(level=logging.DEBUG)
+
+
+    setConf(conf)
+
+    Configureable.conf.openDatabase()
+    L.info("Connected to database")
+
+    atexit.register(disconnect)
+
+    from .dataObject import DataObject
+    from .relationship import Relationship
+    from .classRegistry import RegistryEntry, ClassDescription
+    remap()
+    resolve_classes_from_rdf(Configureable.conf['rdf.graph'])
+    remap()
+    m.connected = True
+    if data:
+        loadData(data, dataFormat)
+
+def setConf(conf):
+    """ Set the configuration
+
+    Parameters
+    ----------
     conf : str, Data, Configuration or dict, optional
         The configuration to load.
 
@@ -106,27 +152,7 @@ def connect(conf=False,
         The default action is to attempt to open a file called 'yarom.conf' from
         your current directory as the configuration. Failing that, an 'empty'
         config with default values will be loaded.
-    do_logging : bool, optional
-        If True, turn on debug level logging. The default is False.
-    data : str, optional
-        If provided, specifies a file to load into the library.
-    dataFormat : str, optional
-        If provided, specifies the file format of the file pointed specified by `data`.
-
-        The formats available are those accepted by RDFLib's serializer plugins. 'n3' is the default.
     """
-    import logging
-    import atexit
-    import sys
-    import importlib
-    m = this_module
-    if m.connected == True:
-        print("yarom already connected")
-        return
-
-    if do_logging:
-        logging.basicConfig(level=logging.DEBUG)
-
     if conf:
         if isinstance(conf, Data):
             Configureable.setConf(conf)
@@ -138,17 +164,5 @@ def connect(conf=False,
         try:
             Configureable.setConf(Data.open("yarom.conf"))
         except:
-            logging.info("Couldn't load default configuration")
+            L.info("Couldn't load default configuration")
             Configureable.setConf(Data())
-
-    Configureable.conf.openDatabase()
-    logging.info("Connected to database")
-
-    # have to register the right one to disconnect...
-    atexit.register(disconnect)
-    from .dataObject import DataObject
-    from .relationship import Relationship
-    MappedClass.remap()
-    m.connected = True
-    if data:
-        loadData(data, dataFormat)

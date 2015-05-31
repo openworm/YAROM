@@ -13,12 +13,12 @@ import datetime
 import transaction
 import os
 import traceback
-import logging as L
+import logging
 from .configure import Configureable, Configuration, ConfigValue, BadConf
 
 __all__ = ["Data", "RDFSource", "SerializationSource", "TrixSource", "SPARQLSource", "SleepyCatSource", "DefaultSource", "ZODBSource"]
 
-
+L = logging.getLogger(__name__)
 
 class Data(Configuration, Configureable):
     """
@@ -64,6 +64,16 @@ class Data(Configuration, Configureable):
 
         nm.bind("dt", self.dt_ns)
         nm.bind("", self['rdf.namespace'])
+
+        # TODO: Extract classes recorded in the graph
+        #       First, look at the :pythonClass attribute attached to the RDF class resource.
+        #       - Look up the class in the PythonClassRegistry using the ID
+        #         attached at the :pythonClass attribute.
+        #       - Verify the python class name in the registry
+        #       - Get the python module location (whether remote or local)
+        #       - Load the python module (downloading it if necessary) and add it to the yarom
+        #         namespace
+        # TODO: Add support for loading python packages with setuptools.
 
     def closeDatabase(self):
         """ Close a the configured database """
@@ -263,13 +273,12 @@ class SleepyCatSource(RDFSource):
             "rdf.store_conf" = <your database location here>
     """
     def open(self):
-        import logging
         # XXX: If we have a source that's read only, should we need to set the store separately??
         g0 = ConjunctiveGraph('Sleepycat')
         self.conf['rdf.store'] = 'Sleepycat'
         g0.open(self.conf['rdf.store_conf'],create=True)
         self.graph = g0
-        logging.debug("Opened SleepyCatSource")
+        L.debug("Opened SleepyCatSource")
 
 
 class SQLiteSource(RDFSource):
