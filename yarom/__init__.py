@@ -47,7 +47,7 @@ import logging
 from .configure import Configuration,Configureable,ConfigValue,BadConf
 from .data import Data
 from .dataUser import DataUser
-from .mapper import MappedClass, remap, resolve_classes_from_rdf
+from .mapper import MappedClass, remap, resolve_classes_from_rdf, load_module
 from .quantity import Quantity
 from .yProperty import Property
 from .rdfUtils import *

@@ -68,7 +68,7 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         return self._openSet
 
     def __init__(self,ident=False,var=False,key=False,generate_key=False,**kwargs):
-        """A subclass of DataObject cannot have any positional arguments.
+        """A subclass of DataObject cannot have any required positional arguments.
 
         Parameters
         ----------
@@ -112,6 +112,11 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
 
         for x in self.__class__.dataObjectProperties:
             self.attachProperty(x)
+
+        existing_property_names = [x.linkName for x in self.properties]
+        for propName in kwargs.keys():
+            if propName not in existing_property_names:
+                raise ValueError("No such argument {} to {}::__init__".format(propName, self.__class__.__name__))
 
         for x in self.properties:
             if x.linkName in kwargs:
@@ -248,6 +253,7 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
 
     @classmethod
     def make_identifier(cls, data):
+        # NOTE: The "a" prefix allows all identifiers to nicely reduce to abbreviated form in n3
         return R.URIRef(cls.rdf_namespace["a"+cls.identifier_hash_method(str(data).encode()).hexdigest()])
 
     @classmethod

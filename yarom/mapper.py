@@ -5,7 +5,7 @@ import yarom as Y
 import traceback
 
 __all__ = [ "MappedClass", "MappedPropertyClass", "MappedClasses", "DataObjectsParents",
-            "RDFTypeTable", "get_most_specific_rdf_type", "oid"]
+            "RDFTypeTable", "get_most_specific_rdf_type", "oid", "load_module"]
 
 L = logging.getLogger(__name__)
 
@@ -100,7 +100,7 @@ class MappedClass(type):
         # NOTE: Map should be quick: it runs for every DataObject sub-class created and possibly
         #       several times in testing
         from .dataObject import TypeDataObject
-        cls.rdf_type_object = TypeDataObject(cls.rdf_type)
+        cls.rdf_type_object = TypeDataObject(ident=cls.rdf_type)
 
         RDFTypeTable[cls.rdf_type] = cls
 
@@ -197,7 +197,7 @@ class MappedPropertyClass(type):
 
     def map(cls):
         from .dataObject import PropertyDataObject,RDFSDomainProperty,RDFSRangeProperty
-        cls.rdf_object = PropertyDataObject(cls.link)
+        cls.rdf_object = PropertyDataObject(ident=cls.link)
         if hasattr(cls, 'owner_type'):
             cls.rdf_object.relate('rdfs_domain', cls.owner_type.rdf_type_object, RDFSDomainProperty)
 
@@ -270,6 +270,7 @@ def get_class_descriptions(re):
 def load_module(module_name):
     import importlib as I
     a = I.import_module(module_name)
+    remap()
     return a
 
 def oid(identifier_or_rdf_type, rdf_type=False):
@@ -308,7 +309,6 @@ def oid(identifier_or_rdf_type, rdf_type=False):
 
 def _slice_dict(d, s):
     return {k:v for k,v in d.items() if k in s}
-
 
 def _create_property(owner_type, linkName, property_type, value_type=False, multiple=True, link=False):
     #XXX This should actually get called for all of the properties when their owner

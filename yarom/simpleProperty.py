@@ -212,7 +212,6 @@ class Rel(tuple):
     def __getattr__(self, n):
         return self[Rel._map[n]]
 
-
     def rel(self):
         from .relationship import Relationship
         return Relationship(subject=self.s, property=self.p.rdf_object, object=self.o)
