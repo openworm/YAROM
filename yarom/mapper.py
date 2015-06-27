@@ -81,9 +81,12 @@ class MappedClass(type):
         Also creates the classes for and registers the properties of this DataObject
         """
         cls._du = DataUser()
+        cls.children = []
         MappedClasses[cls.__name__] = cls
         DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, MappedClass)]
         cls.parents = DataObjectsParents[cls.__name__]
+        for c in cls.parents:
+            c.add_child(cls)
 
         cls.addObjectProperties()
         cls.addDatatypeProperties()
@@ -91,6 +94,12 @@ class MappedClass(type):
         setattr(Y, cls.__name__, cls)
 
         return cls
+
+    def add_child(cls, child):
+        if hasattr(cls, 'children'):
+            cls.children.append(child)
+        else:
+            raise Exception("Cannot add child {0} to {1} as {1} has not yet been registered".format(child, cls))
 
     def map(cls):
         """Sets up the object graph related to this class
@@ -165,14 +174,12 @@ class MappedClass(type):
     def _cleanupGraph(cls):
         """ Cleans up the graph by removing statements that can't be connected to typed statement. """
         # XXX: This might belong in DataUser instead
-        q = """
-        DELETE { ?b ?x ?y }
+        q = """DELETE { ?b ?x ?y }
         WHERE
         {
             ?b ?x ?y .
             FILTER (NOT EXISTS { ?b rdf:type ?c } ) .
-        }
-          """
+        }"""
         cls.du.rdf.update(q)
 
 class MappedPropertyClass(type):

@@ -63,7 +63,7 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
             }
 
     @classmethod
-    def openSet(self):
+    def open_set(self):
         """ The open set contains items that must be saved directly in order for their data to be written out """
         return self._openSet
 
@@ -235,11 +235,11 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         return R.Variable(var_name)
 
     @classmethod
-    def addToOpenSet(cls,o):
+    def add_to_open_set(cls,o):
         cls._openSet.add(o)
 
     @classmethod
-    def removeFromOpenSet(cls,o):
+    def remove_from_open_set(cls,o):
         if o not in cls._closedSet:
             cls._openSet.remove(o)
             cls._closedSet.add(o)
@@ -369,6 +369,14 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         """
         self.retract_statements(HeroTripler(self)())
 
+    def retract_references(self):
+        """ Remove all references directly to or made by this object """
+        self.retract_statements(ReferenceTripler(self)())
+
+    def retract_referencesG(self):
+        """ Remove all references directly to or made by this object """
+        self.retract_statements(ReferenceTripler(self, self.rdf)())
+
     def retract_objectG(self):
         """ Remove this object from the data store.
 
@@ -386,7 +394,7 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         except KeyError:
             raise Exception("You attempted to get the value `%s' from `%s'. It isn't here. Perhaps you misspelled the name of a Property?" % (x, self))
 
-    def getOwners(self, property_name):
+    def get_owners(self, property_name):
         """ Return the owners along a property pointing to this object """
         res = []
         for x in self.owner_properties:
@@ -394,6 +402,12 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
                 if str(x.linkName) == str(property_name):
                     res.append(x.owner)
         return res
+
+def validateG(do_type):
+    """ Given a DataObject type, call validate() on all objects of that type in the Python object graph """
+
+def validate(do_type):
+    """ Given a DataObject type, call validate() on all objects of that type in the RDF object graph """
 
 class TypeDataObject(DataObject):
     pass

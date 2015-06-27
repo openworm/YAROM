@@ -319,6 +319,32 @@ class HeroTripler(object):
         self.hero(self.start)
         return self.results
 
+class ReferenceTripler(object):
+    def __init__(self, start, graph=None):
+        self.seen = set()
+        self.start = start
+        self.results = R.Graph()
+        self.graph = graph
+
+    def refs(self, o):
+        if self.graph is not None:
+            from itertools import chain
+            for trip in chain(self.graph.triples((None, None, o.idl)), self.graph.triples((o.idl, None, None))):
+                self.results.add(trip)
+        else:
+            for e in o.properties:
+                for val in e.values:
+                    if val.defined:
+                        self.results.add((o.idl, e.link, val.idl))
+
+            for e in o.owner_properties:
+                if e.owner.defined:
+                    self.results.add((e.owner.idl, e.link, o.idl))
+
+    def __call__(self):
+        self.refs(self.start)
+        return self.results
+
 class IdentifierMissingException(Exception):
     """ Indicates that an identifier should be available for the object in
         question, but there is none """

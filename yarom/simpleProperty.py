@@ -67,6 +67,9 @@ class SimpleProperty(Property, metaclass=MappedPropertyClass):
 
     def set(self,v):
         import bisect
+        if isinstance(v, Rel):
+            v = v.rel()
+
         if not hasattr(v, "idl"):
             v = PropertyValue(v)
 
@@ -205,6 +208,7 @@ class PropertyValue(GraphObject):
             return self.value == R.Literal(other)
 
 class Rel(tuple):
+    """ A container for a relationship-assignment """
     _map=dict(s=0,p=1,o=2)
     def __new__(cls, s, p, o):
         return super(Rel, cls).__new__(cls, (s,p,o))

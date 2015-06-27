@@ -168,7 +168,7 @@ class DataObjectTest(_DataTest):
         """ Be sure that we can call graph pattern on the same object multiple times and not have it die on us """
 
         g = make_graph(20)
-        d = Y.DataObject(triples=g, key="id")
+        d = Y.DataObject(key="id")
         self.assertNotEqual(0,len(d.graph_pattern()))
         self.assertNotEqual(0,len(d.graph_pattern()))
 
@@ -715,7 +715,6 @@ class MapperTest(_DataTestB):
         """Test that we can add an object and then access it from the yarom module"""
         dc = MappedClass("TestDOM", (Y.DataObject,), dict())
         self.assertTrue(hasattr(Y, "TestDOM"))
-        u
 
     def test_object_from_id_class(self):
         """ Ensure we get an object from just the class name """
@@ -723,6 +722,13 @@ class MapperTest(_DataTestB):
         remap()
         g = mapper.oid(dc.rdf_type)
         self.assertIsInstance(g,Y.TestDOM)
+
+    def test_children_are_added(self):
+        """ Ensure that, on registration, children are added """
+        MappedClass("TestDOM", (Y.DataObject,), dict())
+        self.assertEqual( Y.DataObject.children, [Y.TestDOM], msg="Only the test class is a child")
+
+
 
 class RDFPropertyTest(_DataTest):
     def test_getInstanceTwice(self):
