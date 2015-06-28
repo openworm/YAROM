@@ -109,7 +109,7 @@ class ObjectProperty(SimpleProperty):
     def set(self, v):
         from .dataObject import DataObject
         if not isinstance(v, (DataObject, Variable)):
-            raise Exception("An ObjectProperty only accepts DataObject instances")
+            raise Exception("An ObjectProperty only accepts DataObject or Variable instances. Got a "+str(type(v)))
         return SimpleProperty.set(self, v)
 
     def get(self):

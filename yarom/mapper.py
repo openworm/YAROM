@@ -1,18 +1,20 @@
+import importlib as I
+import traceback
+import logging
 import rdflib as R
 from yarom import DataUser
-import logging
 import yarom as Y
-import traceback
 
 __all__ = [ "MappedClass", "MappedPropertyClass", "MappedClasses", "DataObjectsParents",
-            "RDFTypeTable", "get_most_specific_rdf_type", "oid", "load_module"]
+            "RDFTypeTable", "get_most_specific_rdf_type", "oid", "reload_module", "load_module"]
 
 L = logging.getLogger(__name__)
 
 MappedClasses = dict() # class names to classes
 DataObjectsParents = dict() # class names to parents of the related class
-RDFTypeTable = dict() # class rdf types to classes
 DataObjectProperties = dict() # Property classes to
+
+RDFTypeTable = dict() # class rdf types to classes
 
 ProplistToProptype = { "datatypeProperties" : "DatatypeProperty",
                        "objectProperties"   : "ObjectProperty",
@@ -72,13 +74,14 @@ class MappedClass(type):
     def __lt__(cls, other):
         if isinstance(other, MappedPropertyClass):
             return False
-        return issubclass(cls,other) or ((not issubclass(other, cls)) and cls.__name__ < other.__name__)
+        return issubclass(cls,other) or ((not issubclass(other, cls)) and (cls.__name__ < other.__name__))
 
     def register(cls):
-        """
-        Registers the class as a DataObject to be included in the configured rdf graph.
+        """Sets up the object graph related to this class
 
-        Also creates the classes for and registers the properties of this DataObject
+        :meth:`regsister` never touches the RDF graph itself.
+
+        Also registers the properties of this DataObject
         """
         cls._du = DataUser()
         cls.children = []
@@ -88,12 +91,50 @@ class MappedClass(type):
         for c in cls.parents:
             c.add_child(cls)
 
-        cls.addObjectProperties()
-        cls.addDatatypeProperties()
-        cls.addSimpleProperties()
-        setattr(Y, cls.__name__, cls)
+        cls.addProperties('objectProperties')
+        cls.addProperties('datatypeProperties')
+        cls.addProperties('_')
+
+        if getattr(Y, cls.__name__, False):
+            new_name = "_"+cls.__name__
+            warnMismapping('yarom module', cls.__name__, "nothing", getattr(Y, cls.__name__))
+            if getattr(Y, new_name, False):
+                L.warning("Still unable to add {0} to {1}. {0} will not be accessible through {1}".format(new_name, 'yarom module'))
+            else:
+                setattr(Y, new_name, cls)
+        else:
+            setattr(Y, cls.__name__, cls)
 
         return cls
+
+    def deregister(cls):
+        """Removes the class from the object graph.
+
+        Should make it possible to garbage collect
+
+        :method:``deregister`` never touches the RDF graph itself.
+        """
+
+        if getattr(Y, cls.__name__) == cls:
+            delattr(Y, cls.__name__)
+        elif getattr(Y, "_"+cls.__name__) == cls:
+            delattr(Y, "_"+cls.__name__)
+
+        if cls.__name__ in MappedClasses:
+            del MappedClasses[cls.__name__]
+
+        if cls.__name__ in DataObjectsParents:
+            del DataObjectsParents[cls.__name__]
+
+        for c in cls.parents:
+            c.remove_child(cls)
+
+    def remove_child(cls, child):
+        if hasattr(cls, 'children'):
+            cls.children.remove(child)
+        else:
+            raise Exception("Cannot remove child {0} from {1} as {1} has not yet been registered".format(child, cls))
+
 
     def add_child(cls, child):
         if hasattr(cls, 'children'):
@@ -102,9 +143,8 @@ class MappedClass(type):
             raise Exception("Cannot add child {0} to {1} as {1} has not yet been registered".format(child, cls))
 
     def map(cls):
-        """Sets up the object graph related to this class
-
-        ``map`` never touches the RDF graph itself.
+        """
+        Maps the class to the configured rdf graph.
         """
         # NOTE: Map should be quick: it runs for every DataObject sub-class created and possibly
         #       several times in testing
@@ -113,15 +153,35 @@ class MappedClass(type):
 
         RDFTypeTable[cls.rdf_type] = cls
 
-        cls.addParentsToGraph()
-        cls.addNamespaceToManager()
+        cls._add_parents_to_graph()
+        cls._add_namespace_to_manager()
 
         return cls
 
-    def addNamespaceToManager(cls):
-        cls.du['rdf.namespace_manager'].bind(cls.__name__, cls.rdf_namespace)
+    def unmap(cls):
+        """
+        Unmaps the class
+        """
+        cls.rdf_type_object = TypeDataObject(ident=cls.rdf_type)
 
-    def addParentsToGraph(cls):
+        if RDFTypeTable.get(cls.rdf_type, None) == cls.rdf_type:
+            del RDFTypeTable[cls.rdf_type]
+        else:
+            L.error("{0} in RDFTypeTable is assigned a a value other than {1}. Not unmapping {1}".format(cls.rdf_type, cls))
+
+        cls._remove_parents_from_graph()
+        cls._remove_namespace_from_manager()
+
+        return cls
+
+    def _remove_namespace_from_manager(cls):
+        pass
+        #cls.du['rdf.namespace_manager'].bind(cls.__name__, "")
+
+    def _add_namespace_to_manager(cls):
+        cls.du['rdf.namespace_manager'].bind(cls.__name__, cls.rdf_namespace, replace=True)
+
+    def _add_parents_to_graph(cls):
         from .dataObject import RDFSSubClassOfProperty,DataObject
         for parent in cls.parents:
             for ancestor in [x for x in parent.mro() if issubclass(x, DataObject)]:
@@ -162,14 +222,6 @@ class MappedClass(type):
         except:
             traceback.print_exc()
 
-    def addObjectProperties(cls):
-        cls.addProperties('objectProperties')
-
-    def addDatatypeProperties(cls):
-        cls.addProperties('datatypeProperties')
-
-    def addSimpleProperties(cls):
-        cls.addProperties('_')
 
     def _cleanupGraph(cls):
         """ Cleans up the graph by removing statements that can't be connected to typed statement. """
@@ -181,6 +233,12 @@ class MappedClass(type):
             FILTER (NOT EXISTS { ?b rdf:type ?c } ) .
         }"""
         cls.du.rdf.update(q)
+
+def warnMismapping(mapping, key, should_be, is_actually=None):
+    if is_actually is None:
+        is_actually = mapping[key]
+
+    L.warning("Mismapping of {} in {}. Is {}. Should be {}".format(key, mapping, is_actually, should_be))
 
 class MappedPropertyClass(type):
     def __init__(cls, name, bases, dct):
@@ -202,6 +260,25 @@ class MappedPropertyClass(type):
 
         return cls
 
+    def deregister(cls):
+        if MappedClasses.get(cls.__name__, False) == cls:
+            del MappedClasses[cls.__name__]
+        else:
+            warnMismapping(MappedClasses, cls.__name__, cls)
+
+        if DataObjectProperties.get(cls.__name__, False) == cls:
+            del DataObjectProperties[cls.__name__]
+        else:
+            warnMismapping(DataObjectProperties, cls.__name__, cls)
+
+        if getattr(Y, cls.__name__) == cls:
+            setattr(Y, cls.__name__, cls)
+        else:
+            warnMismapping(dir(Y), cls.__name__, cls)
+
+        return cls
+
+
     def map(cls):
         from .dataObject import PropertyDataObject,RDFSDomainProperty,RDFSRangeProperty
         cls.rdf_object = PropertyDataObject(ident=cls.link)
@@ -220,6 +297,15 @@ def remap():
     classes.reverse()
     for x in classes:
         x.map()
+
+def unmap_all():
+    for cls in MappedClasses:
+        cls.unmap()
+
+def deregister_all():
+    keys = list(MappedClasses.keys())
+    for cname in keys:
+        MappedClasses[cname].deregister()
 
 def resolve_classes_from_rdf(graph):
     """ Gathers Python classes from the RDF graph.
@@ -275,8 +361,12 @@ def get_class_descriptions(re):
     return mod_data
 
 def load_module(module_name):
-    import importlib as I
     a = I.import_module(module_name)
+    remap()
+    return a
+
+def reload_module(mod):
+    a = I.reload(mod)
     remap()
     return a
 

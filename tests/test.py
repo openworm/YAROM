@@ -699,9 +699,14 @@ class MapperTest(_DataTestB):
         Configureable.conf = self.TestConfig
         Configureable.conf = Data()
         Configureable.conf.openDatabase()
+        if hasattr(Y, 'dataObject'):
+            Y.reload_module(yarom.dataObject)
+        else:
+            Y.load_module('yarom.dataObject')
 
     def tearDown(self):
         Configureable.conf.closeDatabase()
+        deregister_all()
         _DataTestB.tearDown(self)
 
     @unittest.expectedFailure
@@ -726,9 +731,13 @@ class MapperTest(_DataTestB):
     def test_children_are_added(self):
         """ Ensure that, on registration, children are added """
         MappedClass("TestDOM", (Y.DataObject,), dict())
-        self.assertEqual( Y.DataObject.children, [Y.TestDOM], msg="Only the test class is a child")
+        self.assertIn( Y.DataObject.children, Y.TestDOM, msg="The test class is a child")
 
-
+    def test_children_are_added(self):
+        """ Ensure that, on deregistration, DataObject types are cleared from the module namespace """
+        self.assertTrue(hasattr(Y,'DataObject'), "DataObject is in the yarom module")
+        deregister_all()
+        self.assertFalse(hasattr(Y,'DataObject'), "DataObject is no longer in the yarom module")
 
 class RDFPropertyTest(_DataTest):
     def test_getInstanceTwice(self):

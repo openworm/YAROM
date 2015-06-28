@@ -47,7 +47,7 @@ import logging
 from .configure import Configuration,Configureable,ConfigValue,BadConf
 from .data import Data
 from .dataUser import DataUser
-from .mapper import MappedClass, remap, resolve_classes_from_rdf, load_module
+from .mapper import MappedClass, remap, resolve_classes_from_rdf, reload_module, load_module, deregister_all
 from .quantity import Quantity
 from .yProperty import Property
 from .rdfUtils import *
@@ -76,6 +76,7 @@ def disconnect(c=False):
 
     if c == False:
         c = Configureable.conf
+    deregister_all() # NOTE: We do NOT unmap on disconnect
     # Note that `c' could be set in one of the previous branches;
     # don't try to simplify this logic.
     if c != False:
@@ -124,13 +125,19 @@ def connect(conf=False,
 
     atexit.register(disconnect)
 
-    from .dataObject import DataObject
-    from .relationship import Relationship
-    from .classRegistry import RegistryEntry, ClassDescription
-    remap()
+    if hasattr(m,'connected_before'):
+        reload_module(m.dataObject)
+        reload_module(m.relationship)
+        reload_module(m.classRegistry)
+    else:
+        load_module("yarom.dataObject")
+        load_module("yarom.relationship")
+        load_module("yarom.classRegistry")
+
     resolve_classes_from_rdf(Configureable.conf['rdf.graph'])
     remap()
     m.connected = True
+    m.connected_before = True
     if data:
         loadData(data, dataFormat)
 
@@ -166,3 +173,4 @@ def setConf(conf):
         except:
             L.info("Couldn't load default configuration")
             Configureable.setConf(Data())
+

@@ -3,11 +3,10 @@
 Making data objects
 ====================
 To make new objects, for the most part, you just need to make a Python class and subclass it from :class:`yarom.dataObject.DataObject`.
-Say, for example, that I want to record some information about drug reactions in C. elegans. I make
-``Drug`` and ``Experiment`` classes to describe C. elegans drug reactions::
+Say, for example, that I want to record some information about drug reactions in C. elegans. Using classes I've already created in :file:`c_elegans.py`, 
+I make ``Drug`` and ``Experiment`` classes in :file:`drugRxn.py` to describe C. elegans drug reactions::
 
-    import yarom as Y
-    Y.connect()
+    import yarom
     from yarom import DataObject
     from c_elegans import Worm, Evidence
 
@@ -18,7 +17,7 @@ Say, for example, that I want to record some information about drug reactions in
             return len(self.name.values) > 0
 
         def identifier_augment(self):
-            return self.make_identifier_from_properties('name')
+            return self.make_identifier_direct(self.name.values[0])
 
     class Experiment(DataObject):
         _ = [{'name':'drug', 'type':Drug, 'multiple':False},
@@ -27,9 +26,17 @@ Say, for example, that I want to record some information about drug reactions in
              'summary',
              'route_of_entry',
              'reaction']
-    Y.remap()
 
-I can then make a Drug object for moon rocks and describe an experiment by Aperture Labs::
+The :meth:`~yarom.dataObject.DataObject.defined_augment` and :meth:`~yarom.dataObject.DataObject.identifier_augment`
+methods define the unique identifier of a drug object as being based on the drug name.
+
+In a new file, I can then make a Drug object for moon rocks and describe an experiment by Aperture Labs::
+
+    import yarom
+    yarom.connect({"rdf.source" : "ZODB", "rdf.store_conf" : "ceDrugRxns.db"})
+
+    yarom.load_module('drugRxn')
+    from yarom import *
 
     d = Drug(name='moon rocks')
     d.relate('granularity', 'ground up')
@@ -46,9 +53,11 @@ I can then make a Drug object for moon rocks and describe an experiment by Apert
     e.route_of_entry('ingestion')
     e.reaction('no reaction')
     ev.asserts(e)
+    ev.save() # XXX: Don't forget this!
 
-and save it::
+    print_graph(config('rdf.graph'))
 
-    ev.save()
+It is not necessary to put the class definitions and the objects in separate files, but the descriptions must follow a 
+call to :func:`yarom.connect`.
 
 For simple objects, this is all we have to do.

@@ -151,6 +151,7 @@ class Configuration(object):
         elif (default is not None):
             return default
         else:
+            traceback.print_stack()
             raise KeyError(pname)
 
 class Configureable(object):
