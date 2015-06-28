@@ -187,8 +187,6 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
             self._id = self.make_identifier(key)
 
     def relate(self, linkName, other, prop=False):
-        cls = type(self)
-
         existing_property_names = [x.linkName for x in self.properties]
         if linkName in existing_property_names:
             p = getattr(self, linkName)

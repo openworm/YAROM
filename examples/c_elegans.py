@@ -257,4 +257,3 @@ class Network(Y.DataObject):
 
     def __init__(self, **kwargs):
         Y.DataObject.__init__(self,**kwargs)
-

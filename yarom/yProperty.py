@@ -29,12 +29,12 @@ class Property(DataUser):
 
     # Indicates whether the Property is multi-valued
     multiple = False
+    link = None
+    linkName = None
 
-    def __init__(self, name=False, owner=False, **kwargs):
+    def __init__(self, owner=False, **kwargs):
         DataUser.__init__(self, **kwargs)
         self.owner = owner
-        # XXX: Default implementation is a box for a value
-        self._value = False
 
     def get(self,*args):
         """ Get the things which are on the other side of this property
@@ -45,7 +45,7 @@ class Property(DataUser):
 
         Derived classes must override.
         """
-        # This should run a query or return a cached value
+
         raise NotImplementedError()
 
     def set(self,*args,**kwargs):
@@ -53,7 +53,7 @@ class Property(DataUser):
 
         Derived classes must override.
         """
-        # This should set some values and call DataObject.save()
+
         raise NotImplementedError()
 
     def one(self):
@@ -71,7 +71,11 @@ class Property(DataUser):
 
         This may be defined differently for each property
         """
-        return True
+        return False
+
+    @property
+    def values(self):
+        raise NotImplementedError()
 
     def __call__(self,*args,**kwargs):
         """ If arguments are passed to the ``Property``, its ``set`` method

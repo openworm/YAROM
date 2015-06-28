@@ -21,7 +21,7 @@ class SimpleProperty(Property, metaclass=MappedPropertyClass):
         if not hasattr(self, 'linkName'):
             self.__class__.linkName = self.__class__.__name__ + "property"
 
-        Property.__init__(self, name=self.linkName, **kwargs)
+        Property.__init__(self, **kwargs)
         #
         # 'v' holds values that have been set on this SimpleProperty. It acts
         # as a sort of staging area before saving the values to the graph.

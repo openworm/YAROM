@@ -1,18 +1,35 @@
 import rdflib as R
+import logging
+from .yProperty import Property
+
+L = logging.getLogger(__name__)
 
 class GraphObject(object):
-    """ An object which can be included in the object graph. """
+    """ An object which can be included in the object graph.
+
+    An abstract base class.
+    """
     def __init__(self):
         self.properties = []
         self.owner_properties = []
 
     def identifier(self):
-        """ Must return an rdflib.term.URIRef object representing this object
+        """ Must return an :class:`rdflib.term.URIRef` object representing this object
             or else raise an Exception. """
         raise NotImplementedError()
 
+    @property
     def defined(self):
         """ Returns true if an :meth:`identifier` would return an identifier """
+        raise NotImplementedError()
+
+    def variable(self):
+        """ Must return a :class:`rdflib.term.Variable` object that identifies
+        this :class:`GraphObject` in queries.
+
+        The variable can be randomly generated when the object is created and stored in
+        the object.
+        """
         raise NotImplementedError()
 
     @property
@@ -43,12 +60,13 @@ class GraphObjectQuerier(object):
         self.graph = graph
 
     def do_query(self):
-        qu = QU(self.query_object)
+        qu = PrepareQuery(self.query_object)
         h = self.hoc(qu())
         return self.qpr(h)
 
     def hoc(self,l):
         res = dict()
+        L.debug("hoc: {}".format(l))
         for x in l:
             if len(x) > 0:
                 tmp = res.get(x[0], [])
@@ -127,7 +145,7 @@ class SV(object):
         self.g(current_node)
         return self.results
 
-class QN(tuple):
+class QueryPathElement(tuple):
     def __new__(cls):
         return tuple.__new__(cls, ([],[]))
 
@@ -143,68 +161,66 @@ class QN(tuple):
     def path(self):
         return self[1]
 
-class QU(object):
+class PrepareQuery(object):
     def __init__(self, start):
         self.seen = list()
-        self.lean = list()
+        self.stack = list()
         self.paths = list()
         self.start = start
 
-    def b(self, CUR, LIST, IS_INV):
+    def gather_paths_along_properties(self, current_node, property_list, is_inverse):
         ret = []
         is_good = False
-
-        for e in LIST:
-            if IS_INV:
-                p = [e.owner]
+        for this_property in property_list:
+            if is_inverse:
+                others = [this_property.owner]
             else:
-                p = e.values
+                others = this_property.values
 
-            for x in p:
-                if IS_INV:
-                    self.lean.append((x.idl, e.link, None))
+            for other in others:
+                if is_inverse:
+                    self.stack.append((other.idl, this_property.link, None))
                 else:
-                    self.lean.append((None, e.link, x.idl))
+                    self.stack.append((None, this_property.link, other.idl))
 
-                subpath = self.g(x)
-                if len(self.lean) > 0:
-                    self.lean.pop()
+                subpath = self.prepare(other)
+
+                if len(self.stack) > 0:
+                    self.stack.pop()
 
                 if subpath[0]:
                     is_good = True
-                    subpath[1].path.insert(0, (CUR.idl, e, x.idl))
+                    subpath[1].path.insert(0, (current_node.idl, this_property, other.idl))
                     ret.insert(0, subpath[1])
+
         return is_good, ret
 
-    def k(self):
-        pass
-
-    def g(self, current_node):
+    def prepare(self, current_node):
         if current_node.defined:
-            if len(self.lean) > 0:
-                tmp = list(self.lean)
+            if len(self.stack) > 0:
+                tmp = list(self.stack)
                 self.paths.append(tmp)
-            return True, QN()
+            return True, QueryPathElement()
         else:
             if current_node in self.seen:
-                return False, QN()
+                return False, QueryPathElement()
             else:
                 self.seen.append(current_node)
 
-            retp = self.b(current_node, current_node.owner_properties, True)
-            reto = self.b(current_node, current_node.properties, False)
+            owner_parts = self.gather_paths_along_properties(current_node, current_node.owner_properties, True)
+            owned_parts = self.gather_paths_along_properties(current_node, current_node.properties, False)
 
             self.seen.pop()
-            subpaths = retp[1]+reto[1]
+            subpaths = owner_parts[1]+owner_parts[1]
             if (len(subpaths) == 1):
                 ret = subpaths[0]
             else:
-                ret = QN()
+                ret = QueryPathElement()
                 ret.subpaths = subpaths
-            return (retp[0] or reto[0], ret)
+            return (owner_parts[0] or owned_parts[0], ret)
 
     def __call__(self):
-        self.g(self.start)
+        self.prepare(self.start)
         return self.paths
 
 class DescendantTripler(object):
