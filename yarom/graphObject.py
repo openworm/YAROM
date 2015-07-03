@@ -4,11 +4,15 @@ from .yProperty import Property
 
 L = logging.getLogger(__name__)
 
+__all__ = ["GraphObject","GraphObjectQuerier"]
+
 class GraphObject(object):
+
     """ An object which can be included in the object graph.
 
     An abstract base class.
     """
+
     def __init__(self):
         self.properties = []
         self.owner_properties = []
@@ -54,17 +58,19 @@ class GraphObject(object):
         else:
             return id(self) < id(other)
 
+
 class GraphObjectQuerier(object):
+
     def __init__(self, q, graph):
         self.query_object = q
         self.graph = graph
 
     def do_query(self):
-        qu = PrepareQuery(self.query_object)
+        qu = _QueryPreparer(self.query_object)
         h = self.hoc(qu())
         return self.qpr(h)
 
-    def hoc(self,l):
+    def hoc(self, l):
         res = dict()
         L.debug("hoc: {}".format(l))
         for x in l:
@@ -90,7 +96,7 @@ class GraphObjectQuerier(object):
                 other_idx = 2
 
             if isinstance(x[other_idx], R.Variable):
-                for z in self.qpr(sub, i+1):
+                for z in self.qpr(sub, i + 1):
                     if idx == 2:
                         qx = (z, x[1], None)
                     else:
@@ -115,8 +121,11 @@ class GraphObjectQuerier(object):
         res = self.do_query()
         return res
 
-class SV(object):
-    def __init__(self):
+
+class ComponentTripler(object):
+
+    def __init__(self, start):
+        self.start = start
         self.seen = set()
         self.results = R.Graph()
 
@@ -133,25 +142,28 @@ class SV(object):
             p = e.owner
             if p.defined:
                 self.results.add((p.idl, e.link, current_node.idl))
-                self.g(p,i+1)
+                self.g(p, i + 1)
 
         for e in current_node.properties:
             for val in e.values:
                 if val.defined:
                     self.results.add((current_node.idl, e.link, val.idl))
-                    self.g(val,i+1)
+                    self.g(val, i + 1)
 
-    def __call__(self, current_node):
-        self.g(current_node)
+    def __call__(self):
+        self.g(self.start)
         return self.results
 
-class QueryPathElement(tuple):
+
+class _QueryPathElement(tuple):
+
     def __new__(cls):
-        return tuple.__new__(cls, ([],[]))
+        return tuple.__new__(cls, ([], []))
 
     @property
     def subpaths(self):
         return self[0]
+
     @subpaths.setter
     def subpaths(self, toset):
         del self[0][:]
@@ -161,7 +173,9 @@ class QueryPathElement(tuple):
     def path(self):
         return self[1]
 
-class PrepareQuery(object):
+
+class _QueryPreparer(object):
+
     def __init__(self, start):
         self.seen = list()
         self.stack = list()
@@ -200,10 +214,10 @@ class PrepareQuery(object):
             if len(self.stack) > 0:
                 tmp = list(self.stack)
                 self.paths.append(tmp)
-            return True, QueryPathElement()
+            return True, _QueryPathElement()
         else:
             if current_node in self.seen:
-                return False, QueryPathElement()
+                return False, _QueryPathElement()
             else:
                 self.seen.append(current_node)
 
@@ -211,11 +225,11 @@ class PrepareQuery(object):
             owned_parts = self.gather_paths_along_properties(current_node, current_node.properties, False)
 
             self.seen.pop()
-            subpaths = owner_parts[1]+owner_parts[1]
+            subpaths = owner_parts[1] + owner_parts[1]
             if (len(subpaths) == 1):
                 ret = subpaths[0]
             else:
-                ret = QueryPathElement()
+                ret = _QueryPathElement()
                 ret.subpaths = subpaths
             return (owner_parts[0] or owned_parts[0], ret)
 
@@ -223,7 +237,9 @@ class PrepareQuery(object):
         self.prepare(self.start)
         return self.paths
 
+
 class DescendantTripler(object):
+
     def __init__(self, start):
         self.seen = set()
         self.start = start
@@ -248,11 +264,14 @@ class DescendantTripler(object):
         self.g(self.start)
         return self.graph
 
-class Legends(object):
+
+class LegendFinder(object):
+
     """ Gets a list of the objects which can not be deleted freely from the transitive closure.
 
     "Heroes get remembered, but legends never die."
     """
+
     def __init__(self, start, graph=None):
         self.talked_about = dict()
         self.seen = set()
@@ -268,7 +287,7 @@ class Legends(object):
                 if value != self.start:
                     count = self.count(value)
                     self.talked_about[value] = count - 1
-                    self.legends(value, depth+1)
+                    self.legends(value, depth + 1)
 
     def count(self, o):
         if o in self.talked_about:
@@ -288,7 +307,9 @@ class Legends(object):
         self.legends(self.start)
         return {x for x in self.talked_about if self.talked_about[x] > 0}
 
+
 class HeroTripler(object):
+
     def __init__(self, start, graph=None, legends=None):
         self.seen = set()
         self.start = start
@@ -297,7 +318,7 @@ class HeroTripler(object):
         self.graph = graph
 
         if legends is None:
-            self.legends = Legends(self.start, graph)()
+            self.legends = LegendFinder(self.start, graph)()
         else:
             self.legends = legends
 
@@ -315,7 +336,7 @@ class HeroTripler(object):
         for prop in o.properties:
             for value in prop.values:
                 if not self.isLegend(value):
-                    self.heros(value, depth+1)
+                    self.heros(value, depth + 1)
                     self.hero(value)
 
     def hero(self, o):
@@ -335,7 +356,9 @@ class HeroTripler(object):
         self.hero(self.start)
         return self.results
 
+
 class ReferenceTripler(object):
+
     def __init__(self, start, graph=None):
         self.seen = set()
         self.start = start
@@ -361,8 +384,11 @@ class ReferenceTripler(object):
         self.refs(self.start)
         return self.results
 
+
 class IdentifierMissingException(Exception):
+
     """ Indicates that an identifier should be available for the object in
         question, but there is none """
+
     def __init__(self, dataObject="[unspecified object]", *args, **kwargs):
         super().__init__("An identifier should be provided for {}".format(str(dataObject)), *args, **kwargs)

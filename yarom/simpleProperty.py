@@ -135,7 +135,6 @@ class ObjectProperty(SimpleProperty):
 class UnionProperty(SimpleProperty):
     """ A Property that can handle either DataObjects or basic types """
     def set(self, v):
-        from .dataObject import DataObject
         return SimpleProperty.set(self, v)
 
     def get(self):

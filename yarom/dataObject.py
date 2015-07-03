@@ -1,22 +1,38 @@
 import rdflib as R
-import traceback
-import logging as L
+import logging
 import hashlib
 import random
-from .mapper import *
-from .dataUser import DataUser
-from .simpleProperty import *
-from .rdfUtils import *
-from .graphObject import *
+from .mapper import (
+    MappedPropertyClass,
+    MappedClass,
+    get_most_specific_rdf_type,
+    oid)
+from .dataUser import DataUser, BadConf
+from .simpleProperty import (SimpleProperty, DatatypeProperty, ObjectProperty)
+from .rdfUtils import triples_to_bgp
+from .graphObject import (
+    GraphObject,
+    GraphObjectQuerier,
+    ComponentTripler,
+    HeroTripler,
+    ReferenceTripler,
+    DescendantTripler,
+    IdentifierMissingException)
 
 """
 .. autoclass:: DataObject
 """
 
-# NOTE: This module (and all modules containing DataObject sub-types) may be reloaded. Objects should not be created in the top-level of this module.
+# NOTE: This module (and all modules containing DataObject sub-types) may
+# be reloaded. Objects should not be created in the top-level of this
+# module.
+
+L = logging.getLogger(__name__)
+
 
 def _bnode_to_var(x):
     return "?" + x
+
 
 def get_hash_function(method_name):
     if method_name == "sha224":
@@ -26,7 +42,9 @@ def get_hash_function(method_name):
     elif method_name in hashlib.algorithms_available:
         return (lambda data: hashlib.new(method_name, data))
 
+
 class DataObject(GraphObject, DataUser, metaclass=MappedClass):
+
     """
     An object backed by the database
 
@@ -40,32 +58,40 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         Properties belonging to this object
     owner_properties : list of Property
         Properties belonging to parents of this object
-
-
     """
 
     _openSet = set()
     _closedSet = set()
 
     configuration_variables = {
-            "rdf.namespace" : {
-                "description" : "Namespaces for DataObject sub-classes will, by default, be based off of this. For example, a subclass named A would have a namespace '[rdf.namespace]A/'",
-                "type" : R.Namespace,
-                "directly_configureable" : True
-                },
-            "dataObject.identifier_hash" : {
-                "description" : "The hash method used for object identifiers. Defaults to md5.",
-                "type" : "sha224, md5, or one of the types accepted by hashlib.new()",
-                "directly_configureable" : True
-                },
-            }
+        "rdf.namespace": {
+            "description": "Namespaces for DataObject sub-classes will, by " +
+            "default, be based off of this. For example, a subclass named A " +
+            "would have a namespace '[rdf.namespace]A/'",
+            "type": R.Namespace,
+            "directly_configureable": True},
+        "dataObject.identifier_hash": {
+            "description": "The hash method used for object identifiers. " +
+            "Defaults to md5.",
+            "type": "sha224, md5, or one of the types accepted by"+
+            "hashlib.new()",
+            "directly_configureable": True},
+    }
 
     @classmethod
     def open_set(self):
-        """ The open set contains items that must be saved directly in order for their data to be written out """
+        """ The open set contains items that must be saved directly in order for
+        their data to be written out
+        """
         return self._openSet
 
-    def __init__(self,ident=False,var=False,key=False,generate_key=False,**kwargs):
+    def __init__(
+            self,
+            ident=False,
+            var=False,
+            key=False,
+            generate_key=False,
+            **kwargs):
         """A subclass of DataObject cannot have any required positional arguments.
 
         Parameters
@@ -75,8 +101,9 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         var : str
             In lieu of `ident`, sets the variable for this object
         key : str or object
-            In lieu of `ident` or `var`, sets the identifier for this DataObject using the key value.
-            For a namespace `ex:` and key `a`, the identifier would be `ex:a`.
+            In lieu of `ident` or `var`, sets the identifier for this DataObject
+            using the key value. For a namespace `ex:` and key `a`, the
+            identifier would be `ex:a`.
         generate_key : bool
             If true generates a random key value
         kwargs : dict
@@ -85,7 +112,7 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         try:
             super().__init__()
         except BadConf as e:
-            raise Exception("You may need to connect to a database before continuing.")
+            raise Exception("You may need to connect to a database before continuing.") from e
 
         self._id = False
 
@@ -96,7 +123,9 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
                 self._id = R.URIRef(ident)
         elif var:
             self._id_variable = R.Variable(var)
-        elif key: # TODO: Support a key function that generates the key based on live values of the object (e.g., property values)
+        # TODO: Support a key function that generates the key based on live
+        # values of the object (e.g., property values)
+        elif key:
             self.setKey(key)
         elif generate_key:
             self.setKey(random.random())
@@ -106,7 +135,11 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
             # that functions as an identifier
             v = (random.random(), random.random())
             cname = self.__class__.__name__
-            self._id_variable = self._graph_variable(cname + "_" + hashlib.md5(str(v).encode()).hexdigest())
+            self._id_variable = self._graph_variable(
+                cname +
+                "_" +
+                hashlib.md5(
+                    str(v).encode()).hexdigest())
 
         for x in self.__class__.dataObjectProperties:
             self.attachProperty(x)
@@ -114,26 +147,44 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         existing_property_names = [x.linkName for x in self.properties]
         for propName in kwargs.keys():
             if propName not in existing_property_names:
-                raise ValueError("No such argument {} to {}::__init__".format(propName, self.__class__.__name__))
+                raise ValueError(
+                    "No such argument {} to {}::__init__".format(
+                        propName,
+                        self.__class__.__name__))
 
         for x in self.properties:
             if x.linkName in kwargs:
                 self.relate(x.linkName, kwargs[x.linkName])
 
         if isinstance(self, PropertyDataObject):
-            self.relate('rdf_type_property', RDFProperty.getInstance(), RDFTypeProperty)
+            self.relate(
+                'rdf_type_property',
+                RDFProperty.getInstance(),
+                RDFTypeProperty)
         elif isinstance(self, TypeDataObject):
-            self.relate('rdf_type_property', RDFSClass.getInstance(), RDFTypeProperty)
+            self.relate(
+                'rdf_type_property',
+                RDFSClass.getInstance(),
+                RDFTypeProperty)
         elif isinstance(self, RDFProperty):
-            self.relate('rdf_type_property', RDFSClass.getInstance(), RDFTypeProperty)
+            self.relate(
+                'rdf_type_property',
+                RDFSClass.getInstance(),
+                RDFTypeProperty)
         elif isinstance(self, RDFSClass):
             self.relate('rdf_type_property', self, RDFTypeProperty)
         else:
-            self.relate('rdf_type_property', self.rdf_type_object, RDFTypeProperty)
+            self.relate(
+                'rdf_type_property',
+                self.rdf_type_object,
+                RDFTypeProperty)
 
     @classmethod
     def identifier_hash_method(self, o):
-        return get_hash_function(self.conf.get('dataObject.identifier_hash', 'md5'))(o)
+        return get_hash_function(
+            self.conf.get(
+                'dataObject.identifier_hash',
+                'md5'))(o)
 
     def make_identifier_from_properties(self, *properties):
         if len(properties) == 0:
@@ -154,15 +205,15 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         True when your custom identifier would be defined. You must also override
         :meth:`identifier_augment`
         """
-        if self._id != False:
+        if self._id:
             return True
         else:
             return self.defined_augment()
 
     def defined_augment(self):
-        """ This fuction must return False if :meth:`identifier_augment` would raise an
-            :exc:`IdentifierMissingException <yarom.graphObject.IdentifierMissingException>`. Override it when defining a non-standard
-            identifier for subclasses of DataObjects.
+        """ This fuction must return False if :meth:`identifier_augment` would
+        raise an :exc:`~yarom.graphObject.IdentifierMissingException`. Override
+        it when defining a non-standard identifier for subclasses of DataObjects.
         """
         return False
 
@@ -198,25 +249,37 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
                 else:
                     property_type = DatatypeProperty
                 link = type(self).rdf_namespace[linkName]
-                prop = MappedPropertyClass(linkName, (property_type,), dict(link=link, linkName=linkName, multiple=True))
+                prop = MappedPropertyClass(
+                    linkName, (property_type,), dict(
+                        link=link, linkName=linkName, multiple=True))
             p = self.attachProperty(prop)
         return p.set(other)
 
     def attachProperty(self, prop):
         p = prop(owner=self)
         if hasattr(self, prop.linkName):
-            raise Exception("Cannot attach property '{}'. A property must have a different name from any attributes in DataObject".format(prop.linkName))
+            raise Exception(
+                "Cannot attach property '{}'. A property must have a different \
+                        name from any attributes in DataObject".format(
+                    prop.linkName))
         self.properties.append(p)
         setattr(self, p.linkName, p)
         return p
 
     def get_defined_component(self):
-        g = SV()(self)
+        g = ComponentTripler(self)()
         g.namespace_manager = self.namespace_manager
         return g
 
-    def __eq__(self,other):
-        return (isinstance(other,DataObject) and (self.idl == other.idl)) or (isinstance(other, R.URIRef) and self.idl == other)
+    def __eq__(self, other):
+        return (
+            isinstance(
+                other,
+                DataObject) and (
+                self.idl == other.idl)) or (
+            isinstance(
+                other,
+                R.URIRef) and self.idl == other)
 
     def __hash__(self):
         return hash(self.idl)
@@ -227,15 +290,15 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
     def __repr__(self):
         return self.__str__()
 
-    def _graph_variable(self,var_name):
+    def _graph_variable(self, var_name):
         return R.Variable(var_name)
 
     @classmethod
-    def add_to_open_set(cls,o):
+    def add_to_open_set(cls, o):
         cls._openSet.add(o)
 
     @classmethod
-    def remove_from_open_set(cls,o):
+    def remove_from_open_set(cls, o):
         if o not in cls._closedSet:
             cls._openSet.remove(o)
             cls._closedSet.add(o)
@@ -245,12 +308,20 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         if uri.startswith(cls.rdf_namespace):
             return uri[:len(cls.rdf_namespace)]
         else:
-            raise Exception("This URI ({}) doesn't start with the appropriate namespace ({})".format(uri, cls.rdf_namespace))
+            raise Exception(
+                "This URI ({}) doesn't start with the appropriate namespace ({})".format(
+                    uri,
+                    cls.rdf_namespace))
 
     @classmethod
     def make_identifier(cls, data):
-        # NOTE: The "a" prefix allows all identifiers to nicely reduce to abbreviated form in n3
-        return R.URIRef(cls.rdf_namespace["a"+cls.identifier_hash_method(str(data).encode()).hexdigest()])
+        # NOTE: The "a" prefix allows all identifiers to nicely reduce to
+        # abbreviated form in n3
+        return R.URIRef(
+            cls.rdf_namespace[
+                "a" +
+                cls.identifier_hash_method(
+                    str(data).encode()).hexdigest()])
 
     @classmethod
     def make_identifier_direct(cls, string):
@@ -272,7 +343,7 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         -------
         :class:`rdflib.term.URIRef`
         """
-        if self._id != False:
+        if self._id:
             return self._id
         else:
             return self.identifier_augment()
@@ -319,7 +390,9 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         nm = None
         if shorten:
             nm = self.namespace_manager
-        return triples_to_bgp(self.get_defined_component(), namespace_manager=nm)
+        return triples_to_bgp(
+            self.get_defined_component(),
+            namespace_manager=nm)
 
     def load(self):
         for ident in GraphObjectQuerier(self, self.rdf)():
@@ -365,14 +438,6 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         """
         self.retract_statements(HeroTripler(self)())
 
-    def retract_references(self):
-        """ Remove all references directly to or made by this object """
-        self.retract_statements(ReferenceTripler(self)())
-
-    def retract_referencesG(self):
-        """ Remove all references directly to or made by this object """
-        self.retract_statements(ReferenceTripler(self, self.rdf)())
-
     def retract_objectG(self):
         """ Remove this object from the data store.
 
@@ -384,11 +449,21 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         g = HeroTripler(self, self.rdf)()
         self.retract_statements(g)
 
+    def retract_references(self):
+        """ Remove all references directly to or made by this object """
+        self.retract_statements(ReferenceTripler(self)())
+
+    def retract_referencesG(self):
+        """ Remove all references directly to or made by this object """
+        self.retract_statements(ReferenceTripler(self, self.rdf)())
+
     def __getitem__(self, x):
         try:
             return DataUser.__getitem__(self, x)
         except KeyError:
-            raise Exception("You attempted to get the value `%s' from `%s'. It isn't here. Perhaps you misspelled the name of a Property?" % (x, self))
+            raise Exception(
+                "You attempted to get the value `%s' from `%s'. It isn't here. Perhaps you misspelled the name of a Property?" %
+                (x, self))
 
     def get_owners(self, property_name):
         """ Return the owners along a property pointing to this object """
@@ -399,22 +474,29 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
                     res.append(x.owner)
         return res
 
+
 def validateG(do_type):
     """ Given a DataObject type, call validate() on all objects of that type in the Python object graph """
+
 
 def validate(do_type):
     """ Given a DataObject type, call validate() on all objects of that type in the RDF object graph """
 
+
 class TypeDataObject(DataObject):
     pass
 
+
 class DataObjectSingleton(DataObject):
     instance = None
+
     def __init__(self, *args, **kwargs):
         if type(self)._gettingInstance:
             DataObject.__init__(self, *args, **kwargs)
         else:
-            raise Exception("You must call getInstance to get "+type(self).__name__)
+            raise Exception(
+                "You must call getInstance to get " +
+                type(self).__name__)
 
     @classmethod
     def getInstance(cls):
@@ -425,17 +507,23 @@ class DataObjectSingleton(DataObject):
 
         return cls.instance
 
-class RDFSClass(DataObjectSingleton): # This maybe becomes a DataObject later
+
+class RDFSClass(DataObjectSingleton):  # This maybe becomes a DataObject later
+
     """ The DataObject corresponding to rdfs:Class """
     # XXX: This class may be changed from a singleton later to facilitate dumping
     #      and reloading the object graph
     rdf_type = R.RDFS['Class']
+
     def __init__(self):
         super().__init__(R.RDFS["Class"])
 
+
 class RDFProperty(DataObjectSingleton):
+
     """ The DataObject corresponding to rdf:Property """
     rdf_type = R.RDF['Property']
+
     def __init__(self):
         super().__init__(R.RDF["Property"])
 
@@ -447,6 +535,7 @@ class RDFTypeProperty(ObjectProperty):
     value_type = RDFSClass
     multiple = True
 
+
 class RDFSSubClassOfProperty(ObjectProperty):
     link = R.RDFS['subClassOf']
     linkName = "rdfs_subClassOf"
@@ -454,11 +543,14 @@ class RDFSSubClassOfProperty(ObjectProperty):
     value_type = RDFSClass
     multiple = True
 
+
 class PropertyDataObject(DataObject):
+
     """ A PropertyDataObject represents the property-as-object.
 
     Try not to confuse this with the Property class
     """
+
 
 class RDFSDomainProperty(ObjectProperty):
     link = R.RDFS['domain']
@@ -467,6 +559,7 @@ class RDFSDomainProperty(ObjectProperty):
     value_type = RDFSClass
     multiple = True
 
+
 class RDFSRangeProperty(ObjectProperty):
     link = R.RDFS['range']
     linkName = "rdfs_range"
@@ -474,7 +567,9 @@ class RDFSRangeProperty(ObjectProperty):
     value_type = RDFSClass
     multiple = True
 
+
 class ObjectCollection(DataObject):
+
     """
     A convenience class for working with a collection of objects
 
@@ -515,13 +610,13 @@ class ObjectCollection(DataObject):
 
     """
     _ = ['member']
-    datatypeProperties = [{'name':'name', 'multiple':False}]
-    def __init__(self,group_name=False,**kwargs):
-        DataObject.__init__(self,key=group_name,**kwargs)
+    datatypeProperties = [{'name': 'name', 'multiple': False}]
+
+    def __init__(self, group_name=False, **kwargs):
+        DataObject.__init__(self, key=group_name, **kwargs)
         self.add = self.member
         self.group_name = self.name
         self.name(group_name)
 
     def identifier(self, query=False):
         return self.make_identifier(self.group_name)
-
