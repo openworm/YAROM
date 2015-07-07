@@ -17,10 +17,10 @@ class Variable(GraphObject):
         return False
 
     def __hash__(self):
-        return hash(self.variable)
+        return hash(self.var)
 
     def __str__(self):
-        return str(self.variable)
+        return str(self.var)
 
     def __repr__(self):
-        return str(self)
+        return "Variable('"+str(self)+"')"

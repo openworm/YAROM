@@ -1,6 +1,5 @@
 import rdflib as R
 import logging
-from .yProperty import Property
 
 L = logging.getLogger(__name__)
 
@@ -130,6 +129,7 @@ class ComponentTripler(object):
         self.results = R.Graph()
 
     def g(self, current_node, i=0):
+        L.debug("g({},{})".format(current_node,i))
         if current_node in self.seen:
             return
         else:
@@ -144,8 +144,11 @@ class ComponentTripler(object):
                 self.results.add((p.idl, e.link, current_node.idl))
                 self.g(p, i + 1)
 
+        L.debug("current_node.properties = {}".format(current_node.properties))
         for e in current_node.properties:
+            L.debug("values = {}".format(e.values))
             for val in e.values:
+                L.debug("val = {}".format(val))
                 if val.defined:
                     self.results.add((current_node.idl, e.link, val.idl))
                     self.g(val, i + 1)

@@ -1,12 +1,10 @@
 from .dataUser import DataUser
 
-__all__ = ["Property", 'NoRelationshipException']
+__all__ = ["Property"]
 
-class NoRelationshipException(Exception):
-    """ Indicates that a Relationship was asked for but one could not be given. """
 
-# Define a property by writing the get
 class Property(DataUser):
+
     """ Store a value associated with a DataObject
 
     Properties can be be accessed like methods. A method call like::
@@ -36,7 +34,7 @@ class Property(DataUser):
         DataUser.__init__(self, **kwargs)
         self.owner = owner
 
-    def get(self,*args):
+    def get(self, *args):
         """ Get the things which are on the other side of this property
 
         The return value must be iterable. For a ``get`` that just returns
@@ -48,7 +46,7 @@ class Property(DataUser):
 
         raise NotImplementedError()
 
-    def set(self,*args,**kwargs):
+    def set(self, *args, **kwargs):
         """ Set the value of this property
 
         Derived classes must override.
@@ -77,7 +75,7 @@ class Property(DataUser):
     def values(self):
         raise NotImplementedError()
 
-    def __call__(self,*args,**kwargs):
+    def __call__(self, *args, **kwargs):
         """ If arguments are passed to the ``Property``, its ``set`` method
         is called. Otherwise, the ``get`` method is called. If the ``multiple``
         member for the ``Property`` is set to ``True``, then a Python set containing
@@ -85,9 +83,9 @@ class Property(DataUser):
         """
 
         if len(args) > 0 or len(kwargs) > 0:
-            return self.set(*args,**kwargs)
+            return self.set(*args, **kwargs)
         else:
-            r = self.get(*args,**kwargs)
+            r = self.get(*args, **kwargs)
             if self.multiple:
                 return set(r)
             else:

@@ -8,7 +8,6 @@ sys.path.insert(0,".")
 import yarom
 import yarom as Y
 from yarom import *
-import tests
 import test_data as TD
 import rdflib
 import rdflib as R
@@ -167,7 +166,6 @@ class DataObjectTest(_DataTest):
     def test_call_graph_pattern_twice(self):
         """ Be sure that we can call graph pattern on the same object multiple times and not have it die on us """
 
-        g = make_graph(20)
         d = Y.DataObject(key="id")
         self.assertNotEqual(0,len(d.graph_pattern()))
         self.assertNotEqual(0,len(d.graph_pattern()))
@@ -295,7 +293,6 @@ class DataUserTest(_DataTest):
         # These are the properties that we should find
         uploader_n3_uri = du.conf['rdf.namespace']['uploader'].n3()
         upload_date_n3_uri = du.conf['rdf.namespace']['upload_date'].n3()
-        uploader_email = du.conf['user.email']
 
         # This is the query to get uploader information
         q = """
@@ -376,10 +373,6 @@ class sameAsRules(object):
         """ make a rules file with a simple 'sameAs' rule and return the file name """
         self.rules = tempfile.mkstemp()[1]
         f = open(self.rules, "w")
-        if self.ns:
-            ex = self.ns
-        else:
-            ex = R.Namespace(ns)
         v = {"x" : R.Variable('x').n3(),
                 "y" : self.predicate.n3(),
                 "z" : R.Variable('z').n3(),
@@ -540,8 +533,9 @@ class QuantityTest(unittest.TestCase):
         rdf_datatype = rdflib.URIRef("http://example.com/datatypes/quantity")
         rdflib.term.bind(rdf_datatype, Quantity, Quantity.parse)
         q_rdf = rdflib.Literal("23 mL", datatype=rdf_datatype)
-        q = Quantity(23, "milliliter")
         self.assertEqual("23 milliliter", str(q_rdf))
+        q = Quantity(23, "milliliter")
+        self.assertEqual(q, q_rdf.toPython())
 
 #class QuantityDataTest(_DataTest):
 
@@ -623,7 +617,6 @@ class DataTest(unittest.TestCase):
     def test_trix_source(self):
         """ Test that we can load the datbase up from an XML file.
         """
-        t = tempfile.mkdtemp()
         f = tempfile.mkstemp()
 
         c = Configuration()
@@ -652,7 +645,6 @@ class DataTest(unittest.TestCase):
     def test_trig_source(self):
         """ Test that we can load the datbase up from a trig file.
         """
-        t = tempfile.mkdtemp()
         f = tempfile.mkstemp()
 
         c = Configuration()
@@ -718,7 +710,7 @@ class MapperTest(_DataTestB):
 
     def test_access_created_from_module(self):
         """Test that we can add an object and then access it from the yarom module"""
-        dc = MappedClass("TestDOM", (Y.DataObject,), dict())
+        MappedClass("TestDOM", (Y.DataObject,), dict())
         self.assertTrue(hasattr(Y, "TestDOM"))
 
     def test_object_from_id_class(self):
@@ -733,7 +725,7 @@ class MapperTest(_DataTestB):
         MappedClass("TestDOM", (Y.DataObject,), dict())
         self.assertIn( Y.DataObject.children, Y.TestDOM, msg="The test class is a child")
 
-    def test_children_are_added(self):
+    def test_children_are_deregistered(self):
         """ Ensure that, on deregistration, DataObject types are cleared from the module namespace """
         self.assertTrue(hasattr(Y,'DataObject'), "DataObject is in the yarom module")
         deregister_all()
@@ -756,7 +748,6 @@ class RDFPropertyTest(_DataTest):
 class SimplePropertyTest(_DataTest):
     def __init__(self,*args,**kwargs):
         _DataTest.__init__(self,*args,**kwargs)
-        id_tests = []
 
     def setUp(self):
         _DataTest.setUp(self)
@@ -854,7 +845,6 @@ class SimplePropertyTest(_DataTest):
         self.assertEqual(len(boots.values), 0)
 
     def test_unset_single_by_identifier(self):
-        from yarom.simpleProperty import PropertyValue
         bats = self.k().bats
 
         o = self.k(key='blah')

@@ -107,8 +107,6 @@ def connect(conf=False,
         The formats available are those accepted by RDFLib's serializer plugins. 'n3' is the default.
     """
     import atexit
-    import sys
-    import importlib
     m = this_module
     if m.connected == True:
         print("yarom already connected")

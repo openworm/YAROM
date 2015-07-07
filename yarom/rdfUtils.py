@@ -8,10 +8,7 @@ def print_graph(g, hide_namespaces=False):
     print(s)
 
 def serialize_rdflib_term(x, namespace_manager=None):
-    if isinstance(x, R.BNode):
-        return _bnode_to_var(x)
-    else:
-        return x.n3(namespace_manager)
+    return x.n3(namespace_manager)
 
 def deserialize_rdflib_term(x):
     if isinstance(x, R.Literal):

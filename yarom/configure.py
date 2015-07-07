@@ -1,60 +1,80 @@
-# a class for modules that need outside objects to parameterize their behavior (because what are generics?)
-# Modules inherit from this class and use their self['expected_configured_property']
+#
+# a class for modules that need outside objects to parameterize their behavior
+# Modules inherit from this class and use their
+# self['expected_configured_property']
 import traceback
+
+
 class ConfigValue(object):
+
     """ A value to be configured.
 
     Elements of a :class:`Configuration` are, in fact, :class:`ConfigValue` objects. They
     can be resolved an arbitrary time after the :class:`Configuration` object is created
     by calling :meth:`get`.
     """
+
     def get(self):
         """ Override this method to return a value when a configuration variable is accessed"""
         raise NotImplementedError
 
+
 class _C(ConfigValue):
+
     """ A helper class that simply stores a value and can report it back with the get method.
         Subclasses ConfigValue and implements the get method.
     """
+
     def __init__(self, v):
         self.v = v
+
     def get(self):
         return self.v
+
     def __str__(self):
         return str(self.v)
+
     def __repr__(self):
         return str(self.v)
 
 
 class BadConf(Exception):
+
     """ Special exception subclass for alerting the user to a bad configuration
     """
     pass
 
+
 class _link(ConfigValue):
+
     """ Helper class that groups values within a Configuration
     """
-    def __init__(self,members,c):
+
+    def __init__(self, members, c):
         self.members = members
         self.conf = c
+
     def get(self):
         return self.conf[self.members[0]]
 
+
 class Configuration(object):
+
     """ A simple configuration object.  Enables setting and getting key-value pairs"""
     # conf: is a configure instance to base this one on
     # dependencies are required for this class to be initialized (TODO)
 
     def __init__(self, **kwargs):
         for x in kwargs:
-            if not isinstance(kwargs[x],ConfigValue):
+            if not isinstance(kwargs[x], ConfigValue):
                 kwargs[x] = _C(kwargs[x])
         self._properties = kwargs
 
     def __setitem__(self, pname, value):
         if not isinstance(value, ConfigValue):
             value = _C(value)
-        if (pname in self._properties) and isinstance(self._properties[pname], _link):
+        if (pname in self._properties) and isinstance(
+                self._properties[pname], _link):
             for x in self._properties[pname].members:
                 self._properties[x] = value
         else:
@@ -66,11 +86,11 @@ class Configuration(object):
     def __iter__(self):
         return iter(self._properties)
 
-    def link(self,*names):
+    def link(self, *names):
         """ Call link() with the names of configuration values that should
         always be the same to link them together
         """
-        l = _link(names,self)
+        l = _link(names, self)
         for n in names:
             self._properties[n] = l
 
@@ -78,13 +98,15 @@ class Configuration(object):
         return (thing in self._properties)
 
     def __str__(self):
-        return "\n".join("%s = %s" %(k,self._properties[k]) for k in self._properties)
+        return "\n".join(
+            "%s = %s" %
+            (k, self._properties[k]) for k in self._properties)
 
     def __len__(self):
         return len(self._properties)
 
     @classmethod
-    def open(cls,file_name):
+    def open(cls, file_name):
         """ Open a configuration file and read it to build the internal state.
 
         Parameters
@@ -118,9 +140,9 @@ class Configuration(object):
         -------
         self
         """
-        if isinstance(other,Configuration):
+        if isinstance(other, Configuration):
             self._properties = dict(other._properties)
-        elif isinstance(other,dict):
+        elif isinstance(other, dict):
             for x in other:
                 self[x] = other[x]
         return self
@@ -154,7 +176,9 @@ class Configuration(object):
             traceback.print_stack()
             raise KeyError(pname)
 
+
 class Configureable(object):
+
     """ An object which can be configured.
 
     A ``Configureable`` object can access a :class:`Configuration` object,
@@ -199,11 +223,11 @@ class Configureable(object):
     def setConf(cls, conf):
         cls.conf = conf
 
-    def __getitem__(self,k):
+    def __getitem__(self, k):
         return self.conf.get(k)
 
-    def __setitem__(self,k,v):
+    def __setitem__(self, k, v):
         self.conf[k] = v
 
     def get(self, pname, default=False):
-        return self.conf.get(pname,default)
+        return self.conf.get(pname, default)

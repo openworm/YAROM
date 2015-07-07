@@ -163,17 +163,6 @@ class MappedClass(type):
         """
         Unmaps the class
         """
-        cls.rdf_type_object = TypeDataObject(ident=cls.rdf_type)
-
-        if RDFTypeTable.get(cls.rdf_type, None) == cls.rdf_type:
-            del RDFTypeTable[cls.rdf_type]
-        else:
-            L.error("{0} in RDFTypeTable is assigned a a value other than {1}. Not unmapping {1}".format(cls.rdf_type, cls))
-
-        cls._remove_parents_from_graph()
-        cls._remove_namespace_from_manager()
-
-        return cls
 
     def _remove_namespace_from_manager(cls):
         pass
@@ -464,6 +453,6 @@ def get_most_specific_rdf_type(types):
         try:
             if RDFTypeTable[x] < least:
                 least = RDFTypeTable[x]
-        except KeyError as e:
+        except KeyError:
             pass
     return least.rdf_type

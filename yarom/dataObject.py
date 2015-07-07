@@ -65,15 +65,15 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
 
     configuration_variables = {
         "rdf.namespace": {
-            "description": "Namespaces for DataObject sub-classes will, by " +
-            "default, be based off of this. For example, a subclass named A " +
+            "description": "Namespaces for DataObject sub-classes will, by "
+            "default, be based off of this. For example, a subclass named A "
             "would have a namespace '[rdf.namespace]A/'",
             "type": R.Namespace,
             "directly_configureable": True},
         "dataObject.identifier_hash": {
-            "description": "The hash method used for object identifiers. " +
+            "description": "The hash method used for object identifiers. "
             "Defaults to md5.",
-            "type": "sha224, md5, or one of the types accepted by"+
+            "type": "sha224, md5, or one of the types accepted by"
             "hashlib.new()",
             "directly_configureable": True},
     }

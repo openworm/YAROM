@@ -1,18 +1,25 @@
-from .rdfUtils import *
-from .variable import Variable
-from .graphObject import *
-from .yProperty import Property
-from .mapper import MappedPropertyClass
-from random import random
 import rdflib
 import logging
 import hashlib
+import six
+
+from .variable import Variable
+from .graphObject import GraphObjectQuerier
+from .rdfUtils import deserialize_rdflib_term
+from .yProperty import Property
+from .propertyValue import PropertyValue
+from .mapper import MappedPropertyClass
+from random import random
 
 L = logging.getLogger(__name__)
 
-__all__ = ["SimpleProperty", "DatatypeProperty", "ObjectProperty"]
+__all__ = ["SimpleProperty", "DatatypeProperty", "ObjectProperty", "NoRelationshipException"]
 
-class SimpleProperty(Property, metaclass=MappedPropertyClass):
+class NoRelationshipException(Exception):
+
+    """ Indicates that a Relationship was asked for but one could not be given. """
+
+class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
     """ A property that has one or more links to literals or DataObjects """
 
     def __init__(self,**kwargs):
@@ -121,7 +128,7 @@ class ObjectProperty(SimpleProperty):
                 L.warn('ObjectProperty.get: Skipping non-URI term, "'+ident+'", returned for a data object.')
                 continue
             types = set()
-            for rdf_type in self.rdf.objects(ident, R.RDF['type']):
+            for rdf_type in self.rdf.objects(ident, rdflib.RDF['type']):
                 types.add(rdf_type)
 
             if len(types) == 0:
@@ -148,7 +155,7 @@ class UnionProperty(SimpleProperty):
                 L.warn('UnionProperty.get: Retrieved BNode, "'+ident+'". BNodes are not supported in yarom')
             else:
                 types = set()
-                for rdf_type in self.rdf.objects(ident, R.RDF['type']):
+                for rdf_type in self.rdf.objects(ident, rdflib.RDF['type']):
                     types.add(rdf_type)
                 L.debug("{} <- types, {} <- ident".format(types,ident))
                 the_type = DataObject.rdf_type
@@ -162,49 +169,6 @@ class UnionProperty(SimpleProperty):
                         L.warn('UnionProperty.get: Couldn\'t resolve types for `{}\'. Defaulting to a DataObject typed object'.format(ident))
 
                 yield oid(ident, the_type)
-
-class PropertyValue(GraphObject):
-    """ Holds a literal value for a property """
-    def __init__(self, value):
-        super().__init__()
-        if not isinstance(value, rdflib.term.Identifier):
-            self.value = R.Literal(value)
-        else:
-            self.value = value
-
-    def triples(self, *args, **kwargs):
-        return []
-
-    def identifier(self):
-        return self.value
-
-    @property
-    def defined(self):
-        return True
-
-    @property
-    def idl(self):
-        return self.identifier()
-
-    def __hash__(self):
-        return hash(self.value)
-
-    def __str__(self):
-        return str(self.value)
-
-    def __repr__(self):
-        return str(self)
-
-    def __lt__(self, other):
-        return self.value < other.value
-
-    def __eq__(self, other):
-        if id(self) == id(other):
-            return True
-        elif isinstance(other, PropertyValue):
-            return self.value == other.value
-        else:
-            return self.value == R.Literal(other)
 
 class Rel(tuple):
     """ A container for a relationship-assignment """
