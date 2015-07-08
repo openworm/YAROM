@@ -23,7 +23,7 @@ setup(
         "git://github.com/RDFLib/FuXi.git#egg=FuXi",
         ],
     setup_requires="six==1.7.3",
-    version = '0.5.0-alpha',
+    version = '0.6.0',
     packages = ['yarom'],
     package_data = {"yarom":['default.conf', 'rules.n3']},
     author = "Mark Watts",

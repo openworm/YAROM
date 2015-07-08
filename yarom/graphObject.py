@@ -1,5 +1,6 @@
 import rdflib as R
 import logging
+import six
 
 L = logging.getLogger(__name__)
 
@@ -129,6 +130,7 @@ class ComponentTripler(object):
         self.results = R.Graph()
 
     def g(self, current_node, i=0):
+
         L.debug("g({},{})".format(current_node,i))
         if current_node in self.seen:
             return
