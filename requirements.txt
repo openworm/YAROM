@@ -1,7 +1,6 @@
 ZODB==4.2.0
 rdflib>=4.1.2
 numpydoc==0.5
-persistent==4.0.8
 rdflib_zodb==1.0
 transaction==1.4.4
 pint
