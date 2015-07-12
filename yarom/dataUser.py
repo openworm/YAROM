@@ -35,7 +35,7 @@ class DataUser(Configureable):
                 }
             }
     def __init__(self, **kwargs):
-        Configureable.__init__(self)
+        super(DataUser, self).__init__(**kwargs)
 
         if not isinstance(self.conf, Data):
             Configureable.setConf(Data())

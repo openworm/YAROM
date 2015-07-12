@@ -25,10 +25,10 @@ class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
     def __init__(self,**kwargs):
         # The 'linkName' must be made up from the class name if one isn't set
         # before initialization (typically in mapper._create_property)
+        super(SimpleProperty, self).__init__(**kwargs)
         if not hasattr(self, 'linkName'):
             self.__class__.linkName = self.__class__.__name__ + "property"
 
-        Property.__init__(self, **kwargs)
         #
         # 'v' holds values that have been set on this SimpleProperty. It acts
         # as a sort of staging area before saving the values to the graph.

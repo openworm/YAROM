@@ -216,7 +216,7 @@ class Configureable(object):
       to ``False``.
     """
 
-    def __init__(self):
+    def __init__(self, conf=None):
         pass
 
     @classmethod

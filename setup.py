@@ -21,8 +21,6 @@ for feature_file in glob("*.requirements.txt"):
         required = f.read().splitlines()
         feature_deps[feature] = required
 
-print(feature_deps)
-
 import os
 
 long_description = open("README.rst").read()
@@ -51,8 +49,9 @@ setup(
         'License :: OSI Approved :: BSD License',
         'Natural Language :: English',
         'Operating System :: OS Independent',
-        'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.2',
+        'Programming Language :: Python :: 3.4',
         'Topic :: Scientific/Engineering'],
     extras_require=feature_deps,
     zip_safe = False

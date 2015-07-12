@@ -1,5 +1,7 @@
-import yarom as Y
+import six
 import rdflib as R
+
+import yarom as Y
 
 # TODO Generate key for the RegistryEntry type as a combination of the ClassDescription>classKey and rdfClass
 # TODO Generate RegistryEntry objects for all mapped classes automatically
@@ -12,7 +14,7 @@ class _RegistryEntryType(Y.mapper.MappedClass):
         cls.rdf_type = rns["RegistryEntry"]
         cls.rdf_namespace = R.Namespace(
             cls.conf['rdf.namespace']['PythonClassRegistry'] + "/")
-        super().__init__(*args)
+        super(_RegistryEntryType, cls).__init__(*args)
 
 
 class _ClassDescriptionType(Y.mapper.MappedClass):
@@ -21,10 +23,10 @@ class _ClassDescriptionType(Y.mapper.MappedClass):
         cls.rdf_type = rns["ClassDescription"]
         cls.rdf_namespace = R.Namespace(
             cls.conf['rdf.namespace']['ClassDescription'] + "/")
-        super().__init__(*args)
+        super(_ClassDescriptionType, cls).__init__(*args)
 
 
-class RegistryEntry(Y.DataObject, metaclass=_RegistryEntryType):
+class RegistryEntry(six.with_metaclass( _RegistryEntryType, Y.DataObject)):
 
     """ A mapping from a Python class to an RDF class.
 
@@ -33,5 +35,5 @@ class RegistryEntry(Y.DataObject, metaclass=_RegistryEntryType):
     _ = ["pythonClass", "rdfClass"]
 
 
-class ClassDescription(Y.DataObject, metaclass=_ClassDescriptionType):
+class ClassDescription(six.with_metaclass( _ClassDescriptionType, Y.DataObject)):
     _ = ["classKey", "className", "moduleName", "moduleLocation", "priority"]

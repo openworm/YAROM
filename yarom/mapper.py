@@ -85,6 +85,8 @@ class MappedClass(type):
 
         Also registers the properties of this DataObject
         """
+        #if cls.__name__ == "RegistryEntry":
+            #raise Exception("Registration of RegistryEntry")
         cls._du = DataUser()
         cls.children = []
         MappedClasses[cls.__name__] = cls
@@ -116,7 +118,6 @@ class MappedClass(type):
 
         :method:``deregister`` never touches the RDF graph itself.
         """
-
         if getattr(Y, cls.__name__) == cls:
             delattr(Y, cls.__name__)
         elif getattr(Y, "_" + cls.__name__) == cls:
@@ -229,12 +230,13 @@ def warnMismapping(mapping, key, should_be, is_actually=None):
         is_actually = mapping[key]
 
     L.warning("Mismapping of {} in {}. Is {}. Should be {}".format(key, mapping, is_actually, should_be))
+    raise Exception("Mismapping")
 
 
 class MappedPropertyClass(type):
 
     def __init__(cls, name, bases, dct):
-        type.__init__(cls, name, bases, dct)
+        super(MappedPropertyClass, cls).__init__(name, bases, dct)
         if 'link' not in dct:
             cls.link = cls.conf['rdf.namespace'][cls.__name__]
         else:
@@ -297,6 +299,7 @@ def unmap_all():
 
 
 def deregister_all():
+    global MappedClasses
     keys = list(MappedClasses.keys())
     for cname in keys:
         MappedClasses[cname].deregister()
@@ -366,7 +369,8 @@ def load_module(module_name):
 
 
 def reload_module(mod):
-    a = I.reload(mod)
+    from six.moves import reload_module
+    a = reload_module(mod)
     remap()
     return a
 

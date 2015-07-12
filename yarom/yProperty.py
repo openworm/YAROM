@@ -31,7 +31,7 @@ class Property(DataUser):
     linkName = None
 
     def __init__(self, owner=False, **kwargs):
-        DataUser.__init__(self, **kwargs)
+        super(Property, self).__init__(**kwargs)
         self.owner = owner
 
     def get(self, *args):

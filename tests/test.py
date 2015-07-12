@@ -5,6 +5,7 @@ import unittest
 import sys
 sys.path.insert(0, ".")
 
+
 import yarom
 import yarom as Y
 from yarom import *
@@ -15,6 +16,7 @@ import pint as Q
 import os
 import subprocess
 import tempfile
+import six
 
 try:
     import bsddb
@@ -280,14 +282,6 @@ class DataUserTest(_DataTest):
 
         Configureable.conf = c
 
-    def test_init_no_config_with_default(self):
-        """ Should suceed if the default configuration is a Data object """
-        DataUser()
-
-    def test_init_False_with_default(self):
-        """ Should suceed if the default configuration is a Data object """
-        DataUser(conf=False)
-
     @unittest.skip("Should be tracked by version control")
     def test_add_statements_has_uploader(self):
         """ Assert that each statement has an uploader annotation """
@@ -430,6 +424,7 @@ class RDFLibTest(unittest.TestCase):
         except:
             self.fail("Doesn't actually fail...which is weird")
 
+    @unittest.skipIf(six.PY2, "In Python 2.7, no error is thrown by rdflib")
     def test_uriref_not_id(self):
         """ Test that rdflib throws up a warning when we do something bad """
         import io
@@ -443,9 +438,13 @@ class RDFLibTest(unittest.TestCase):
         finally:
             out.flush()
             logger.removeHandler(stream_handler)
+
         v = out.getvalue()
         out.close()
-        self.assertRegex(str(v), r".*some random string.*")
+        if six.PY2:
+            six.assertRegex(self, str(v), r".*some random string.*")
+        else:
+            self.assertRegex(str(v), ".*some random string.*")
 
     def test_BNode_equality1(self):
         a = rdflib.BNode("some random string")
@@ -815,10 +814,6 @@ class RDFPropertyTest(_DataTest):
 
 
 class SimplePropertyTest(_DataTest):
-
-    def __init__(self, *args, **kwargs):
-        _DataTest.__init__(self, *args, **kwargs)
-
     def setUp(self):
         _DataTest.setUp(self)
 
@@ -829,65 +824,6 @@ class SimplePropertyTest(_DataTest):
 
             objectProperties = [{'name': 'bats', 'multiple': False}, 'bits']
         self.k = K
-
-    # XXX: auto generate some of these tests...
-    @unittest.skip
-    def test_same_value_same_id_not_empty(self):
-        """
-        Test that two SimpleProperty with the same name have the same identifier()
-        XXX: Make this evoke the related relation object and compare those
-        """
-        do = self.k(key="a")
-        do1 = self.k(key="a")
-        do.boots('partition')
-        do1.boots('partition')
-        self.assertEqual(do.boots.identifier(), do1.boots.identifier())
-
-    @unittest.skip
-    def test_same_value_same_id_not_empty_object_property(self):
-        """
-        Test that two SimpleProperty with the same name have the same identifier()
-        XXX: Make this evoke the related relation object and compare those
-        """
-        do = self.k(key="a")
-        do1 = self.k(key="a")
-        dz = self.k(key="b")
-        dz1 = self.k(key="b")
-        do.bats(dz)
-        do1.bats(dz1)
-        self.assertEqual(do.bats.identifier(), do1.bats.identifier())
-
-    @unittest.skip
-    def test_diff_value_diff_id_not_empty(self):
-        """
-        Test that two SimpleProperty with the same name have the same identifier()
-        XXX: Make this evoke the related relation object and compare those
-        """
-        do = self.k(key="a")
-        do1 = self.k(key="a")
-        do.boots('join')
-        do1.boots('partition')
-        self.assertNotEqual(do.boots.link, do1.boots.link)
-
-    @unittest.skip
-    def test_diff_value_insert_order_same_id_object_property(self):
-        """
-        Test that two SimpleProperty with the same name have the same identifier()
-        XXX: Make this evoke the related relation object and compare those
-        """
-        do = self.k(key="a")
-        do1 = self.k(key="a")
-        oa = self.k(key="1")
-        ob = self.k(key="2")
-        oc = self.k(key="3")
-
-        do.bits(oa)
-        do.bits(ob)
-        do.bits(oc)
-        do1.bits(oc)
-        do1.bits(oa)
-        do1.bits(ob)
-        self.assertEqual(do.bits.identifier(), do1.bits.identifier())
 
     def test_non_multiple_saves_single_values(self):
         class C(Y.DataObject):

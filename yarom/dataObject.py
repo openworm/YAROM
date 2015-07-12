@@ -1,7 +1,9 @@
 import rdflib as R
 import logging
 import hashlib
+import six
 import random
+
 from .mapper import (
     MappedPropertyClass,
     MappedClass,
@@ -43,7 +45,8 @@ def get_hash_function(method_name):
         return (lambda data: hashlib.new(method_name, data))
 
 
-class DataObject(GraphObject, DataUser, metaclass=MappedClass):
+
+class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
 
     """
     An object backed by the database
@@ -110,9 +113,12 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
             Values to set for named properties
         """
         try:
-            super().__init__()
+            super(DataObject, self).__init__()
         except BadConf as e:
-            raise Exception("You may need to connect to a database before continuing.") from e
+            six.raise_from(
+                Exception(
+                    "You may need to connect to a database before continuing."),
+                e)
 
         self._id = False
 
@@ -336,8 +342,8 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
     def make_identifier_direct(cls, string):
         if not isinstance(string, str):
             raise Exception("make_identifier_direct only accepts strings")
-        from urllib.parse import quote
-        return R.URIRef(cls.rdf_namespace[quote(string)])
+        from six.moves import urllib
+        return R.URIRef(cls.rdf_namespace[urllib.parse.quote(string)])
 
     def identifier(self):
         """ The identifier for this object in the rdf graph.
@@ -525,7 +531,7 @@ class RDFSClass(DataObjectSingleton):  # This maybe becomes a DataObject later
     rdf_type = R.RDFS['Class']
 
     def __init__(self):
-        super().__init__(R.RDFS["Class"])
+        super(RDFSClass, self).__init__(R.RDFS["Class"])
 
 
 class RDFProperty(DataObjectSingleton):
@@ -534,7 +540,7 @@ class RDFProperty(DataObjectSingleton):
     rdf_type = R.RDF['Property']
 
     def __init__(self):
-        super().__init__(R.RDF["Property"])
+        super(RDFProperty, self).__init__(R.RDF["Property"])
 
 
 class RDFTypeProperty(ObjectProperty):
