@@ -205,6 +205,15 @@ class DataObject(GraphObject, DataUser, metaclass=MappedClass):
         True when your custom identifier would be defined. You must also override
         :meth:`identifier_augment`
         """
+        # TODO: Add a check for circular definition of "defined" status by
+        #       defined_augment like:
+        #
+        #           a is defined if b is defined
+        #           b is defined if a is defined.
+        #
+        #       such definitions are legal and if one or the other has its
+        #       ident set explicitly, then there would be done unbounded
+        #       recursion.
         if self._id:
             return True
         else:

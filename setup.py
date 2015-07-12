@@ -3,12 +3,25 @@
 from setuptools import setup
 import sys
 import os
+from glob import glob
 
 with open('requirements.txt') as f:
     required = f.read().splitlines()
     on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
     if on_rtd:
         required.append("numpydoc")
+
+feature_deps = {}
+
+for feature_file in glob("*.requirements.txt"):
+    print(feature_file)
+    feature,_ = feature_file.split(".", 1)
+
+    with open(feature_file) as f:
+        required = f.read().splitlines()
+        feature_deps[feature] = required
+
+print(feature_deps)
 
 import os
 
@@ -20,7 +33,7 @@ setup(
     dependency_links=[
         "git://github.com/NeuralEnsemble/libNeuroML.git#egg=libNeuroML",
         "git://github.com/zopefoundation/ZODB.git#egg=ZODB",
-        "git://github.com/RDFLib/FuXi.git#egg=FuXi",
+        "git://github.com/RDFLib/rdflib-zodb.git#egg=ZODB",
         ],
     setup_requires="six==1.7.3",
     version = '0.6.0',
@@ -41,5 +54,6 @@ setup(
         'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
         'Topic :: Scientific/Engineering'],
+    extras_require=feature_deps,
     zip_safe = False
 )

@@ -38,7 +38,7 @@ class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
         self._value = Variable("_" + hashlib.md5(str(v).encode()).hexdigest())
 
     def hasValue(self):
-        """ Returns true if the ``Property`` has had ``load`` called previously and some value was available or if ``set`` has been called previously """
+        """ Returns true if the :meth:`set` has been called previously """
         return len(self._v) > 0
 
     def _get(self):

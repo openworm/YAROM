@@ -13,7 +13,8 @@ class GraphObject(object):
     An abstract base class.
     """
 
-    def __init__(self):
+    def __init__(self,**kwargs):
+        super(GraphObject,self).__init__(**kwargs)
         self.properties = []
         self.owner_properties = []
 
@@ -131,7 +132,7 @@ class ComponentTripler(object):
 
     def g(self, current_node, i=0):
 
-        L.debug("g({},{})".format(current_node,i))
+        L.debug("g({},{})".format(current_node, i))
         if current_node in self.seen:
             return
         else:
@@ -187,7 +188,11 @@ class _QueryPreparer(object):
         self.paths = list()
         self.start = start
 
-    def gather_paths_along_properties(self, current_node, property_list, is_inverse):
+    def gather_paths_along_properties(
+            self,
+            current_node,
+            property_list,
+            is_inverse):
         ret = []
         is_good = False
         for this_property in property_list:
@@ -209,7 +214,8 @@ class _QueryPreparer(object):
 
                 if subpath[0]:
                     is_good = True
-                    subpath[1].path.insert(0, (current_node.idl, this_property, other.idl))
+                    subpath[1].path.insert(
+                        0, (current_node.idl, this_property, other.idl))
                     ret.insert(0, subpath[1])
 
         return is_good, ret
@@ -226,8 +232,14 @@ class _QueryPreparer(object):
             else:
                 self.seen.append(current_node)
 
-            owner_parts = self.gather_paths_along_properties(current_node, current_node.owner_properties, True)
-            owned_parts = self.gather_paths_along_properties(current_node, current_node.properties, False)
+            owner_parts = self.gather_paths_along_properties(
+                current_node,
+                current_node.owner_properties,
+                True)
+            owned_parts = self.gather_paths_along_properties(
+                current_node,
+                current_node.properties,
+                False)
 
             self.seen.pop()
             subpaths = owner_parts[1] + owner_parts[1]
