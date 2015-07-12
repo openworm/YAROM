@@ -94,19 +94,25 @@ class Data(Configuration, Configureable):
                 'zodb' : ZODBSource
                 }
 
-        i = self.sources[self['rdf.source'].lower()]()
-        self.source = i
+        source_graph = self.sources[self['rdf.source'].lower()]()
+        self.source = source_graph
 
         if self.get("rdf.inference", False):
             if 'rdf.rules' not in self:
+                self['rdf.inference'] = False
                 raise Exception("You've set `rdf.inference' in your configuration. Please provide n3 rules in your configuration (property name `rdf.rules') as well in order to use rdf inference.")
 
             import warnings
             warnings.filterwarnings('ignore', "Missing pydot library") # Filters an obnoxious warning from FuXi
             warnings.filterwarnings('ignore', ".*unclosed file <_io.BufferedReader .*") # Filters a warning from rdflib not closing its files from a parse
-            from FuXi.Rete.RuleStore import SetupRuleStore
-            from FuXi.Rete.Util import generateTokenSet
-            from FuXi.Horn.HornRules import HornFromN3
+            try:
+                from FuXi.Rete.RuleStore import SetupRuleStore
+                from FuXi.Rete.Util import generateTokenSet
+                from FuXi.Horn.HornRules import HornFromN3
+            except ImportError:
+                self['rdf.inference'] = False
+                raise Exception("You've set `rdf.inference' in your configuration, but you do not have FuXi installed, so inference cannot be performed.")
+
             #fetch the derived object's graph
             rule_store, rule_graph, network = SetupRuleStore(makeNetwork=True)
 
@@ -132,21 +138,19 @@ class Data(Configuration, Configureable):
 
             # XXX: Not sure if this is the most appropriate way to set
             #      up the network
-            i._get = i.get
+            source_graph._get = source_graph.get
             def get():
-                """ A one-time wrapper. resets to the actual `get` after being called once """
-                g = i._get() # get the graph in the normal way
+                """ A one-time wrapper. Resets to the actual `get` after being called once """
+                g = source_graph._get() # get the graph in the normal way
                 infer(False, g) # add the initial facts to the rete network
-                i.get = i._get # restore the old `get`
+                source_graph.get = source_graph._get # restore the old `get`
                 return g
 
-            i.get = get
-
-
+            source_graph.get = get
 
         self.link('semantic_net_new', 'semantic_net', 'rdf.graph')
-        self['rdf.graph'] = i
-        return i
+        self['rdf.graph'] = source_graph
+        return source_graph
 
 def modification_date(filename):
     t = os.path.getmtime(filename)

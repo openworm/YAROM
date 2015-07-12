@@ -33,3 +33,12 @@ class Quantity:
 
     def __str__(self):
         return str(self._quant)
+
+    def __repr__(self):
+        return repr(self._quant)
+
+    def __eq__(self, other):
+        return (id(self) == id(other)) or (self._quant == other._quant)
+
+    def __hash__(self):
+        return hash(self._quant)
