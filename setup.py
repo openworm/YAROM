@@ -32,7 +32,6 @@ setup(
         "git://github.com/zopefoundation/ZODB.git#egg=ZODB",
         "git://github.com/RDFLib/rdflib-zodb.git#egg=ZODB",
         ],
-    setup_requires="six==1.7.3",
     version = '0.6.3',
     packages = ['yarom'],
     package_data = {"yarom":['default.conf', 'rules.n3']},
