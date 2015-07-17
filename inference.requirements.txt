@@ -1,1 +1,1 @@
-FuXi==1.4.1.production
+FuXi==1.4.2-dev
