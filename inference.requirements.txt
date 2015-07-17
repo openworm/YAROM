@@ -1,1 +1,1 @@
-FuXi==1.4.2-dev
+FuXi==1.4.2.dev
