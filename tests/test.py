@@ -18,15 +18,24 @@ import subprocess
 import tempfile
 import six
 
+HAS_BSDDB = False
+HAS_FUXI = False
+
 try:
     import bsddb
-    has_bsddb = True
+    HAS_BSDDB = True
 except ImportError:
     try:
         import bsddb3
-        has_bsddb = True
+        HAS_BSDDB = True
     except:
-        has_bsddb = False
+        HAS_BSDDB = False
+
+try:
+    import FuXi
+    HAS_FUXI = True
+except ImportError:
+    pass
 
 test_ns = "http://github.com/mwatts15/YAROM/tests/"
 
@@ -59,7 +68,7 @@ except:
 
 @unittest.skipIf(
     (TEST_CONFIG['rdf.source'] == 'Sleepycat') and (
-        has_bsddb == False),
+        HAS_BSDDB == False),
     "Sleepycat store will not work without bsddb")
 class _DataTestB(unittest.TestCase):
     TestConfig = TEST_CONFIG
@@ -358,6 +367,7 @@ class DataUserTestToo(unittest.TestCase):
             DataUser()
         Configureable.conf = tmp
 
+    @unittest.skipIf((HAS_FUXI == False), "Cannot test inference without the FuXi package")
     def test_inference(self):
         """ A simple test on the inference engine """
         ex = R.Namespace("http://example.org/")
@@ -633,7 +643,7 @@ class DataTest(unittest.TestCase):
             self.fail("Bad state")
         unlink_zodb_db(fname)
 
-    @unittest.skipIf((has_bsddb == False), "Sleepycat requires working bsddb")
+    @unittest.skipIf((HAS_BSDDB == False), "Sleepycat requires working bsddb")
     def test_Sleepycat_persistence(self):
         """ Should be able to init without these values """
         c = Configuration()
