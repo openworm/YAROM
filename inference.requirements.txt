@@ -1,1 +1,1 @@
-FuXi
+FuXi==1.4.1.production
