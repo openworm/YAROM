@@ -32,7 +32,7 @@ setup(
         "git://github.com/zopefoundation/ZODB.git#egg=ZODB",
         "git://github.com/RDFLib/rdflib-zodb.git#egg=ZODB",
     ],
-    version='0.6.3',
+    version='0.6.4',
     packages=['yarom'],
     package_data={"yarom": ['default.conf', 'rules.n3']},
     author="Mark Watts",
