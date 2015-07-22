@@ -5,20 +5,19 @@ import sys
 import os
 from glob import glob
 
+REQUIRED = []
 with open('requirements.txt') as f:
-    required = f.read().splitlines()
+    REQUIRED = f.read().splitlines()
     on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
     if on_rtd:
-        required.append("numpydoc")
-
+        REQUIRED.append("numpydoc")
 feature_deps = {}
 
 for feature_file in glob("*.requirements.txt"):
     feature, _ = feature_file.split(".", 1)
 
     with open(feature_file) as f:
-        required = f.read().splitlines()
-        feature_deps[feature] = required
+        feature_deps[feature] = f.read().splitlines()
 
 import os
 
@@ -26,13 +25,13 @@ long_description = open("README.rst").read()
 
 setup(
     name="YAROM",
-    install_requires=required,
+    install_requires=REQUIRED,
     dependency_links=[
         "git://github.com/NeuralEnsemble/libNeuroML.git#egg=libNeuroML",
         "git://github.com/zopefoundation/ZODB.git#egg=ZODB",
         "git://github.com/RDFLib/rdflib-zodb.git#egg=ZODB",
     ],
-    version='0.6.4',
+    version='0.6.5',
     packages=['yarom'],
     package_data={"yarom": ['default.conf', 'rules.n3']},
     author="Mark Watts",
@@ -41,7 +40,7 @@ setup(
     long_description=long_description,
     license="BSD 3-clause",
     url="http://yarom.readthedocs.org/en/latest/",
-    download_url='https://github.com/mwatts15/YAROM/archive/master.zip',
+    download_url='https://github.com/mwatts15/YAROM/archive/v0.6.5.tar.gz',
     classifiers=[
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: BSD License',
