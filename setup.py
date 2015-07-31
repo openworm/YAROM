@@ -28,7 +28,7 @@ setup(
         "git://github.com/zopefoundation/ZODB.git#egg=ZODB",
         "git://github.com/RDFLib/rdflib-zodb.git#egg=ZODB",
     ],
-    version='0.6.5',
+    version='0.7.0',
     packages=['yarom'],
     package_data={"yarom": ['default.conf', 'rules.n3']},
     author="Mark Watts",
@@ -37,7 +37,7 @@ setup(
     long_description=long_description,
     license="BSD 3-clause",
     url="http://yarom.readthedocs.org/en/latest/",
-    download_url='https://github.com/mwatts15/YAROM/archive/v0.6.5.tar.gz',
+    download_url='https://github.com/mwatts15/YAROM/archive/v0.7.0.tar.gz',
     classifiers=[
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: BSD License',
