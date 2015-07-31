@@ -1,11 +1,15 @@
-from rdflib import URIRef, Literal, Graph, Namespace, ConjunctiveGraph
-from rdflib.namespace import RDFS, RDF, NamespaceManager
-from .configure import Configureable,BadConf
+from rdflib import Graph, Namespace
+from rdflib.namespace import RDF, NamespaceManager
+import logging
+from .configure import Configureable
 import transaction
 from .data import Data
 from .rdfUtils import triples_to_bgp
 
+L = logging.getLogger(__name__)
+
 __all__ = ["DataUser"]
+
 class DataUser(Configureable):
     """ A convenience wrapper for users of the database
 
@@ -109,7 +113,7 @@ class DataUser(Configureable):
 
         Parameters
         ----------
-        triples : iter of (URIRef, URIRef, URIRef)
+        triples : iter of (:class:`rdflib.term.URIRef`, :class:`rdflib.term.URIRef`, :class:`rdflib.term.URIRef`)
             A set of triples to remove
         """
         for x in statements:
@@ -129,7 +133,7 @@ class DataUser(Configureable):
 
         Parameters
         ----------
-        triples : iter of (URIRef, URIRef, URIRef)
+        triples : iter of (:class:`rdflib.term.URIRef`, :class:`rdflib.term.URIRef`, :class:`rdflib.term.URIRef`)
             A set of triples to add to the graph
         """
         self._add_to_store(graph)

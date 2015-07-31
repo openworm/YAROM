@@ -4,7 +4,7 @@ import six
 
 from .variable import Variable
 from .graphObject import GraphObjectQuerier
-from .propertyMixin import (
+from .propertyMixins import (
     DatatypePropertyMixin,
     ObjectPropertyMixin,
     UnionPropertyMixin)
@@ -114,7 +114,6 @@ class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
 
 class DatatypeProperty(DatatypePropertyMixin, SimpleProperty):
     pass
-
 
 class ObjectProperty(ObjectPropertyMixin, SimpleProperty):
     pass

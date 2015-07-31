@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from setuptools import setup
-import sys
 import os
 from glob import glob
 
@@ -18,8 +17,6 @@ for feature_file in glob("*.requirements.txt"):
 
     with open(feature_file) as f:
         feature_deps[feature] = f.read().splitlines()
-
-import os
 
 long_description = open("README.rst").read()
 

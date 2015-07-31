@@ -7,9 +7,11 @@ import random
 from .mapper import (
     MappedPropertyClass,
     MappedClass,
+    Resolver,
     get_most_specific_rdf_type,
     oid)
-from .dataUser import DataUser, BadConf
+from .dataUser import DataUser
+from .configure import BadConf
 from .simpleProperty import (SimpleProperty, DatatypeProperty, ObjectProperty)
 from .rdfUtils import triples_to_bgp
 from .graphObject import (
@@ -267,7 +269,7 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
         return p.set(other)
 
     def attachProperty(self, prop):
-        p = prop(owner=self)
+        p = prop(resolver=Resolver.get_instance(), owner=self)
         if hasattr(self, prop.linkName):
             raise Exception(
                 "Cannot attach property '{}'. A property must have a different \
@@ -472,7 +474,7 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
 
     def __getitem__(self, x):
         try:
-            return DataUser.__getitem__(self, x)
+            return self.conf[x]
         except KeyError:
             raise Exception(
                 "You attempted to get the value `%s' from `%s'. It isn't here. Perhaps you misspelled the name of a Property?" %
@@ -626,7 +628,7 @@ class ObjectCollection(DataObject):
     datatypeProperties = [{'name': 'name', 'multiple': False}]
 
     def __init__(self, group_name=False, **kwargs):
-        DataObject.__init__(self, key=group_name, **kwargs)
+        super(ObjectCollection, self).__init__(key=group_name, **kwargs)
         self.add = self.member
         self.group_name = self.name
         self.name(group_name)

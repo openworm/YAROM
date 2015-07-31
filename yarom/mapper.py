@@ -3,10 +3,20 @@ import traceback
 import logging
 import rdflib as R
 from yarom import DataUser
+from .rdfTypeResolver import RDFTypeResolver
 import yarom as Y
 
-__all__ = ["MappedClass", "MappedPropertyClass", "MappedClasses", "DataObjectsParents",
-           "RDFTypeTable", "get_most_specific_rdf_type", "oid", "reload_module", "load_module"]
+__all__ = [
+    "MappedClass",
+    "MappedPropertyClass",
+    "MappedClasses",
+    "DataObjectsParents",
+    "RDFTypeTable",
+    "get_most_specific_rdf_type",
+    "oid",
+    "Resolver",
+    "reload_module",
+    "load_module"]
 
 L = logging.getLogger(__name__)
 
@@ -38,7 +48,8 @@ class MappedClass(type):
         if 'rdf_namespace' in dct:
             cls.rdf_namespace = dct['rdf_namespace']
         else:
-            cls.rdf_namespace = R.Namespace(cls.conf['rdf.namespace'][cls.__name__] + "/")
+            cls.rdf_namespace = R.Namespace(
+                cls.conf['rdf.namespace'][cls.__name__] + "/")
 
         cls.dataObjectProperties = []
         for x in bases:
@@ -49,14 +60,22 @@ class MappedClass(type):
         cls.register()
 
     @classmethod
-    def make_class(cls, name, bases, objectProperties=False, datatypeProperties=False):
+    def make_class(
+            cls,
+            name,
+            bases,
+            objectProperties=False,
+            datatypeProperties=False):
         """ Intended to be used for setting up a class from the RDF graph, for instance. """
         # Need to distinguish datatype and object properties...
         if not datatypeProperties:
             datatypeProperties = []
         if not objectProperties:
             objectProperties = []
-        cls(name, bases, dict(objectProperties=objectProperties, datatypeProperties=datatypeProperties))
+        cls(name, bases,
+            dict(
+                objectProperties=objectProperties,
+                datatypeProperties=datatypeProperties))
 
     @property
     def du(self):
@@ -76,7 +95,8 @@ class MappedClass(type):
     def __lt__(cls, other):
         if isinstance(other, MappedPropertyClass):
             return False
-        return issubclass(cls, other) or ((not issubclass(other, cls)) and (cls.__name__ < other.__name__))
+        return issubclass(cls, other) or ((not issubclass(other, cls)) \
+                    and (cls.__name__ < other.__name__))
 
     def register(cls):
         """Sets up the object graph related to this class
@@ -85,12 +105,11 @@ class MappedClass(type):
 
         Also registers the properties of this DataObject
         """
-        #if cls.__name__ == "RegistryEntry":
-            #raise Exception("Registration of RegistryEntry")
         cls._du = DataUser()
         cls.children = []
         MappedClasses[cls.__name__] = cls
-        DataObjectsParents[cls.__name__] = [x for x in cls.__bases__ if isinstance(x, MappedClass)]
+        DataObjectsParents[cls.__name__] = \
+                [x for x in cls.__bases__ if isinstance(x, MappedClass)]
         cls.parents = DataObjectsParents[cls.__name__]
         for c in cls.parents:
             c.add_child(cls)
@@ -101,9 +120,18 @@ class MappedClass(type):
 
         if getattr(Y, cls.__name__, False):
             new_name = "_" + cls.__name__
-            warnMismapping('yarom module', cls.__name__, "nothing", getattr(Y, cls.__name__))
+            warnMismapping(
+                'yarom module',
+                cls.__name__,
+                "nothing",
+                getattr(
+                    Y,
+                    cls.__name__))
             if getattr(Y, new_name, False):
-                L.warning("Still unable to add {0} to {1}. {0} will not be accessible through {1}".format(new_name, 'yarom module'))
+                L.warning(
+                    "Still unable to add {0} to {1}. {0} will not be accessible through {1}".format(
+                        new_name,
+                        'yarom module'))
             else:
                 setattr(Y, new_name, cls)
         else:
@@ -136,13 +164,19 @@ class MappedClass(type):
         if hasattr(cls, 'children'):
             cls.children.remove(child)
         else:
-            raise Exception("Cannot remove child {0} from {1} as {1} has not yet been registered".format(child, cls))
+            raise Exception(
+                "Cannot remove child {0} from {1} as {1} has not yet been registered".format(
+                    child,
+                    cls))
 
     def add_child(cls, child):
         if hasattr(cls, 'children'):
             cls.children.append(child)
         else:
-            raise Exception("Cannot add child {0} to {1} as {1} has not yet been registered".format(child, cls))
+            raise Exception(
+                "Cannot add child {0} to {1} as {1} has not yet been registered".format(
+                    child,
+                    cls))
 
     def map(cls):
         """
@@ -170,13 +204,20 @@ class MappedClass(type):
         #cls.du['rdf.namespace_manager'].bind(cls.__name__, "")
 
     def _add_namespace_to_manager(cls):
-        cls.du['rdf.namespace_manager'].bind(cls.__name__, cls.rdf_namespace, replace=True)
+        cls.du['rdf.namespace_manager'].bind(
+            cls.__name__,
+            cls.rdf_namespace,
+            replace=True)
 
     def _add_parents_to_graph(cls):
         from .dataObject import RDFSSubClassOfProperty, DataObject
         for parent in cls.parents:
-            for ancestor in [x for x in parent.mro() if issubclass(x, DataObject)]:
-                cls.rdf_type_object.relate('rdfs_subClassOf', ancestor.rdf_type_object, RDFSSubClassOfProperty)
+            ancestors = (x for x in parent.mro() if issubclass(x, DataObject))
+            for ancestor in ancestors:
+                cls.rdf_type_object.relate(
+                    'rdfs_subClassOf',
+                    ancestor.rdf_type_object,
+                    RDFSSubClassOfProperty)
 
     def addProperties(cls, listName):
         # TODO: Make an option string to abbreviate these options
@@ -187,12 +228,16 @@ class MappedClass(type):
 
                 assert(isinstance(propList, (tuple, list, set)))
                 for x in propList:
-                    value_type = False
+                    value_type = None
                     p = None
                     if isinstance(x, tuple):
                         if len(x) > 2:
                             value_type = x[2]
-                        p = _create_property(cls, x[0], propType, value_type=value_type)
+                        p = _create_property(
+                            cls,
+                            x[0],
+                            propType,
+                            value_type=value_type)
                     elif isinstance(x, dict):
                         if 'prop' in x:
                             p = DataObjectProperties[x['prop']]
@@ -204,7 +249,12 @@ class MappedClass(type):
                                 value_type = x['type']
                                 del x['type']
 
-                            p = _create_property(cls, name, propType, value_type=value_type, **x)
+                            p = _create_property(
+                                cls,
+                                name,
+                                propType,
+                                value_type=value_type,
+                                **x)
                     else:
                         p = _create_property(cls, x, propType)
                     cls.dataObjectProperties.append(p)
@@ -229,7 +279,12 @@ def warnMismapping(mapping, key, should_be, is_actually=None):
     if is_actually is None:
         is_actually = mapping[key]
 
-    L.warning("Mismapping of {} in {}. Is {}. Should be {}".format(key, mapping, is_actually, should_be))
+    L.warning(
+        "Mismapping of {} in {}. Is {}. Should be {}".format(
+            key,
+            mapping,
+            is_actually,
+            should_be))
     raise Exception("Mismapping")
 
 
@@ -276,13 +331,22 @@ class MappedPropertyClass(type):
         from .dataObject import PropertyDataObject, RDFSDomainProperty, RDFSRangeProperty
         cls.rdf_object = PropertyDataObject(ident=cls.link)
         if hasattr(cls, 'owner_type'):
-            cls.rdf_object.relate('rdfs_domain', cls.owner_type.rdf_type_object, RDFSDomainProperty)
+            cls.rdf_object.relate(
+                'rdfs_domain',
+                cls.owner_type.rdf_type_object,
+                RDFSDomainProperty)
 
         if hasattr(cls, 'value_type'):
-            cls.rdf_object.relate('rdfs_range', cls.value_type.rdf_type_object, RDFSRangeProperty)
+            cls.rdf_object.relate(
+                'rdfs_range',
+                cls.value_type.rdf_type_object,
+                RDFSRangeProperty)
 
     def __lt__(cls, other):
-        return issubclass(cls, other) or isinstance(other, MappedClass) or ((not issubclass(other, cls)) and cls.__name__ < other.__name__)
+        return issubclass(cls, other) \
+                or isinstance(other, MappedClass) \
+                or ((not issubclass(other, cls)) \
+                    and (cls.__name__ < other.__name__))
 
 
 def remap():
@@ -316,7 +380,9 @@ def resolve_classes_from_rdf(graph):
     # get the DataObject class resource
     # get the subclasses of DataObject, transitively
     # take the list of subclasses and resolve them into Python classes
-    for x in graph.transitive_subjects(R.RDFS['subClassOf'], Y.DataObject.rdf_type):
+    for x in graph.transitive_subjects(
+            R.RDFS['subClassOf'],
+            Y.DataObject.rdf_type):
         L.debug("RESOLVING {}".format(x))
         resolve_class(x)
 
@@ -414,10 +480,17 @@ def _slice_dict(d, s):
     return {k: v for k, v in d.items() if k in s}
 
 
-def _create_property(owner_type, linkName, property_type, value_type=None, multiple=True, link=None):
+def _create_property(
+        owner_type,
+        linkName,
+        property_type,
+        value_type=None,
+        multiple=True,
+        link=None):
     # XXX This should actually get called for all of the properties when their owner
     #    classes are defined.
-    #    The initialization, however, must happen with the owner object's creation
+    # The initialization, however, must happen with the owner object's
+    # creation
     from .simpleProperty import ObjectProperty, DatatypeProperty, UnionProperty
 
     properties = _slice_dict(locals(), ['owner_type', 'linkName', 'multiple'])
@@ -461,3 +534,19 @@ def get_most_specific_rdf_type(types):
         except KeyError:
             pass
     return least.rdf_type
+
+
+class Resolver(RDFTypeResolver):
+    instance = None
+
+    @classmethod
+    def get_instance(cls):
+        from .dataObject import DataObject
+        from .rdfUtils import deserialize_rdflib_term
+        if cls.instance is None:
+            cls.instance = RDFTypeResolver(
+                DataObject.rdf_type,
+                get_most_specific_rdf_type,
+                oid,
+                deserialize_rdflib_term)
+        return cls.instance
