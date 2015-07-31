@@ -1,10 +1,13 @@
-import rdflib as R
 import logging
 import six
+from pprint import pprint,pformat
 
 L = logging.getLogger(__name__)
 
-__all__ = ["GraphObject","GraphObjectQuerier"]
+__all__ = ["GraphObject", "GraphObjectQuerier", "ComponentTripler"]
+
+class Variable(int):
+    pass
 
 class GraphObject(object):
 
@@ -13,14 +16,14 @@ class GraphObject(object):
     An abstract base class.
     """
 
-    def __init__(self,**kwargs):
-        super(GraphObject,self).__init__(**kwargs)
+    def __init__(self, **kwargs):
+        super(GraphObject, self).__init__(**kwargs)
         self.properties = []
         self.owner_properties = []
 
     def identifier(self):
-        """ Must return an :class:`rdflib.term.URIRef` object representing this object
-            or else raise an Exception. """
+        """ Must return an object representing this object or else
+        raise an Exception. """
         raise NotImplementedError()
 
     @property
@@ -29,7 +32,7 @@ class GraphObject(object):
         raise NotImplementedError()
 
     def variable(self):
-        """ Must return a :class:`rdflib.term.Variable` object that identifies
+        """ Must return a :class:`Variable` object that identifies
         this :class:`GraphObject` in queries.
 
         The variable can be randomly generated when the object is created and stored in
@@ -96,7 +99,7 @@ class GraphObjectQuerier(object):
             else:
                 other_idx = 2
 
-            if isinstance(x[other_idx], R.Variable):
+            if isinstance(x[other_idx], Variable):
                 for z in self.qpr(sub, i + 1):
                     if idx == 2:
                         qx = (z, x[1], None)
@@ -128,15 +131,15 @@ class ComponentTripler(object):
     def __init__(self, start):
         self.start = start
         self.seen = set()
-        self.results = R.Graph()
+        self.results = set()
 
     def g(self, current_node, i=0):
 
         L.debug("g({},{})".format(current_node, i))
-        if current_node in self.seen:
+        if id(current_node) in self.seen:
             return
         else:
-            self.seen.add(current_node)
+            self.seen.add(id(current_node))
 
         if not current_node.defined:
             return
@@ -187,26 +190,36 @@ class _QueryPreparer(object):
         self.stack = list()
         self.paths = list()
         self.start = start
+        self.variables = dict()
+        self.vcount = 0
+        # TODO: Refactor. The return values are not actually
+        # used for anything
 
     def gather_paths_along_properties(
             self,
             current_node,
             property_list,
             is_inverse):
+        L.debug("gpap: current_node %s", current_node)
         ret = []
         is_good = False
         for this_property in property_list:
+            L.debug("this_property is %s", this_property)
             if is_inverse:
                 others = [this_property.owner]
             else:
                 others = this_property.values
 
             for other in others:
-                if is_inverse:
-                    self.stack.append((other.idl, this_property.link, None))
-                else:
-                    self.stack.append((None, this_property.link, other.idl))
+                other_id = other.idl
+                if not other.defined:
+                    other_id = self.var(other_id)
 
+                if is_inverse:
+                    self.stack.append((other_id, this_property.link, None))
+                else:
+                    self.stack.append((None, this_property.link, other_id))
+                L.debug("gpap: preparing %s from %s", other, this_property)
                 subpath = self.prepare(other)
 
                 if len(self.stack) > 0:
@@ -218,9 +231,21 @@ class _QueryPreparer(object):
                         0, (current_node.idl, this_property, other.idl))
                     ret.insert(0, subpath[1])
 
+        L.debug("gpap: exiting %s", "good" if is_good else "bad")
         return is_good, ret
 
+    def var(self, v):
+        if v in self.variables:
+            return self.variables[v]
+        else:
+            var = Variable(self.vcount)
+            self.variables[v] = var
+            self.vcount += 1
+            return var
+
+
     def prepare(self, current_node):
+        L.debug("prepare: current_node %s", current_node)
         if current_node.defined:
             if len(self.stack) > 0:
                 tmp = list(self.stack)
@@ -231,7 +256,6 @@ class _QueryPreparer(object):
                 return False, _QueryPathElement()
             else:
                 self.seen.append(current_node)
-
             owner_parts = self.gather_paths_along_properties(
                 current_node,
                 current_node.owner_properties,
@@ -243,7 +267,7 @@ class _QueryPreparer(object):
 
             self.seen.pop()
             subpaths = owner_parts[1] + owner_parts[1]
-            if (len(subpaths) == 1):
+            if len(subpaths) == 1:
                 ret = subpaths[0]
             else:
                 ret = _QueryPathElement()
@@ -252,6 +276,7 @@ class _QueryPreparer(object):
 
     def __call__(self):
         self.prepare(self.start)
+        L.debug("_QueryPreparer paths:"+ str(pformat(self.paths)))
         return self.paths
 
 
@@ -260,7 +285,7 @@ class DescendantTripler(object):
     def __init__(self, start):
         self.seen = set()
         self.start = start
-        self.graph = R.Graph()
+        self.graph = set()
 
     def g(self, current_node):
         if current_node in self.seen:
@@ -331,7 +356,7 @@ class HeroTripler(object):
         self.seen = set()
         self.start = start
         self.heroslist = set()
-        self.results = R.Graph()
+        self.results = set()
         self.graph = graph
 
         if legends is None:
@@ -379,13 +404,17 @@ class ReferenceTripler(object):
     def __init__(self, start, graph=None):
         self.seen = set()
         self.start = start
-        self.results = R.Graph()
+        self.results = set()
         self.graph = graph
 
     def refs(self, o):
         if self.graph is not None:
             from itertools import chain
-            for trip in chain(self.graph.triples((None, None, o.idl)), self.graph.triples((o.idl, None, None))):
+            for trip in chain(
+                self.graph.triples(
+                    (None, None, o.idl)),
+                self.graph.triples(
+                    (o.idl, None, None))):
                 self.results.add(trip)
         else:
             for e in o.properties:
@@ -408,4 +437,8 @@ class IdentifierMissingException(Exception):
         question, but there is none """
 
     def __init__(self, dataObject="[unspecified object]", *args, **kwargs):
-        super().__init__("An identifier should be provided for {}".format(str(dataObject)), *args, **kwargs)
+        super().__init__(
+            "An identifier should be provided for {}".format(
+                str(dataObject)),
+            *args,
+            **kwargs)

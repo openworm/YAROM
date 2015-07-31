@@ -45,7 +45,6 @@ def get_hash_function(method_name):
         return (lambda data: hashlib.new(method_name, data))
 
 
-
 class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
 
     """
@@ -141,11 +140,8 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
             # that functions as an identifier
             v = (random.random(), random.random())
             cname = self.__class__.__name__
-            self._id_variable = self._graph_variable(
-                cname +
-                "_" +
-                hashlib.md5(
-                    str(v).encode()).hexdigest())
+            self._id_variable = R.Variable(cname + "_" + hashlib.md5(
+                str(v).encode()).hexdigest())
 
         for x in self.__class__.dataObjectProperties:
             self.attachProperty(x)
@@ -283,6 +279,11 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
 
     def get_defined_component(self):
         g = ComponentTripler(self)()
+        if not isinstance(g, R.Graph):
+            h = R.Graph()
+            for t in g:
+                h.add(t)
+            g = h
         g.namespace_manager = self.namespace_manager
         return g
 
@@ -304,9 +305,6 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
 
     def __repr__(self):
         return self.__str__()
-
-    def _graph_variable(self, var_name):
-        return R.Variable(var_name)
 
     @classmethod
     def add_to_open_set(cls, o):
@@ -377,7 +375,7 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
         """
         raise IdentifierMissingException(self)
 
-    def triples(self, query=False, visited_list=False):
+    def triples(self):
         """ Returns 3-tuples of the connected component of the object graph
             starting from this object.
 
@@ -387,7 +385,7 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
         """
         return self.get_defined_component()
 
-    def graph_pattern(self, query=False, shorten=False):
+    def graph_pattern(self, shorten=False):
         """ Get the graph pattern for this object.
 
         It should be as simple as converting the result of triples() into a BGP

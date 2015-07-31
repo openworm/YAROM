@@ -232,6 +232,7 @@ class DataObjectTest(_DataTest):
 
     def test_triples_cycle(self):
         """ Test that no duplicate triples are released when there's a cycle in the graph """
+        # TODO: This test is invalid
         class T(Y.DataObject):
             objectProperties = ['s']
 
@@ -929,7 +930,6 @@ class UnionPropertyTest(_DataTest):
             self.k,
             "stored DataObject is of the correct type")
         self.assertEqual(val, j, "returned value equals stored value")
-
 
 class ObjectCollectionTest(_DataTest):
 
