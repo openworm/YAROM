@@ -82,7 +82,6 @@ class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
             raise Exception("Can't find value {}".format(v))
 
     def set(self, v):
-        import bisect
         if isinstance(v, Rel):
             v = v.rel()
 
@@ -93,7 +92,7 @@ class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
             v.owner_properties.append(self)
 
         if self.multiple:
-            bisect.insort(self._v, v)
+            self._v.append(v)
         else:
             self._v = [v]
         return Rel(self.owner, self, v)
