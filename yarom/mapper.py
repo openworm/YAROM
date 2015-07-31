@@ -414,7 +414,7 @@ def _slice_dict(d, s):
     return {k: v for k, v in d.items() if k in s}
 
 
-def _create_property(owner_type, linkName, property_type, value_type=False, multiple=True, link=False):
+def _create_property(owner_type, linkName, property_type, value_type=None, multiple=True, link=None):
     # XXX This should actually get called for all of the properties when their owner
     #    classes are defined.
     #    The initialization, however, must happen with the owner object's creation
@@ -428,15 +428,16 @@ def _create_property(owner_type, linkName, property_type, value_type=False, mult
     x = None
     if property_type == 'ObjectProperty':
         x = ObjectProperty
-        if not value_type:
+        if value_type is None:
             value_type = Y.DataObject
         properties['value_type'] = value_type
+        properties['value_rdf_type'] = value_type.rdf_type
     elif property_type == 'DatatypeProperty':
         x = DatatypeProperty
     else:
         x = UnionProperty
 
-    if link:
+    if link is not None:
         properties['link'] = link
     else:
         properties['link'] = owner_type.rdf_namespace[linkName]
