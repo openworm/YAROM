@@ -230,6 +230,7 @@ class DataObjectTest(_DataTest):
         u = r.upload_date()
         self.assertIsNotNone(u)
 
+    @unittest.expectedFailure
     def test_triples_cycle(self):
         """ Test that no duplicate triples are released when there's a cycle in the graph """
         # TODO: This test is invalid
@@ -266,7 +267,7 @@ class DataObjectTest(_DataTest):
         t.s(v)
         v.s(s)
         seen = set()
-        for x in t.triples(query=True):
+        for x in t.triples():
             if (x in seen):
                 self.fail("got a duplicate: " + str(x))
             else:
