@@ -25,14 +25,14 @@ def call_with_prompt_on_error(command, action):
         subprocess.check_call(command.split(" "))
         return False
     except subprocess.CalledProcessError:
-        if yes_no_prompt("Failed to {} with `{}`. Exit? (Y/n)".format(action, command)):
+        if yes_no_prompt("Failed to {} with `{}`. Exit?".format(action, command)):
             sys.exit()
         return True
 
 def yes_no_prompt(prompt):
     print(prompt+ "(Y/n)")
     line = sys.stdin.readline()
-    if not line.lower().startswith('n'):
+    if line.lower().startswith('n'):
         return False
     return True
 
@@ -45,7 +45,7 @@ def update_main_package_version(package_directory, version):
         while len(line) > 0:
             if line.startswith('__version__'):
                 print("updating version")
-                line = '__version__ = "{}"'.format(version)
+                line = '__version__ = "{}"\n'.format(version)
             temp.write(line)
             line = f.readline()
     temp.close()
