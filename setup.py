@@ -26,7 +26,7 @@ setup(
     dependency_links=[
         "git://github.com/NeuralEnsemble/libNeuroML.git#egg=libNeuroML",
         "git://github.com/zopefoundation/ZODB.git#egg=ZODB",
-        "git://github.com/RDFLib/rdflib-zodb.git#egg=ZODB",
+        "git://github.com/RDFLib/rdflib-zodb.git#egg=rdflib_zodb-1.0.0",
     ],
     version='0.7.0',
     packages=['yarom'],
