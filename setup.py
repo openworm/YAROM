@@ -10,15 +10,16 @@ with open('requirements.txt') as f:
     on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
     if on_rtd:
         REQUIRED.append("numpydoc")
-feature_deps = {}
+FEATURE_DEPS = {}
 
 for feature_file in glob("*.requirements.txt"):
     feature, _ = feature_file.split(".", 1)
 
     with open(feature_file) as f:
-        feature_deps[feature] = f.read().splitlines()
+        FEATURE_DEPS[feature] = f.read().splitlines()
 
-long_description = open("README.rst").read()
+VERSION = open("version.txt").read()
+LONG_DESCRIPTION = open("README.rst").read()
 
 setup(
     name="YAROM",
@@ -28,16 +29,16 @@ setup(
         "git://github.com/zopefoundation/ZODB.git#egg=ZODB",
         "git://github.com/RDFLib/rdflib-zodb.git#egg=rdflib_zodb-1.0.0",
     ],
-    version='0.7.0',
+    version=VERSION,
     packages=['yarom'],
     package_data={"yarom": ['default.conf', 'rules.n3']},
     author="Mark Watts",
     author_email="wattsmark2015@gmail.com",
     description="Yet Another RDF-Object Mapper",
-    long_description=long_description,
+    long_description=LONG_DESCRIPTION,
     license="BSD 3-clause",
     url="http://yarom.readthedocs.org/en/latest/",
-    download_url='https://github.com/mwatts15/YAROM/archive/v0.7.0.tar.gz',
+    download_url='https://github.com/mwatts15/YAROM/archive/v'+VERSION+'.tar.gz',
     classifiers=[
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: BSD License',
@@ -47,6 +48,6 @@ setup(
         'Programming Language :: Python :: 3.2',
         'Programming Language :: Python :: 3.4',
         'Topic :: Scientific/Engineering'],
-    extras_require=feature_deps,
+    extras_require=FEATURE_DEPS,
     zip_safe=False
 )

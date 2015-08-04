@@ -38,11 +38,9 @@ Classes
 .. automodule:: yarom.mapper
 """
 
-__version__ = '0.5.0-alhpa'
+__version__ = "0.7.1"
 __author__ = 'Mark Watts'
 
-
-import traceback
 import logging
 from .configure import Configuration,Configureable,ConfigValue,BadConf
 from .data import Data
