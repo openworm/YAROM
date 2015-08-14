@@ -8,6 +8,7 @@ python:
 install:
   - "pip install -r requirements.txt"
   - "pip install -r inference.requirements.txt"
+  - "pip install -r zodb.requirements.txt"
 
 script:  
   - python tests/test.py
