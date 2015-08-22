@@ -1,7 +1,6 @@
 # Works like Configuration:
 # Inherit from the DataUser class to access data of all kinds (listed above)
 
-
 import rdflib
 from rdflib import Literal, Graph, Namespace, ConjunctiveGraph
 from rdflib.namespace import RDFS, NamespaceManager
@@ -9,7 +8,6 @@ from .quantity import Quantity
 from datetime import datetime as DT
 import datetime
 import os
-import traceback
 import logging
 from .configure import Configureable, Configuration, ConfigValue
 
@@ -20,8 +18,7 @@ __all__ = [
     "TrixSource",
     "SPARQLSource",
     "SleepyCatSource",
-    "DefaultSource",
-    "ZODBSource"]
+    "DefaultSource"]
 
 L = logging.getLogger(__name__)
 
@@ -56,6 +53,8 @@ class Data(Configuration, Configureable):
         quant_datatype = self.dt_ns["quantity"]
         if quant_datatype not in rdflib.term._toPythonMapping:
             rdflib.term.bind(quant_datatype, Quantity, Quantity.parse)
+        self.sources = dict()
+        self.register_source(DefaultSource)
 
     @classmethod
     def open(cls, file_name):
@@ -85,6 +84,14 @@ class Data(Configuration, Configureable):
         #         namespace
         # TODO: Add support for loading python packages with setuptools.
 
+    def register_source(self, source):
+        if source.name in self.sources:
+            raise Exception(
+                "There is already an rdf source with the name " +
+                str(source.name))
+        else:
+            self.sources[source.name] = source
+
     def closeDatabase(self):
         """ Close a the configured database """
         self.source.close()
@@ -97,14 +104,6 @@ class Data(Configuration, Configureable):
         self['rdf.store_conf'] = c['rdf.store_conf'] = c.get(
             'rdf.store_conf',
             'default')
-
-        self.sources = {'sparql_endpoint': SPARQLSource,
-                        'sleepycat': SleepyCatSource,
-                        'default': DefaultSource,
-                        'trix': TrixSource,
-                        'serialization': SerializationSource,
-                        'zodb': ZODBSource
-                        }
 
         source_graph = self.sources[self['rdf.source'].lower()]()
         self.source = source_graph
@@ -186,8 +185,7 @@ class RDFSource(ConfigValue, Configureable):
     """
 
     def __init__(self, **kwargs):
-        Configureable.__init__(self, **kwargs)
-        ConfigValue.__init__(self, **kwargs)
+        super(RDFSource, self).__init__(**kwargs)
         self.graph = False
 
     def get(self):
@@ -224,6 +222,7 @@ class SerializationSource(RDFSource):
             "rdf.store_conf" = <your rdflib store configuration here>
 
     """
+    name = 'serialization'
 
     def open(self):
         if not self.graph:
@@ -283,8 +282,10 @@ class TrixSource(SerializationSource):
 
     """
 
+    name = 'trix'
+
     def __init__(self, **kwargs):
-        SerializationSource.__init__(self, **kwargs)
+        super(TrixSource, self).__init__(**kwargs)
         h = self.conf.get('trix_location', 'UNSET')
         self.conf.link('rdf.serialization', 'trix_location')
         self.conf['rdf.serialization'] = h
@@ -295,10 +296,11 @@ class SPARQLSource(RDFSource):
 
     """ Reads from and queries against a remote data store
 
-        ::
+        Configure like::
 
             "rdf.source" = "sparql_endpoint"
     """
+    name = 'sparql_endpoint'
 
     def open(self):
         # XXX: If we have a source that's read only, should we need to set the
@@ -318,6 +320,7 @@ class SleepyCatSource(RDFSource):
             "rdf.source" = "Sleepycat"
             "rdf.store_conf" = <your database location here>
     """
+    name = 'sleepycat'
 
     def open(self):
         # XXX: If we have a source that's read only, should we need to set the
@@ -327,80 +330,6 @@ class SleepyCatSource(RDFSource):
         g0.open(self.conf['rdf.store_conf'], create=True)
         self.graph = g0
         L.debug("Opened SleepyCatSource")
-
-
-class SQLiteSource(RDFSource):
-
-    """ Reads from and queries against a SQLite database
-
-    See see the SQLite database :file:`db/celegans.db` for the format
-
-    The database store is configured with::
-
-        "rdf.source" = "Sleepycat"
-        "sqldb" = "/home/USER/openworm/yarom/db/celegans.db",
-        "rdf.store" = <your rdflib store name here>
-        "rdf.store_conf" = <your rdflib store configuration here>
-
-    Leaving ``rdf.store`` unconfigured simply gives an in-memory data store.
-    """
-
-    def open(self):
-        raise Exception(
-            "Please don't use SQLiteSource. It's hanging around until I decide what to do with it")
-        import sqlite3
-        conn = sqlite3.connect(self.conf['sqldb'])
-        cur = conn.cursor()
-
-        # first step, grab all entities and add them to the graph
-        n = self.conf['rdf.namespace']
-
-        cur.execute("SELECT DISTINCT ID, Entity FROM tblentity")
-        g0 = ConjunctiveGraph(self.conf['rdf.store'])
-        g0.open(self.conf['rdf.store_conf'], create=True)
-
-        for r in cur.fetchall():
-            # first item is a number -- needs to be converted to a string
-            first = str(r[0])
-            # second item is text
-            second = str(r[1])
-
-            # This is the backbone of any RDF graph.  The unique
-            # ID for each entity is encoded as a URI and every other piece of
-            # knowledge about that entity is connected via triples to that URI
-            # In this case, we connect the common name of that entity to the
-            # root URI via the RDFS label property.
-            g0.add((n[first], RDFS.label, Literal(second)))
-
-        # second step, get the relationships between them and add them to the
-        # graph
-        cur.execute(
-            "SELECT DISTINCT EnID1, Relation, EnID2, Citations FROM tblrelationship")
-
-        gi = ''
-
-        i = 0
-        for r in cur.fetchall():
-            # all items are numbers -- need to be converted to a string
-            first = str(r[0])
-            second = str(r[1])
-            third = str(r[2])
-            prov = str(r[3])
-
-            ui = self.conf['molecule_name'](prov)
-            gi = Graph(g0.store, ui)
-
-            gi.add((n[first], n[second], n[third]))
-
-            g0.add([ui, RDFS.label, Literal(str(i))])
-            if (prov != ''):
-                g0.add([ui, n['text_reference'], Literal(prov)])
-
-            i = i + 1
-
-        cur.close()
-        conn.close()
-        self.graph = g0
 
 
 class DefaultSource(RDFSource):
@@ -417,100 +346,27 @@ class DefaultSource(RDFSource):
 
         Leaving unconfigured simply gives an in-memory data store.
     """
+    name = 'default'
 
     def open(self):
         self.graph = ConjunctiveGraph(self.conf['rdf.store'])
         self.graph.open(self.conf['rdf.store_conf'], create=True)
 
 
-class ZODBSource(RDFSource):
-
-    """ Reads from and queries against a configured Zope Object Database.
-
-        If the configured database does not exist, it is created.
-
-        The database store is configured with::
-
-            "rdf.source" = "ZODB"
-            "rdf.store_conf" = <location of your ZODB database>
-
-        Leaving unconfigured simply gives an in-memory data store.
-    """
-
-    def __init__(self, *args, **kwargs):
-        try:
-            import transaction
-        except:
-            print("Unable to use ZODBSource. Cannot import transaction")
-        RDFSource.__init__(self, *args, **kwargs)
-
-        self.conf['rdf.store'] = "ZODB"
-
-    def open(self):
-        import ZODB
-        import transaction
-        from ZODB.FileStorage import FileStorage
-        self.path = self.conf['rdf.store_conf']
-        openstr = os.path.abspath(self.path)
-        try:
-            fs = FileStorage(openstr)
-            self.zdb = ZODB.DB(fs)
-            self.conn = self.zdb.open()
-            root = self.conn.root()
-            if 'rdflib' not in root:
-                root['rdflib'] = ConjunctiveGraph('ZODB')
-            self.graph = root['rdflib']
-            try:
-                transaction.commit()
-            except Exception as e:
-                # catch commit exception and close db.
-                # otherwise db would stay open and follow up tests
-                # will detect the db in error state
-                L.warning('Forced to abort transaction on ZODB store opening')
-                traceback.print_exc()
-                transaction.abort()
-            transaction.begin()
-            self.graph.open(self.path)
-        except Exception:
-            transaction.abort()
-            raise Exception(
-                "ZODB format error. This may be a result of using two different version of ZODB, such as between Python 3.x and Python 2.x")
-
-    def close(self):
-        import transaction
-        if self.graph == False:
-            return
-
-        self.graph.close()
-
-        try:
-            transaction.commit()
-        except Exception:
-            # catch commit exception and close db.
-            # otherwise db would stay open and follow up tests
-            # will detect the db in error state
-            traceback.print_exc()
-            L.warning('Forced to abort transaction on ZODB store closing')
-            transaction.abort()
-        self.conn.close()
-        self.zdb.close()
-        self.graph = False
-
-ZERO = datetime.timedelta(0)
-
-
 class _UTC(datetime.tzinfo):
 
     """UTC"""
 
+    ZERO = datetime.timedelta(0)
+
     def utcoffset(self, dt):
-        return ZERO
+        return _UTC.ZERO
 
     def tzname(self, dt):
         return "UTC"
 
     def dst(self, dt):
-        return ZERO
+        return _UTC.ZERO
 utc = _UTC()
 
 

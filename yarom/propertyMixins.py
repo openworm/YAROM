@@ -61,11 +61,14 @@ class ObjectPropertyMixin(object):
             types = set()
             types.add(self.__class__.value_rdf_type)
 
-            for rdf_type in super(ObjectPropertyMixin, self).rdf.objects(ident, rdflib.RDF['type']):
+            for rdf_type in super(
+                    ObjectPropertyMixin, self).rdf.objects(
+                    ident, rdflib.RDF['type']):
                 types.add(rdf_type)
 
             the_type = self._resolver.type_resolver(types)
             yield self._resolver.id2ob(ident, the_type)
+
 
 class UnionPropertyMixin(object):
 
@@ -95,7 +98,9 @@ class UnionPropertyMixin(object):
                     '". BNodes are not supported in yarom')
             else:
                 types = set()
-                for rdf_type in super(UnionPropertyMixin, self).rdf.objects(ident, rdflib.RDF['type']):
+                for rdf_type in super(
+                        UnionPropertyMixin, self).rdf.objects(
+                        ident, rdflib.RDF['type']):
                     types.add(rdf_type)
                 L.debug("{} <- types, {} <- ident".format(types, ident))
                 the_type = self._resolver.base_type
@@ -110,6 +115,7 @@ class UnionPropertyMixin(object):
                         L.debug("the_type = {}".format(the_type))
                     except:
                         L.warn(
-                            'UnionProperty.get: Couldn\'t resolve types for `{}\'. Defaulting to a DataObject typed object'.format(ident))
+                            "UnionProperty.get: Couldn't resolve types for `{}'. "
+                            "Defaulting to a DataObject typed object".format(ident))
 
                 yield self._resolver.id2ob(ident, the_type)

@@ -42,6 +42,7 @@ class Mapper(object):
         """ Calls `map` on all of the registered classes """
         l = list(self.MappedClasses.values())
         l.sort()
+        print("MAPPING: {}".format(l))
         for x in l:
             x.map()
 
@@ -279,8 +280,9 @@ class MappedClass(type):
             if getattr(Y, new_name, False):
                 L.warning(
                     "Still unable to add {0} to {1}. {0} will not be "
-                    "accessible through {1}".format(new_name,
-                                                    'yarom module'))
+                    "accessible through {1}".format(
+                        new_name,
+                        'yarom module'))
             else:
                 setattr(Y, new_name, cls)
         else:
@@ -314,16 +316,20 @@ class MappedClass(type):
             cls.children.remove(child)
         else:
             raise Exception(
-                "Cannot remove child {0} from {1} as {1} has not yet been"
-                " registered".format(child, cls))
+                "Cannot remove child {0} from {1} as {1} has not yet "
+                "been registered".format(
+                    child,
+                    cls))
 
     def add_child(cls, child):
         if hasattr(cls, 'children'):
             cls.children.append(child)
         else:
             raise Exception(
-                "Cannot add child {0} to {1} as {1} has not yet been"
-                " registered".format(child, cls))
+                "Cannot add child {0} to {1} "
+                "as {1} has not yet been registered".format(
+                    child,
+                    cls))
 
     def map(cls):
         """
@@ -358,6 +364,7 @@ class MappedClass(type):
         # XXX: What else to do here?
 
     def _remove_namespace_from_manager(cls):
+        # XXX: Only way I can think to do this is to remake the namespace_manager
         pass
 
     def _add_namespace_to_manager(cls):
@@ -390,9 +397,10 @@ class MappedClass(type):
                 if isinstance(x, tuple):
                     if len(x) > 2:
                         value_type = x[2]
+                    name = x[0]
                     p = _create_property(
                         cls,
-                        x[0],
+                        name,
                         propType,
                         value_type=value_type)
                 elif isinstance(x, dict):
@@ -436,14 +444,13 @@ class MappedClass(type):
 def warnMismapping(mapping, key, should_be, is_actually=None):
     if is_actually is None:
         is_actually = mapping[key]
-
-    L.warning(
-        "Mismapping of {} in {}. Is {}. Should be {}".format(
+    warning_message = "Mismapping of {} in {}. Is {}. Should be {}".format(
             key,
             mapping,
             is_actually,
-            should_be))
-    raise Exception("Mismapping")
+            should_be)
+    L.warning(warning_message)
+    raise Exception(warning_message)
 
 
 class MappedPropertyClass(type):

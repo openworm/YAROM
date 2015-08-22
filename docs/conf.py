@@ -21,7 +21,6 @@ sys.path.insert(0, os.path.abspath('../'))
 def setup(self):
     import yarom
     # General information about the project.
-    print(self,type(self))
     self.version = yarom.__version__
     self.release = yarom.__version__
     self.copyright = u'2015' + yarom.__author__

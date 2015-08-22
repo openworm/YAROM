@@ -11,8 +11,8 @@ class Property(DataUser):
 
         a.P()
 
-    for a property ``P`` will return values appropriate to that property for ``a``,
-    the `owner` of the property.
+    for a property ``P`` will return values appropriate to that property for
+    ``a``, the `owner` of the property.
 
     Parameters
     ----------
@@ -35,7 +35,8 @@ class Property(DataUser):
         self.owner = owner
 
     def get(self, *args):
-        """ Get the things which are on the other side of this property
+        """
+        Get the things which are on the other side of this property
 
         The return value must be iterable. For a ``get`` that just returns
         a single value, an easy way to make an iterable is to wrap the
@@ -47,7 +48,8 @@ class Property(DataUser):
         raise NotImplementedError()
 
     def set(self, *args, **kwargs):
-        """ Set the value of this property
+        """
+        Set the value of this property
 
         Derived classes must override.
         """
@@ -55,7 +57,9 @@ class Property(DataUser):
         raise NotImplementedError()
 
     def one(self):
-        """ Returns a single value for the ``Property`` whether or not it is multivalued.
+        """
+        Returns a single value for the ``Property`` whether or not it is
+        multivalued.
         """
 
         try:
@@ -65,7 +69,8 @@ class Property(DataUser):
             return None
 
     def hasValue(self):
-        """ Returns true if the Property has any values set on it.
+        """
+        Returns true if the Property has any values set on it.
 
         This may be defined differently for each property
         """
@@ -76,10 +81,12 @@ class Property(DataUser):
         raise NotImplementedError()
 
     def __call__(self, *args, **kwargs):
-        """ If arguments are passed to the ``Property``, its ``set`` method
-        is called. Otherwise, the ``get`` method is called. If the ``multiple``
-        member for the ``Property`` is set to ``True``, then a Python set containing
-        the associated values is returned. Otherwise, a single bare value is returned.
+        """
+        If arguments are passed to the ``Property``, its ``set`` method is
+        called. Otherwise, the ``get`` method is called. If the ``multiple``
+        member for the ``Property`` is set to ``True``, then a Python set
+        containing the associated values is returned. Otherwise, a single bare
+        value is returned.
         """
 
         if len(args) > 0 or len(kwargs) > 0:

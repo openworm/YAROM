@@ -32,6 +32,7 @@ Classes
 .. automodule:: yarom.dataObject
 .. automodule:: yarom.dataUser
 .. automodule:: yarom.data
+.. automodule:: yarom.zodb
 .. automodule:: yarom.configure
 .. automodule:: yarom.graphObject
 .. automodule:: yarom.mapper
@@ -42,15 +43,23 @@ __author__ = 'Mark Watts'
 
 import logging
 from .configure import (Configuration, Configureable, ConfigValue, BadConf)
-from .data import Data
+from .data import (
+    Data,
+    SPARQLSource,
+    SleepyCatSource,
+    DefaultSource,
+    TrixSource,
+    SerializationSource)
+
 from .dataUser import DataUser
-from .mapper import (
-    MappedClass,
-    Mapper)
+from .mapper import (MappedClass, Mapper)
 from .quantity import Quantity
 from .yProperty import Property
-from .rdfUtils import *
-import rdflib
+from .rdfUtils import (
+    print_graph,
+    serialize_rdflib_term,
+    triples_to_bgp,
+    deserialize_rdflib_term)
 
 this_module = __import__('yarom')
 this_module.connected = False
@@ -66,10 +75,12 @@ def config(key=None, value=None):
     else:
         Configureable.conf[key] = value
 
+
 def loadConfig(f):
     """ Load configuration for the module """
     Configureable.setConf(Data.open(f))
     return Configureable.conf
+
 
 def disconnect(c=False):
     """ Close the database """
@@ -96,7 +107,6 @@ def loadData(data, dataFormat):
         g = config('rdf.graph')
         for x in data.quads((None, None, None, None)):
             g.add(x)
-
 
 
 def connect(conf=False,
@@ -130,8 +140,13 @@ def connect(conf=False,
         logging.basicConfig(level=logging.DEBUG)
 
     setConf(conf)
+    dbconn = Configureable.conf
+    dbconn.register_source(SPARQLSource)
+    dbconn.register_source(SleepyCatSource)
+    dbconn.register_source(TrixSource)
+    dbconn.register_source(SerializationSource)
 
-    Configureable.conf.openDatabase()
+    dbconn.openDatabase()
     L.info("Connected to database")
 
     atexit.register(disconnect)
@@ -148,7 +163,7 @@ def connect(conf=False,
         mapper.load_module("yarom.classRegistry")
 
     mapper.remap()
-    mapper.resolve_classes_from_rdf(Configureable.conf['rdf.graph'])
+    mapper.resolve_classes_from_rdf(dbconn['rdf.graph'])
     m.connected = True
     m.connected_before = True
     if data:

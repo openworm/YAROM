@@ -18,6 +18,8 @@ from yarom import (
     MappedClass,
     Quantity)
 from yarom import mapper
+from yarom.mapper import Mapper
+from yarom.data import SleepyCatSource
 import yarom as Y
 import test_data as TD
 import rdflib
@@ -28,6 +30,7 @@ import subprocess
 import tempfile
 import six
 import traceback
+from yarom.zodb import ZODBSource
 
 HAS_BSDDB = False
 HAS_FUXI = False
@@ -644,7 +647,6 @@ class DataTest(unittest.TestCase):
 
     @unittest.skipIf((HAS_ZODB == False), "ZODB persistence test requires ZODB")
     def test_ZODB_persistence(self):
-        """ Should be able to init without these values """
         c = Configuration()
         fname = 'ZODB.fs'
         c['rdf.source'] = 'ZODB'
@@ -652,6 +654,7 @@ class DataTest(unittest.TestCase):
         c['rdf.namespace'] = test_ns
         Configureable.conf = c
         d = Data()
+        d.register_source(ZODBSource)
         try:
             d.openDatabase()
             g = make_graph(20)
@@ -677,6 +680,7 @@ class DataTest(unittest.TestCase):
         c['rdf.namespace'] = test_ns
         Configureable.conf = c
         d = Data()
+        d.register_source(SleepyCatSource)
         try:
             d.openDatabase()
             g = make_graph(20)
@@ -772,17 +776,20 @@ class MapperTest(_DataTestB):
 
     def setUp(self):
         _DataTestB.setUp(self)
+        self.mapper = Mapper.get_instance()
         Configureable.conf = self.TestConfig
         Configureable.conf = Data()
         Configureable.conf.openDatabase()
         if hasattr(Y, 'dataObject'):
-            Y.reload_module(yarom.dataObject)
+            self.mapper.reload_module(yarom.dataObject)
+            self.mapper.reload_module(yarom.classRegistry)
         else:
-            Y.load_module('yarom.dataObject')
+            self.mapper.load_module('yarom.dataObject')
+            self.mapper.load_module('yarom.classRegistry')
 
     def tearDown(self):
         Configureable.conf.closeDatabase()
-        yarom.deregister_all()
+        self.mapper.deregister_all()
         _DataTestB.tearDown(self)
 
     @unittest.expectedFailure
@@ -804,8 +811,8 @@ class MapperTest(_DataTestB):
     def test_object_from_id_class(self):
         """ Ensure we get an object from just the class name """
         dc = MappedClass("TestDOM", (Y.DataObject,), dict())
-        yarom.remap()
-        g = mapper.oid(dc.rdf_type)
+        self.mapper.remap()
+        g = self.mapper.oid(dc.rdf_type)
         self.assertIsInstance(g, Y.TestDOM)
 
     def test_children_are_added(self):
@@ -823,7 +830,7 @@ class MapperTest(_DataTestB):
                 Y,
                 'DataObject'),
             "DataObject is in the yarom module")
-        yarom.deregister_all()
+        self.mapper.deregister_all()
         self.assertFalse(
             hasattr(
                 Y,
