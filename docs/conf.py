@@ -35,7 +35,7 @@ project = 'yarom'
 # If your documentation needs a minimal Sphinx version, state it here.
 #needs_sphinx = '1.0'
 numpydoc_show_class_members = False
-autodoc_default_flags = ['members','show-inheritance','special-members', 'no-inherited-members']
+autodoc_default_flags = ['members','show-inheritance', 'no-inherited-members', 'special-members']
 autodoc_member_order = 'groupwise'
 autoclass_content = 'class'
 # Add any Sphinx extension module names here, as strings. They can be extensions

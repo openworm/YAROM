@@ -1,13 +1,18 @@
 import logging
-import six
-from pprint import pprint,pformat
+from pprint import pformat
 
 L = logging.getLogger(__name__)
 
-__all__ = ["GraphObject", "GraphObjectQuerier", "ComponentTripler"]
+__all__ = [
+    "GraphObject",
+    "GraphObjectQuerier",
+    "ComponentTripler",
+    "IdentifierMissingException"]
+
 
 class Variable(int):
     pass
+
 
 class GraphObject(object):
 
@@ -28,15 +33,16 @@ class GraphObject(object):
 
     @property
     def defined(self):
-        """ Returns true if an :meth:`identifier` would return an identifier """
+        """ Returns true if an :meth:`identifier` would return an identifier
+        """
         raise NotImplementedError()
 
     def variable(self):
         """ Must return a :class:`Variable` object that identifies
         this :class:`GraphObject` in queries.
 
-        The variable can be randomly generated when the object is created and stored in
-        the object.
+        The variable can be randomly generated when the object is created and
+        stored in the object.
         """
         raise NotImplementedError()
 
@@ -65,18 +71,85 @@ class GraphObject(object):
 
 class GraphObjectQuerier(object):
 
+    """ Performs queries for objects in the given graph.
+
+    The querier queries for objects at the center of a star graph. In SPARQL,
+    the query has the form::
+
+        SELECT ?x WHERE {
+            ?x  <p1> ?o1 .
+            ?o1 <p2> ?o2 .
+             ...
+            ?on <pn> <a> .
+
+            ?x  <q1> ?n1 .
+            ?n1 <q2> ?n2 .
+             ...
+            ?nn <qn> <b> .
+        }
+
+    It is allowed that ``<px> == <py>`` for ``x != y``.
+
+    Queries such as::
+
+        SELECT ?x WHERE {
+            ?x  <p1> ?o1 .
+             ...
+            ?on <pn>  ?y .
+        }
+
+    or::
+
+        SELECT ?x WHERE {
+            ?x  <p1> ?o1 .
+             ...
+            ?on <pn>  ?x .
+        }
+
+    or::
+
+        SELECT ?x WHERE {
+            ?x  ?z ?o .
+        }
+
+    or::
+
+        SELECT ?x WHERE {
+            ?x  ?z <a> .
+        }
+
+    are not supported and will be ignored without error.
+
+    """
+
     def __init__(self, q, graph):
+        """ Initialize the querier.
+
+        Call the GraphObjectQuerier object to perform the query.
+
+        Parameters
+        ----------
+        q : :class:`GraphObject`
+            The object which is queried on
+        graph : :class:`object`
+            The graph from which the objects are queried. Must implement a
+            method :meth:`triples` that takes a triple pattern, ``t``, and
+            returns a set of triples matching that pattern. The pattern for
+            ``t`` is ``t[i] = None``, 0 <= i <= 2, indicates that the i'th
+            position can take any value.
+        """
+
         self.query_object = q
         self.graph = graph
 
     def do_query(self):
-        qu = _QueryPreparer(self.query_object)
-        h = self.hoc(qu())
-        return self.qpr(h)
+        qp = _QueryPreparer(self.query_object)
+        h = self.merge_paths(qp())
+        return self.query_path_resolver(h)
 
-    def hoc(self, l):
+    def merge_paths(self, l):
         res = dict()
-        L.debug("hoc: {}".format(l))
+        L.debug("merge_paths: {}".format(l))
         for x in l:
             if len(x) > 0:
                 tmp = res.get(x[0], [])
@@ -84,11 +157,11 @@ class GraphObjectQuerier(object):
                 res[x[0]] = tmp
 
         for x in res:
-            res[x] = self.hoc(res[x])
+            res[x] = self.merge_paths(res[x])
 
         return res
 
-    def qpr(self, h, i=0):
+    def query_path_resolver(self, h, i=0):
         join_args = []
         for x in h:
             sub_answers = set()
@@ -100,7 +173,7 @@ class GraphObjectQuerier(object):
                 other_idx = 2
 
             if isinstance(x[other_idx], Variable):
-                for z in self.qpr(sub, i + 1):
+                for z in self.query_path_resolver(sub, i + 1):
                     if idx == 2:
                         qx = (z, x[1], None)
                     else:
@@ -127,6 +200,13 @@ class GraphObjectQuerier(object):
 
 
 class ComponentTripler(object):
+
+    """ Gets a set of triples with given graph object in the first or
+    last position.
+
+    The ComponentTripler does not query against a backing graph, but instead
+    uses the properties attached to the object.
+    """
 
     def __init__(self, start):
         self.start = start
@@ -243,7 +323,6 @@ class _QueryPreparer(object):
             self.vcount += 1
             return var
 
-
     def prepare(self, current_node):
         L.debug("prepare: current_node %s", current_node)
         if current_node.defined:
@@ -276,11 +355,13 @@ class _QueryPreparer(object):
 
     def __call__(self):
         self.prepare(self.start)
-        L.debug("_QueryPreparer paths:"+ str(pformat(self.paths)))
+        L.debug("_QueryPreparer paths:" + str(pformat(self.paths)))
         return self.paths
 
 
 class DescendantTripler(object):
+
+    """ Gets triples that the object points to, transitively. """
 
     def __init__(self, start):
         self.seen = set()
@@ -309,7 +390,11 @@ class DescendantTripler(object):
 
 class LegendFinder(object):
 
-    """ Gets a list of the objects which can not be deleted freely from the transitive closure.
+    """ Gets a list of the objects which can not be deleted freely from the
+    transitive closure.
+
+    Essentially, this is the 'mark' phase of the "mark-and-sweep" garbage
+    collection algorithm.
 
     "Heroes get remembered, but legends never die."
     """

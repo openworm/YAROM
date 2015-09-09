@@ -29,7 +29,6 @@ Notes:
 
 Classes
 -------
-
 .. automodule:: yarom.dataObject
 .. automodule:: yarom.dataUser
 .. automodule:: yarom.data

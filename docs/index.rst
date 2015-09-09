@@ -13,6 +13,7 @@ Contents
 
    making_dataObjects
    adding_data
+   data_stores
    docs
 
 API
