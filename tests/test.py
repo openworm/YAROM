@@ -7,8 +7,18 @@ sys.path.insert(0, ".")
 
 
 import yarom
+from yarom import (
+    Configuration,
+    ConfigValue,
+    Data,
+    Configureable,
+    DataUser,
+    BadConf,
+    Property,
+    MappedClass,
+    Quantity)
+from yarom import mapper
 import yarom as Y
-from yarom import *
 import test_data as TD
 import rdflib
 import rdflib as R
@@ -17,6 +27,7 @@ import os
 import subprocess
 import tempfile
 import six
+import traceback
 
 HAS_BSDDB = False
 HAS_FUXI = False
@@ -369,7 +380,9 @@ class DataUserTestToo(unittest.TestCase):
             DataUser()
         Configureable.conf = tmp
 
-    @unittest.skipIf((HAS_FUXI == False), "Cannot test inference without the FuXi package")
+    @unittest.skipIf(
+        (HAS_FUXI == False),
+        "Cannot test inference without the FuXi package")
     def test_inference(self):
         """ A simple test on the inference engine """
         ex = R.Namespace("http://example.org/")
@@ -685,8 +698,8 @@ class DataTest(unittest.TestCase):
         with open(f[1], 'w') as fo:
             fo.write(TD.TriX_data)
 
-        connect(conf=c)
-        c = config()
+        yarom.connect(conf=c)
+        c = yarom.config()
 
         try:
             g = c['rdf.graph']
@@ -696,7 +709,7 @@ class DataTest(unittest.TestCase):
         except ImportError:
             pass
         finally:
-            disconnect()
+            yarom.disconnect()
         os.unlink(f[1])
 
     def test_trig_source(self):
@@ -713,8 +726,8 @@ class DataTest(unittest.TestCase):
         with open(f[1], 'w') as fo:
             fo.write(TD.Trig_data)
 
-        connect(conf=c)
-        c = config()
+        yarom.connect(conf=c)
+        c = yarom.config()
 
         try:
             g = c['rdf.graph']
@@ -724,7 +737,7 @@ class DataTest(unittest.TestCase):
         except ImportError:
             pass
         finally:
-            disconnect()
+            yarom.disconnect()
 
 
 class PropertyTest(_DataTest):
@@ -760,7 +773,7 @@ class MapperTest(_DataTestB):
 
     def tearDown(self):
         Configureable.conf.closeDatabase()
-        deregister_all()
+        yarom.deregister_all()
         _DataTestB.tearDown(self)
 
     @unittest.expectedFailure
@@ -782,7 +795,7 @@ class MapperTest(_DataTestB):
     def test_object_from_id_class(self):
         """ Ensure we get an object from just the class name """
         dc = MappedClass("TestDOM", (Y.DataObject,), dict())
-        remap()
+        yarom.remap()
         g = mapper.oid(dc.rdf_type)
         self.assertIsInstance(g, Y.TestDOM)
 
@@ -801,7 +814,7 @@ class MapperTest(_DataTestB):
                 Y,
                 'DataObject'),
             "DataObject is in the yarom module")
-        deregister_all()
+        yarom.deregister_all()
         self.assertFalse(
             hasattr(
                 Y,
@@ -826,6 +839,7 @@ class RDFPropertyTest(_DataTest):
 
 
 class SimplePropertyTest(_DataTest):
+
     def setUp(self):
         _DataTest.setUp(self)
 
@@ -931,6 +945,7 @@ class UnionPropertyTest(_DataTest):
             self.k,
             "stored DataObject is of the correct type")
         self.assertEqual(val, j, "returned value equals stored value")
+
 
 class ObjectCollectionTest(_DataTest):
 
