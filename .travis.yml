@@ -7,8 +7,15 @@ python:
 
 install:
   - "pip install -r requirements.txt"
-  - "pip install -r inference.requirements.txt"
-  - "pip install -r zodb.requirements.txt"
+
+matirx:
+    - install: 
+      - "pip install -r inference.requirements.txt"
+      - "pip install -r zodb.requirements.txt"
+    - install: 
+      - "pip install -r zodb.requirements.txt"
+    - install: 
+      - "pip install -r inference.requirements.txt"
 
 script:  
   - python tests/test.py
