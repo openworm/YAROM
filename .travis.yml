@@ -12,8 +12,12 @@ env:
 
 install:
   - "pip install -r requirements.txt"
-  - "if [[ $INFERENCE ]] ; then pip install -r inference.requirements.txt"
-  - "if [[ $ZODB ]] ; then pip install -r zodb.requirements.txt"
+  - "if [[ $INFERENCE ]] ; then"
+  - "   pip install -r inference.requirements.txt"
+  - "fi"
+  - "if [[ $ZODB ]] ; then"
+  - "   pip install -r zodb.requirements.txt"
+  - "fi"
 
 script:  
   - python tests/test.py
