@@ -10,7 +10,7 @@ env:
   - ZODB=1
   - INFERENCE=1 ZODB=1
 
-install: ./travis.sh
+install: ./.travis.sh
 
 script:  
   - python tests/test.py
