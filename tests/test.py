@@ -31,6 +31,7 @@ import traceback
 
 HAS_BSDDB = False
 HAS_FUXI = False
+HAS_ZODB = False
 
 try:
     import bsddb
@@ -46,6 +47,12 @@ try:
     import FuXi
     HAS_FUXI = True
 except ImportError:
+    pass
+
+try:
+    import ZODB
+    HAS_ZODB = True
+except:
     pass
 
 test_ns = "http://github.com/mwatts15/YAROM/tests/"
@@ -634,6 +641,7 @@ class DataTest(unittest.TestCase):
             traceback.print_exc()
             self.fail("Bad state")
 
+    @unittest.skipIf((HAS_ZODB == False), "ZODB persistence test requires ZODB")
     def test_ZODB_persistence(self):
         """ Should be able to init without these values """
         c = Configuration()
