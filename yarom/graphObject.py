@@ -1,4 +1,5 @@
 import logging
+from itertools import chain
 from pprint import pformat
 
 L = logging.getLogger(__name__)
@@ -205,39 +206,44 @@ class GraphObjectQuerier(object):
 
 class ComponentTripler(object):
 
-    """ Gets a set of triples with given graph object in the first or
-    last position.
+    """ Gets a set of triples that are connected to the given object by
+    objects which have an identifier.
 
     The ComponentTripler does not query against a backing graph, but instead
     uses the properties attached to the object.
     """
 
-    def __init__(self, start):
+    def __init__(self, start, traverse_undefined=False, generator=True):
         self.start = start
         self.seen = set()
-        self.results = set()
+        self.generator = generator
+        self.traverse_undefined = traverse_undefined
 
     def g(self, current_node, i=0):
         L.debug("g({},{})".format(current_node, i))
         if not self.see_node(current_node):
-            if current_node.defined:
-                self.recurse_upwards(current_node, i)
-                self.recurse_downwards(current_node, i)
+            if self.traverse_undefined or current_node.defined:
+                for x in chain(self.recurse_upwards(current_node, i),
+                               self.recurse_downwards(current_node, i)):
+                    yield x
 
     def recurse_upwards(self, current_node, depth):
         for prop in current_node.owner_properties:
-            self.recurse(prop.owner, prop, current_node, UP, depth)
+            for x in self.recurse(prop.owner, prop, current_node, UP, depth):
+                yield x
 
     def recurse_downwards(self, current_node, depth):
         for prop in current_node.properties:
             for val in prop.values:
-                self.recurse(current_node, prop, val, DOWN, depth)
+                for x in self.recurse(current_node, prop, val, DOWN, depth):
+                    yield x
 
     def recurse(self, lhs, via, rhs, direction, depth):
         (ths, nxt) = (rhs, lhs) if direction is UP else (lhs, rhs)
-        if lhs.defined:
-            self.results.add((lhs.idl, via.link, rhs.idl))
-            self.g(nxt, depth + 1)
+        if self.traverse_undefined or nxt.defined:
+            yield (lhs.idl, via.link, rhs.idl)
+            for x in self.g(nxt, depth + 1):
+                yield x
 
     def see_node(self, node):
         node_id = id(node)
@@ -248,8 +254,7 @@ class ComponentTripler(object):
             return False
 
     def __call__(self):
-        self.g(self.start)
-        return self.results
+        return set(self.g(self.start))
 
 
 class _QueryPathElement(tuple):

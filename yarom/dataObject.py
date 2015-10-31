@@ -307,14 +307,10 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
         return g
 
     def __eq__(self, other):
-        return (
-            isinstance(
-                other,
-                DataObject) and (
-                self.idl == other.idl)) or (
-            isinstance(
-                other,
-                R.URIRef) and self.idl == other)
+        return ((isinstance(other, DataObject) and
+                 (self.idl == other.idl)) or
+                (isinstance(other, R.URIRef) and
+                 (self.idl == other)))
 
     def __hash__(self):
         return hash(self.idl)
