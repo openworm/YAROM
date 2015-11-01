@@ -41,10 +41,16 @@ __version__ = "0.7.2"
 __author__ = 'Mark Watts'
 
 import logging
-from .configure import Configuration,Configureable,ConfigValue,BadConf
+from .configure import (Configuration, Configureable, ConfigValue, BadConf)
 from .data import Data
 from .dataUser import DataUser
-from .mapper import MappedClass, remap, resolve_classes_from_rdf, reload_module, load_module, deregister_all
+from .mapper import (
+    MappedClass,
+    remap,
+    resolve_classes_from_rdf,
+    reload_module,
+    load_module,
+    deregister_all)
 from .quantity import Quantity
 from .yProperty import Property
 from .rdfUtils import *
@@ -54,16 +60,19 @@ this_module.connected = False
 
 L = logging.getLogger(__name__)
 
+
 def config(key=None):
     if key is None:
         return Configureable.conf
     else:
         return Configureable.conf[key]
 
+
 def loadConfig(f):
     """ Load configuration for the module """
     Configureable.setConf(Data.open(f))
     return Configureable.conf
+
 
 def disconnect(c=False):
     """ Close the database """
@@ -71,18 +80,20 @@ def disconnect(c=False):
     if not m.connected:
         return
 
-    if c == False:
+    if not c:
         c = Configureable.conf
-    deregister_all() # NOTE: We do NOT unmap on disconnect
+    deregister_all()  # NOTE: We do NOT unmap on disconnect
     # Note that `c' could be set in one of the previous branches;
     # don't try to simplify this logic.
-    if c != False:
+    if c:
         c.closeDatabase()
     m.connected = False
+
 
 def loadData(data, dataFormat):
     if data:
         config('rdf.graph').parse(data, format=dataFormat)
+
 
 def connect(conf=False,
             do_logging=False,
@@ -105,13 +116,12 @@ def connect(conf=False,
     """
     import atexit
     m = this_module
-    if m.connected == True:
+    if m.connected:
         print("yarom already connected")
         return
 
     if do_logging:
         logging.basicConfig(level=logging.DEBUG)
-
 
     setConf(conf)
 
@@ -120,12 +130,14 @@ def connect(conf=False,
 
     atexit.register(disconnect)
 
-    if hasattr(m,'connected_before'):
+    if hasattr(m, 'connected_before'):
         reload_module(m.dataObject)
+        reload_module(m.objectCollection)
         reload_module(m.relationship)
         reload_module(m.classRegistry)
     else:
         load_module("yarom.dataObject")
+        load_module("yarom.objectCollection")
         load_module("yarom.relationship")
         load_module("yarom.classRegistry")
 
@@ -135,6 +147,7 @@ def connect(conf=False,
     m.connected_before = True
     if data:
         loadData(data, dataFormat)
+
 
 def setConf(conf):
     """ Set the configuration
@@ -168,4 +181,3 @@ def setConf(conf):
         except:
             L.info("Couldn't load default configuration")
             Configureable.setConf(Data())
-

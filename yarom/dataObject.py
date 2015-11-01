@@ -105,9 +105,9 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
         var : str
             In lieu of `ident`, sets the variable for this object
         key : str or object
-            In lieu of `ident` or `var`, sets the identifier for this DataObject
-            using the key value. For a namespace `ex:` and key `a`, the
-            identifier would be `ex:a`.
+            In lieu of `ident` or `var`, sets the identifier for this
+            DataObject using the key value. For a namespace `ex:` and key `a`,
+            the identifier would be `ex:a`.
         generate_key : bool
             If true generates a random key value
         kwargs : dict
@@ -117,9 +117,14 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
             super(DataObject, self).__init__()
         except BadConf as e:
             six.raise_from(
-                Exception(
-                    "You may need to connect to a database before continuing."),
-                e)
+                Exception("You may need to connect to " +
+                          "a database before continuing."), e)
+
+        if not self.__class__.mapped:
+            raise Exception(
+                ("The class `{0}` has not been mapped. You should call "
+                 "`{0}.map()` before creating any instances.").format(
+                    self.__class__.__name__))
 
         self._id = False
 
@@ -491,8 +496,9 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
             return self.conf[x]
         except KeyError:
             raise Exception(
-                "You attempted to get the value `%s' from `%s'. It isn't here. Perhaps you misspelled the name of a Property?" %
-                (x, self))
+                "You attempted to get the value `{}' from `{}'. It isn't here."
+                " Perhaps you misspelled the name of a Property?".format(
+                    x, self))
 
     def get_owners(self, property_name):
         """ Return the owners along a property pointing to this object """
@@ -521,7 +527,7 @@ class DataObjectSingleton(DataObject):
 
     def __init__(self, *args, **kwargs):
         if type(self)._gettingInstance:
-            DataObject.__init__(self, *args, **kwargs)
+            super(DataObjectSingleton, self).__init__(*args, **kwargs)
         else:
             raise Exception(
                 "You must call getInstance to get " +
@@ -543,6 +549,7 @@ class RDFSClass(DataObjectSingleton):  # This maybe becomes a DataObject later
     # XXX: This class may be changed from a singleton later to facilitate dumping
     #      and reloading the object graph
     rdf_type = R.RDFS['Class']
+    auto_mapped = True
 
     def __init__(self):
         super(RDFSClass, self).__init__(R.RDFS["Class"])
@@ -595,57 +602,3 @@ class RDFSRangeProperty(ObjectProperty):
     owner_type = RDFProperty
     value_type = RDFSClass
     multiple = True
-
-
-class ObjectCollection(DataObject):
-
-    """
-    A convenience class for working with a collection of objects
-
-    Example::
-
-        v = ObjectCollection('unc-13 neurons and muscles')
-        n = P.Neuron()
-        m = P.Muscle()
-        n.receptor('UNC-13')
-        m.receptor('UNC-13')
-        for x in n.load():
-            v.value(x)
-        for x in m.load():
-            v.value(x)
-        # Save the group for later use
-        v.save()
-        ...
-        # get the list back
-        u = ObjectCollection('unc-13 neurons and muscles')
-        nm = list(u.value())
-
-
-    Parameters
-    ----------
-    group_name : string
-        A name of the group of objects
-
-    Attributes
-    ----------
-    name : DatatypeProperty
-        The name of the group of objects
-    group_name : DataObject
-        an alias for ``name``
-    member : ObjectProperty
-        An object in the group
-    add : ObjectProperty
-        an alias for ``value``
-
-    """
-    _ = ['member']
-    datatypeProperties = [{'name': 'name', 'multiple': False}]
-
-    def __init__(self, group_name=False, **kwargs):
-        super(ObjectCollection, self).__init__(key=group_name, **kwargs)
-        self.add = self.member
-        self.group_name = self.name
-        self.name(group_name)
-
-    def identifier(self, query=False):
-        return self.make_identifier(self.group_name)

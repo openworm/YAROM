@@ -278,7 +278,7 @@ class DataObjectTest(_DataTest):
         """
         class T(Y.DataObject):
             objectProperties = ['s']
-
+        T.map()
         t = T(key="a")
         s = T(key="b")
         v = T(key="c")
@@ -858,11 +858,13 @@ class SimplePropertyTest(_DataTest):
             datatypeProperties = [{'name': 'boots', 'multiple': False}, 'bets']
 
             objectProperties = [{'name': 'bats', 'multiple': False}, 'bits']
+        K.map()
         self.k = K
 
     def test_non_multiple_saves_single_values(self):
         class C(Y.DataObject):
             datatypeProperties = [{'name': 't', 'multiple': False}]
+        C.map()
         do = C(key="s")
         do.t("value1")
         do.t("vaule2")

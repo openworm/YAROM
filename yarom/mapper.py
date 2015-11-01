@@ -40,16 +40,22 @@ class MappedClass(type):
     """
     def __init__(cls, name, bases, dct):
         type.__init__(cls, name, bases, dct)
+
+        if 'auto_mapped' in dct:
+            cls.mapped = True
+        else:
+            cls.mapped = False
+
+        # Set the rdf_type early
         if 'rdf_type' in dct:
             cls.rdf_type = dct['rdf_type']
         else:
-            cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
+            cls.rdf_type = None
 
         if 'rdf_namespace' in dct:
             cls.rdf_namespace = dct['rdf_namespace']
         else:
-            cls.rdf_namespace = R.Namespace(
-                cls.conf['rdf.namespace'][cls.__name__] + "/")
+            cls.rdf_namespace = None
 
         cls.dataObjectProperties = []
         for x in bases:
@@ -95,8 +101,8 @@ class MappedClass(type):
     def __lt__(cls, other):
         if isinstance(other, MappedPropertyClass):
             return False
-        return issubclass(cls, other) or ((not issubclass(other, cls)) \
-                    and (cls.__name__ < other.__name__))
+        return issubclass(cls, other) or ((not issubclass(other, cls)) and
+                                          (cls.__name__ < other.__name__))
 
     def register(cls):
         """Sets up the object graph related to this class
@@ -109,7 +115,7 @@ class MappedClass(type):
         cls.children = []
         MappedClasses[cls.__name__] = cls
         DataObjectsParents[cls.__name__] = \
-                [x for x in cls.__bases__ if isinstance(x, MappedClass)]
+            [x for x in cls.__bases__ if isinstance(x, MappedClass)]
         cls.parents = DataObjectsParents[cls.__name__]
         for c in cls.parents:
             c.add_child(cls)
@@ -185,12 +191,20 @@ class MappedClass(type):
         # NOTE: Map should be quick: it runs for every DataObject sub-class created and possibly
         #       several times in testing
         from .dataObject import TypeDataObject
+        TypeDataObject.mapped = True
+        if cls.rdf_type is None:
+            cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
+        if cls.rdf_namespace is None:
+            cls.rdf_namespace = R.Namespace(
+                cls.conf['rdf.namespace'][cls.__name__] + "/")
+
         cls.rdf_type_object = TypeDataObject(ident=cls.rdf_type)
 
         RDFTypeTable[cls.rdf_type] = cls
 
         cls._add_parents_to_graph()
         cls._add_namespace_to_manager()
+        cls.mapped = True
 
         return cls
 
@@ -221,47 +235,44 @@ class MappedClass(type):
 
     def addProperties(cls, listName):
         # TODO: Make an option string to abbreviate these options
-        try:
-            if hasattr(cls, listName):
-                propList = getattr(cls, listName)
-                propType = ProplistToProptype[listName]
+        if hasattr(cls, listName):
+            propList = getattr(cls, listName)
+            propType = ProplistToProptype[listName]
 
-                assert(isinstance(propList, (tuple, list, set)))
-                for x in propList:
-                    value_type = None
-                    p = None
-                    if isinstance(x, tuple):
-                        if len(x) > 2:
-                            value_type = x[2]
+            assert(isinstance(propList, (tuple, list, set)))
+            for x in propList:
+                value_type = None
+                p = None
+                if isinstance(x, tuple):
+                    if len(x) > 2:
+                        value_type = x[2]
+                    p = _create_property(
+                        cls,
+                        x[0],
+                        propType,
+                        value_type=value_type)
+                elif isinstance(x, dict):
+                    if 'prop' in x:
+                        p = DataObjectProperties[x['prop']]
+                    else:
+                        name = x['name']
+                        del x['name']
+
+                        if 'type' in x:
+                            value_type = x['type']
+                            del x['type']
+
                         p = _create_property(
                             cls,
-                            x[0],
+                            name,
                             propType,
-                            value_type=value_type)
-                    elif isinstance(x, dict):
-                        if 'prop' in x:
-                            p = DataObjectProperties[x['prop']]
-                        else:
-                            name = x['name']
-                            del x['name']
-
-                            if 'type' in x:
-                                value_type = x['type']
-                                del x['type']
-
-                            p = _create_property(
-                                cls,
-                                name,
-                                propType,
-                                value_type=value_type,
-                                **x)
-                    else:
-                        p = _create_property(cls, x, propType)
-                    cls.dataObjectProperties.append(p)
-                setattr(cls, '_' + listName, propList)
-                setattr(cls, listName, [])
-        except:
-            traceback.print_exc()
+                            value_type=value_type,
+                            **x)
+                else:
+                    p = _create_property(cls, x, propType)
+                cls.dataObjectProperties.append(p)
+            setattr(cls, '_' + listName, propList)
+            setattr(cls, listName, [])
 
     def _cleanupGraph(cls):
         """ Cleans up the graph by removing statements that can't be connected to typed statement. """
@@ -292,11 +303,8 @@ class MappedPropertyClass(type):
 
     def __init__(cls, name, bases, dct):
         super(MappedPropertyClass, cls).__init__(name, bases, dct)
-        if 'link' not in dct:
-            cls.link = cls.conf['rdf.namespace'][cls.__name__]
-        else:
+        if 'link' in dct:
             cls.link = dct['link']
-
         cls.register()
 
     def register(cls):
@@ -327,8 +335,19 @@ class MappedPropertyClass(type):
 
         return cls
 
+    @property
+    def value_rdf_type(self):
+        return self.value_type.rdf_type
+
     def map(cls):
-        from .dataObject import PropertyDataObject, RDFSDomainProperty, RDFSRangeProperty
+        from .dataObject import (
+            PropertyDataObject,
+            RDFSDomainProperty,
+            RDFSRangeProperty)
+
+        if cls.link is None:
+            cls.link = cls.conf['rdf.namespace'][cls.__name__]
+
         cls.rdf_object = PropertyDataObject(ident=cls.link)
         if hasattr(cls, 'owner_type'):
             cls.rdf_object.relate(
@@ -344,9 +363,9 @@ class MappedPropertyClass(type):
 
     def __lt__(cls, other):
         return issubclass(cls, other) \
-                or isinstance(other, MappedClass) \
-                or ((not issubclass(other, cls)) \
-                    and (cls.__name__ < other.__name__))
+            or isinstance(other, MappedClass) \
+            or ((not issubclass(other, cls)) and
+                (cls.__name__ < other.__name__))
 
 
 def remap():
@@ -504,7 +523,6 @@ def _create_property(
         if value_type is None:
             value_type = Y.DataObject
         properties['value_type'] = value_type
-        properties['value_rdf_type'] = value_type.rdf_type
     elif property_type == 'DatatypeProperty':
         x = DatatypeProperty
     else:
@@ -512,7 +530,8 @@ def _create_property(
 
     if link is not None:
         properties['link'] = link
-    else:
+    elif (hasattr(owner_type, 'rdf_namespace') and
+            owner_type.rdf_namespace is not None):
         properties['link'] = owner_type.rdf_namespace[linkName]
 
     c = MappedPropertyClass(property_class_name, (x,), properties)
