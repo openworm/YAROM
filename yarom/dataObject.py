@@ -273,14 +273,13 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
                     property_type = ObjectProperty
                 else:
                     property_type = DatatypeProperty
-                self._create_related_property(linkName, property_type)
+                prop = self._create_related_property(linkName, property_type)
             elif not hasattr(prop, 'linkName'):
                 prop.linkName = linkName
             p = self.attachProperty(prop)
         return p.set(other)
 
     def _create_related_property(self, linkName, property_type):
-        property_type = None
         link = type(self).rdf_namespace[linkName]
         return MappedPropertyClass(
             linkName, (property_type,), dict(
