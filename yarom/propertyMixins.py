@@ -59,7 +59,7 @@ class ObjectPropertyMixin(object):
                 continue
 
             types = set()
-            types.add(self.value_rdf_type)
+            types.add(self.__class__.value_rdf_type)
 
             for rdf_type in super(ObjectPropertyMixin, self).rdf.objects(ident, rdflib.RDF['type']):
                 types.add(rdf_type)

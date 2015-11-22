@@ -46,14 +46,11 @@ from .data import Data
 from .dataUser import DataUser
 from .mapper import (
     MappedClass,
-    remap,
-    resolve_classes_from_rdf,
-    reload_module,
-    load_module,
-    deregister_all)
+    Mapper)
 from .quantity import Quantity
 from .yProperty import Property
 from .rdfUtils import *
+import rdflib
 
 this_module = __import__('yarom')
 this_module.connected = False
@@ -61,18 +58,18 @@ this_module.connected = False
 L = logging.getLogger(__name__)
 
 
-def config(key=None):
+def config(key=None, value=None):
     if key is None:
         return Configureable.conf
-    else:
+    elif value is None:
         return Configureable.conf[key]
-
+    else:
+        Configureable.conf[key] = value
 
 def loadConfig(f):
     """ Load configuration for the module """
     Configureable.setConf(Data.open(f))
     return Configureable.conf
-
 
 def disconnect(c=False):
     """ Close the database """
@@ -80,9 +77,11 @@ def disconnect(c=False):
     if not m.connected:
         return
 
+    mapper = Mapper.get_instance()
+
     if not c:
         c = Configureable.conf
-    deregister_all()  # NOTE: We do NOT unmap on disconnect
+    mapper.deregister_all()  # NOTE: We do NOT unmap on disconnect
     # Note that `c' could be set in one of the previous branches;
     # don't try to simplify this logic.
     if c:
@@ -91,8 +90,13 @@ def disconnect(c=False):
 
 
 def loadData(data, dataFormat):
-    if data:
+    if isinstance(data, str):
         config('rdf.graph').parse(data, format=dataFormat)
+    elif isinstance(data, rdflib.ConjunctiveGraph):
+        g = config('rdf.graph')
+        for x in data.quads((None, None, None, None)):
+            g.add(x)
+
 
 
 def connect(conf=False,
@@ -107,7 +111,7 @@ def connect(conf=False,
         The configuration for the YAROM connection
     do_logging : bool, optional
         If True, turn on debug level logging. The default is False.
-    data : str, optional
+    data : str or rdflib.ConjunctiveGraph, optional
         If provided, specifies a file to load into the library.
     dataFormat : str, optional
         If provided, specifies the file format of the file pointed specified by `data`.
@@ -120,6 +124,8 @@ def connect(conf=False,
         print("yarom already connected")
         return
 
+    mapper = Mapper.get_instance()
+
     if do_logging:
         logging.basicConfig(level=logging.DEBUG)
 
@@ -131,18 +137,18 @@ def connect(conf=False,
     atexit.register(disconnect)
 
     if hasattr(m, 'connected_before'):
-        reload_module(m.dataObject)
-        reload_module(m.objectCollection)
-        reload_module(m.relationship)
-        reload_module(m.classRegistry)
+        mapper.reload_module(m.dataObject)
+        mapper.reload_module(m.objectCollection)
+        mapper.reload_module(m.relationship)
+        mapper.reload_module(m.classRegistry)
     else:
-        load_module("yarom.dataObject")
-        load_module("yarom.objectCollection")
-        load_module("yarom.relationship")
-        load_module("yarom.classRegistry")
+        mapper.load_module("yarom.dataObject")
+        mapper.load_module("yarom.objectCollection")
+        mapper.load_module("yarom.relationship")
+        mapper.load_module("yarom.classRegistry")
 
-    resolve_classes_from_rdf(Configureable.conf['rdf.graph'])
-    remap()
+    mapper.remap()
+    mapper.resolve_classes_from_rdf(Configureable.conf['rdf.graph'])
     m.connected = True
     m.connected_before = True
     if data:

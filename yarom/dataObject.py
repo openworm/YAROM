@@ -7,9 +7,7 @@ import random
 from .mapper import (
     MappedPropertyClass,
     MappedClass,
-    Resolver,
-    get_most_specific_rdf_type,
-    oid)
+    Resolver)
 from .dataUser import DataUser
 from .configure import BadConf
 from .simpleProperty import (SimpleProperty, DatatypeProperty, ObjectProperty)
@@ -432,8 +430,23 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
             types = set()
             for rdf_type in self.rdf.objects(ident, R.RDF['type']):
                 types.add(rdf_type)
-            the_type = get_most_specific_rdf_type(types)
-            yield oid(ident, the_type)
+            the_type = self.mapper.get_most_specific_rdf_type(types)
+            yield self.mapper.oid(ident, the_type)
+
+    def resolve(self):
+        """ Resolve this object from the graph.
+
+        Gets the value for each of the properties attached to this object. In
+        contrast to :meth:`load`, this method requires that the object already
+        has its identifier.
+        """
+        print("RESOLVING", self)
+        for p in self.properties:
+            print("PROPERTY", p)
+            values = set(p.get())
+            print("VALUES", values)
+            for v in values:
+                p.set(v)
 
     def save(self):
         """ Write in-memory data to the database. Derived classes should call this to update

@@ -1,5 +1,6 @@
-import importlib as I
+from __future__ import print_function
 import traceback
+import importlib as I
 import logging
 import rdflib as R
 from yarom import DataUser
@@ -9,27 +10,166 @@ import yarom as Y
 __all__ = [
     "MappedClass",
     "MappedPropertyClass",
-    "MappedClasses",
-    "DataObjectsParents",
-    "RDFTypeTable",
-    "get_most_specific_rdf_type",
-    "oid",
-    "Resolver",
-    "reload_module",
-    "load_module"]
+    "Resolver"]
 
 L = logging.getLogger(__name__)
 
-MappedClasses = dict()  # class names to classes
-DataObjectsParents = dict()  # class names to parents of the related class
-DataObjectProperties = dict()  # Property classes to
-
-RDFTypeTable = dict()  # class rdf types to classes
 
 ProplistToProptype = {"datatypeProperties": "DatatypeProperty",
                       "objectProperties": "ObjectProperty",
                       "_": "UnionProperty"
                       }
+
+
+class Mapper(object):
+    instance = None
+
+    @classmethod
+    def get_instance(cls):
+        if cls.instance is None:
+            cls.instance = Mapper()
+        return cls.instance
+
+    def __init__(self):
+        self.MappedClasses = dict()  # class names to classes
+        # class names to parents of the related class
+        self.DataObjectsParents = dict()
+        self.DataObjectProperties = dict()  # Property classes to
+        self.RDFTypeTable = dict()  # class rdf types to classes
+        self.instance = self
+
+    def remap(self):
+        """ Calls `map` on all of the registered classes """
+        l = list(self.MappedClasses.values())
+        l.sort()
+        for x in l:
+            x.map()
+
+    def unmap_all(self):
+        for cls in self.MappedClasses:
+            cls.unmap()
+
+    def deregister_all(self):
+        keys = list(self.MappedClasses.keys())
+        for cname in keys:
+            self.MappedClasses[cname].deregister()
+
+    def resolve_classes_from_rdf(self, graph):
+        """ Gathers Python classes from the RDF graph.
+
+        If there is a remote Python module registered in the RDF graph then an
+        import of the module is attempted. If no remote module can be found (i.e.,
+        none has been registered or the registered module cannot be retrieved) then
+        a subclass of DataObject is generated from data available in the graph
+        """
+        # get the DataObject class resource
+        # get the subclasses of DataObject, transitively
+        # take the list of subclasses and resolve them into Python classes
+        for x in graph.transitive_subjects(
+                R.RDFS['subClassOf'],
+                Y.DataObject.rdf_type):
+            L.debug("RESOLVING {}".format(x))
+            self.resolve_class(x)
+
+    def resolve_class(self, uri):
+        cr = self.load_module('yarom.classRegistry')
+        # look up the class in the registryCache
+        if uri in self.RDFTypeTable:
+            # if it is in the regCache, then return the class;
+            return self.RDFTypeTable[uri]
+        else:
+            # otherwise, attempt to load into the cache by
+            # reading the RDF graph.
+            re = cr.RegistryEntry()
+            re.rdfClass(uri)
+            for cd in self.get_class_descriptions(re):
+                # TODO: if load fails, attempt to construct the class
+                return self.load_class_from_description(cd)
+
+    def load_class_from_description(self, cd):
+        # TODO: Undo the effects to YAROM of loading a class when the
+        #       module doesn't, in fact, have the class being searched
+        #       for.
+        mod_name = cd.moduleName.one()
+        class_name = cd.className.one()
+        self.load_module(mod_name)
+        mod = Y
+        if mod is not None:
+            if hasattr(mod, class_name):
+                cls = getattr(mod, class_name)
+                if cls is not None:
+                    return cls
+            else:
+                raise Exception("Cannot find class " + class_name)
+
+    def get_class_descriptions(self, re):
+        mod_data = []
+        for x in re.load():
+            for y in x.pythonClass():
+                mod_data.append(y)
+        return mod_data
+
+    def load_module(self, module_name):
+        L.debug("LOADING", module_name)
+        a = I.import_module(module_name)
+        return a
+
+    def reload_module(self, mod):
+        from six.moves import reload_module
+        L.debug("RE-LOADING", mod)
+        a = reload_module(mod)
+        return a
+
+    def oid(self, identifier_or_rdf_type, rdf_type=False):
+        """ Create an object from its rdf type
+
+        Parameters
+        ----------
+        identifier_or_rdf_type : :class:`str` or :class:`rdflib.term.URIRef`
+            If `rdf_type` is provided, then this value is used as the identifier
+            for the newly created object. Otherwise, this value will be the
+            :attr:`rdf_type` of the object used to determine the Python type and
+            the object's identifier will be randomly generated.
+        rdf_type : :class:`str`, :class:`rdflib.term.URIRef`, :const:`False`
+            If provided, this will be the :attr:`rdf_type` of the newly created
+            object.
+
+        Returns
+        -------
+           The newly created object
+
+        """
+        identifier = identifier_or_rdf_type
+        if not rdf_type:
+            rdf_type = identifier_or_rdf_type
+            identifier = False
+
+        L.debug("oid making a {} with ident {}".format(rdf_type, identifier))
+        c = self.RDFTypeTable[rdf_type]
+        # if its our class name, then make our own object
+        # if there's a part after that, that's the property name
+        o = None
+        if identifier:
+            o = c(ident=identifier)
+        else:
+            o = c(generate_key=True)
+        return o
+
+    def get_most_specific_rdf_type(self, types):
+        """ Gets the most specific rdf_type.
+
+        Returns the URI corresponding to the lowest in the DataObject class
+        hierarchy from among the given URIs.
+        """
+        do = self.load_module('yarom.dataObject')
+        least = do.DataObject
+        for x in types:
+            try:
+                if self.RDFTypeTable[x] < least:
+                    least = self.RDFTypeTable[x]
+            except KeyError:
+                pass
+        return least.rdf_type
 
 
 class MappedClass(type):
@@ -39,8 +179,9 @@ class MappedClass(type):
     Sets up the graph with things needed for MappedClasses
     """
     def __init__(cls, name, bases, dct):
+        L.debug("INITIALIZING", name)
         type.__init__(cls, name, bases, dct)
-
+        cls.mapper = Mapper.get_instance()
         if 'auto_mapped' in dct:
             cls.mapped = True
         else:
@@ -72,7 +213,10 @@ class MappedClass(type):
             bases,
             objectProperties=False,
             datatypeProperties=False):
-        """ Intended to be used for setting up a class from the RDF graph, for instance. """
+        """
+        Intended to be used for setting up a class from the RDF graph, for
+        instance.
+        """
         # Need to distinguish datatype and object properties...
         if not datatypeProperties:
             datatypeProperties = []
@@ -85,9 +229,10 @@ class MappedClass(type):
 
     @property
     def du(self):
-        # This is just a little indirection to make sure we initialize the DataUser property before using it.
-        # Initialization isn't done in __init__ because I wanted to make sure you could call `connect` before
-        # or after declaring your classes
+        # This is just a little indirection to make sure we initialize the
+        # DataUser property before using it. Initialization isn't done in
+        # __init__ because I wanted to make sure you could call `connect`
+        # before or after declaring your classes
         if hasattr(self, '_du'):
             return self._du
         else:
@@ -99,10 +244,7 @@ class MappedClass(type):
         self._du = value
 
     def __lt__(cls, other):
-        if isinstance(other, MappedPropertyClass):
-            return False
-        return issubclass(cls, other) or ((not issubclass(other, cls)) and
-                                          (cls.__name__ < other.__name__))
+        return less_than(cls, other)
 
     def register(cls):
         """Sets up the object graph related to this class
@@ -111,12 +253,13 @@ class MappedClass(type):
 
         Also registers the properties of this DataObject
         """
+        L.debug("REGISTERING", cls.__name__)
         cls._du = DataUser()
         cls.children = []
-        MappedClasses[cls.__name__] = cls
-        DataObjectsParents[cls.__name__] = \
+        cls.mapper.MappedClasses[cls.__name__] = cls
+        cls.mapper.DataObjectsParents[cls.__name__] = \
             [x for x in cls.__bases__ if isinstance(x, MappedClass)]
-        cls.parents = DataObjectsParents[cls.__name__]
+        cls.parents = cls.mapper.DataObjectsParents[cls.__name__]
         for c in cls.parents:
             c.add_child(cls)
 
@@ -135,9 +278,9 @@ class MappedClass(type):
                     cls.__name__))
             if getattr(Y, new_name, False):
                 L.warning(
-                    "Still unable to add {0} to {1}. {0} will not be accessible through {1}".format(
-                        new_name,
-                        'yarom module'))
+                    "Still unable to add {0} to {1}. {0} will not be "
+                    "accessible through {1}".format(new_name,
+                                                    'yarom module'))
             else:
                 setattr(Y, new_name, cls)
         else:
@@ -157,11 +300,11 @@ class MappedClass(type):
         elif getattr(Y, "_" + cls.__name__) == cls:
             delattr(Y, "_" + cls.__name__)
 
-        if cls.__name__ in MappedClasses:
-            del MappedClasses[cls.__name__]
+        if cls.__name__ in cls.mapper.MappedClasses:
+            del cls.mapper.MappedClasses[cls.__name__]
 
-        if cls.__name__ in DataObjectsParents:
-            del DataObjectsParents[cls.__name__]
+        if cls.__name__ in cls.mapper.DataObjectsParents:
+            del cls.mapper.DataObjectsParents[cls.__name__]
 
         for c in cls.parents:
             c.remove_child(cls)
@@ -171,25 +314,24 @@ class MappedClass(type):
             cls.children.remove(child)
         else:
             raise Exception(
-                "Cannot remove child {0} from {1} as {1} has not yet been registered".format(
-                    child,
-                    cls))
+                "Cannot remove child {0} from {1} as {1} has not yet been"
+                " registered".format(child, cls))
 
     def add_child(cls, child):
         if hasattr(cls, 'children'):
             cls.children.append(child)
         else:
             raise Exception(
-                "Cannot add child {0} to {1} as {1} has not yet been registered".format(
-                    child,
-                    cls))
+                "Cannot add child {0} to {1} as {1} has not yet been"
+                " registered".format(child, cls))
 
     def map(cls):
         """
         Maps the class to the configured rdf graph.
         """
-        # NOTE: Map should be quick: it runs for every DataObject sub-class created and possibly
-        #       several times in testing
+        # NOTE: Map should be quick: it runs for every DataObject sub-class
+        #       created and possibly several times in testing
+        L.debug("MAPPING", cls.__name__)
         from .dataObject import TypeDataObject
         TypeDataObject.mapped = True
         if cls.rdf_type is None:
@@ -200,7 +342,7 @@ class MappedClass(type):
 
         cls.rdf_type_object = TypeDataObject(ident=cls.rdf_type)
 
-        RDFTypeTable[cls.rdf_type] = cls
+        cls.mapper.RDFTypeTable[cls.rdf_type] = cls
 
         cls._add_parents_to_graph()
         cls._add_namespace_to_manager()
@@ -212,10 +354,11 @@ class MappedClass(type):
         """
         Unmaps the class
         """
+        del cls.mapper.RDFTypeTable[cls.rdf_type]
+        # XXX: What else to do here?
 
     def _remove_namespace_from_manager(cls):
         pass
-        #cls.du['rdf.namespace_manager'].bind(cls.__name__, "")
 
     def _add_namespace_to_manager(cls):
         cls.du['rdf.namespace_manager'].bind(
@@ -225,6 +368,7 @@ class MappedClass(type):
 
     def _add_parents_to_graph(cls):
         from .dataObject import RDFSSubClassOfProperty, DataObject
+        L.debug('adding parents for',cls)
         for parent in cls.parents:
             ancestors = (x for x in parent.mro() if issubclass(x, DataObject))
             for ancestor in ancestors:
@@ -253,7 +397,7 @@ class MappedClass(type):
                         value_type=value_type)
                 elif isinstance(x, dict):
                     if 'prop' in x:
-                        p = DataObjectProperties[x['prop']]
+                        p = cls.mapper.DataObjectProperties[x['prop']]
                     else:
                         name = x['name']
                         del x['name']
@@ -275,7 +419,10 @@ class MappedClass(type):
             setattr(cls, listName, [])
 
     def _cleanupGraph(cls):
-        """ Cleans up the graph by removing statements that can't be connected to typed statement. """
+        """
+        Cleans up the graph by removing statements that can't be connected to
+        typed statement.
+        """
         # XXX: This might belong in DataUser instead
         q = """DELETE { ?b ?x ?y }
         WHERE
@@ -302,7 +449,9 @@ def warnMismapping(mapping, key, should_be, is_actually=None):
 class MappedPropertyClass(type):
 
     def __init__(cls, name, bases, dct):
+        L.debug("INITIALIZING", name)
         super(MappedPropertyClass, cls).__init__(name, bases, dct)
+        cls.mapper = Mapper.get_instance()
         if 'link' in dct:
             cls.link = dct['link']
         cls.register()
@@ -310,23 +459,32 @@ class MappedPropertyClass(type):
     def register(cls):
         # This is how we create the RDF predicate that points from the owner
         # to this property
-        MappedClasses[cls.__name__] = cls
-        DataObjectProperties[cls.__name__] = cls
+        L.debug("REGISTERING", cls.__name__)
+        cls.mapper.MappedClasses[cls.__name__] = cls
+        cls.mapper.DataObjectProperties[cls.__name__] = cls
 
         setattr(Y, cls.__name__, cls)
 
         return cls
 
     def deregister(cls):
-        if MappedClasses.get(cls.__name__, False) == cls:
-            del MappedClasses[cls.__name__]
+        if cls.mapper.MappedClasses.get(cls.__name__, False) == cls:
+            del cls.mapper.MappedClasses[cls.__name__]
         else:
-            warnMismapping(MappedClasses, cls.__name__, cls)
+            warnMismapping(
+                cls.mapper.MappedClasses,
+                cls.__name__,
+                cls)
 
-        if DataObjectProperties.get(cls.__name__, False) == cls:
-            del DataObjectProperties[cls.__name__]
+        if cls.mapper.DataObjectProperties.get(
+                cls.__name__,
+                False) == cls:
+            del cls.mapper.DataObjectProperties[cls.__name__]
         else:
-            warnMismapping(DataObjectProperties, cls.__name__, cls)
+            warnMismapping(
+                cls.mapper.DataObjectProperties,
+                cls.__name__,
+                cls)
 
         if getattr(Y, cls.__name__) == cls:
             setattr(Y, cls.__name__, cls)
@@ -345,8 +503,10 @@ class MappedPropertyClass(type):
             RDFSDomainProperty,
             RDFSRangeProperty)
 
+        L.debug("MAPPING", cls.__name__)
         if cls.link is None:
-            cls.link = cls.conf['rdf.namespace'][cls.__name__]
+            if hasattr(cls, 'owner_type'):
+                cls.link = cls.owner_type.rdf_namespace[cls.linkName]
 
         cls.rdf_object = PropertyDataObject(ident=cls.link)
         if hasattr(cls, 'owner_type'):
@@ -362,138 +522,20 @@ class MappedPropertyClass(type):
                 RDFSRangeProperty)
 
     def __lt__(cls, other):
-        return issubclass(cls, other) \
-            or isinstance(other, MappedClass) \
-            or ((not issubclass(other, cls)) and
-                (cls.__name__ < other.__name__))
+        return less_than(cls, other)
 
 
-def remap():
-    """ Calls `map` on all of the registered classes """
-    classes = sorted(list(MappedClasses.values()))
-    classes.reverse()
-    for x in classes:
-        x.map()
-
-
-def unmap_all():
-    for cls in MappedClasses:
-        cls.unmap()
-
-
-def deregister_all():
-    global MappedClasses
-    keys = list(MappedClasses.keys())
-    for cname in keys:
-        MappedClasses[cname].deregister()
-
-
-def resolve_classes_from_rdf(graph):
-    """ Gathers Python classes from the RDF graph.
-
-    If there is a remote Python module registered in the RDF graph then an
-    import of the module is attempted. If no remote module can be found (i.e.,
-    none has been registered or the registered module cannot be retrieved) then
-    a subclass of DataObject is generated from data available in the graph
-    """
-    # get the DataObject class resource
-    # get the subclasses of DataObject, transitively
-    # take the list of subclasses and resolve them into Python classes
-    for x in graph.transitive_subjects(
-            R.RDFS['subClassOf'],
-            Y.DataObject.rdf_type):
-        L.debug("RESOLVING {}".format(x))
-        resolve_class(x)
-
-
-def resolve_class(uri):
-    from .classRegistry import RegistryEntry
-    # look up the class in the registryCache
-    if uri in RDFTypeTable:
-        # if it is in the regCache, then return the class;
-        return RDFTypeTable[uri]
-    else:
-        # otherwise, attempt to load into the cache by
-        # reading the RDF graph.
-        re = RegistryEntry()
-        re.rdfClass(uri)
-        for cd in get_class_descriptions(re):
-            # TODO: if load fails, attempt to construct the class
-            return load_class_from_description(cd)
-
-
-def load_class_from_description(cd):
-    # TODO: Undo the effects to YAROM of loading a class when the
-    #       module doesn't, in fact, have the class being searched
-    #       for.
-    mod_name = cd.moduleName.one()
-    class_name = cd.className.one()
-    load_module(mod_name)
-    mod = Y
-    if mod is not None:
-        if hasattr(mod, class_name):
-            cls = getattr(mod, class_name)
-            if cls is not None:
-                return cls
-        else:
-            raise Exception("Cannot find class " + class_name)
-
-
-def get_class_descriptions(re):
-    mod_data = []
-    for x in re.load():
-        for y in x.pythonClass():
-            mod_data.append(y)
-    return mod_data
-
-
-def load_module(module_name):
-    a = I.import_module(module_name)
-    remap()
-    return a
-
-
-def reload_module(mod):
-    from six.moves import reload_module
-    a = reload_module(mod)
-    remap()
-    return a
-
-
-def oid(identifier_or_rdf_type, rdf_type=False):
-    """ Create an object from its rdf type
-
-    Parameters
-    ----------
-    identifier_or_rdf_type : :class:`str` or :class:`rdflib.term.URIRef`
-        If `rdf_type` is provided, then this value is used as the identifier
-        for the newly created object. Otherwise, this value will be the
-        :attr:`rdf_type` of the object used to determine the Python type and the
-        object's identifier will be randomly generated.
-    rdf_type : :class:`str`, :class:`rdflib.term.URIRef`, :const:`False`
-        If provided, this will be the :attr:`rdf_type` of the newly created object.
-
-    Returns
-    -------
-       The newly created object
-
-    """
-    identifier = identifier_or_rdf_type
-    if not rdf_type:
-        rdf_type = identifier_or_rdf_type
-        identifier = False
-
-    L.debug("oid making a {} with ident {}".format(rdf_type, identifier))
-    c = RDFTypeTable[rdf_type]
-    # if its our class name, then make our own object
-    # if there's a part after that, that's the property name
-    o = None
-    if identifier:
-        o = c(ident=identifier)
-    else:
-        o = c(generate_key=True)
-    return o
-
+def less_than(a, b):
+    res = False
+    if issubclass(b, a) and not issubclass(a, b):
+        res = True
+    elif isinstance(a, MappedClass) and isinstance(b, MappedPropertyClass):
+        res = True
+    elif isinstance(b, MappedClass) and isinstance(a, MappedPropertyClass):
+        res = False
+    elif issubclass(a, b) == issubclass(b, a):
+        res = a.__name__ < b.__name__
+    return res
 
 def _slice_dict(d, s):
     return {k: v for k, v in d.items() if k in s}
@@ -506,10 +548,9 @@ def _create_property(
         value_type=None,
         multiple=True,
         link=None):
-    # XXX This should actually get called for all of the properties when their owner
-    #    classes are defined.
-    # The initialization, however, must happen with the owner object's
-    # creation
+    # XXX: This should actually get called for all of the properties when their
+    #      owner classes are defined. The initialization, however, must happen
+    #      with the owner object's creation
     from .simpleProperty import ObjectProperty, DatatypeProperty, UnionProperty
 
     properties = _slice_dict(locals(), ['owner_type', 'linkName', 'multiple'])
@@ -533,26 +574,8 @@ def _create_property(
     elif (hasattr(owner_type, 'rdf_namespace') and
             owner_type.rdf_namespace is not None):
         properties['link'] = owner_type.rdf_namespace[linkName]
-
     c = MappedPropertyClass(property_class_name, (x,), properties)
     return c
-
-
-def get_most_specific_rdf_type(types):
-    """ Gets the most specific rdf_type.
-
-    Returns the URI corresponding to the lowest in the DataObject class hierarchy
-    from among the given URIs.
-    """
-    from .dataObject import DataObject
-    least = DataObject
-    for x in types:
-        try:
-            if RDFTypeTable[x] < least:
-                least = RDFTypeTable[x]
-        except KeyError:
-            pass
-    return least.rdf_type
 
 
 class Resolver(RDFTypeResolver):
@@ -565,7 +588,7 @@ class Resolver(RDFTypeResolver):
         if cls.instance is None:
             cls.instance = RDFTypeResolver(
                 DataObject.rdf_type,
-                get_most_specific_rdf_type,
-                oid,
+                Mapper.get_instance().get_most_specific_rdf_type,
+                Mapper.get_instance().oid,
                 deserialize_rdflib_term)
         return cls.instance
