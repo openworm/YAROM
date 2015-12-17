@@ -2,19 +2,16 @@
 # Inherit from the DataUser class to access data of all kinds (listed above)
 
 
-import hashlib
-import re
 import rdflib
-from rdflib import URIRef, Literal, Graph, Namespace, ConjunctiveGraph
-from rdflib.namespace import RDFS, RDF, NamespaceManager
+from rdflib import Literal, Graph, Namespace, ConjunctiveGraph
+from rdflib.namespace import RDFS, NamespaceManager
 from .quantity import Quantity
 from datetime import datetime as DT
 import datetime
-import transaction
 import os
 import traceback
 import logging
-from .configure import Configureable, Configuration, ConfigValue, BadConf
+from .configure import Configureable, Configuration, ConfigValue
 
 __all__ = ["Data", "RDFSource", "SerializationSource", "TrixSource", "SPARQLSource", "SleepyCatSource", "DefaultSource", "ZODBSource"]
 
@@ -384,11 +381,17 @@ class ZODBSource(RDFSource):
         Leaving unconfigured simply gives an in-memory data store.
     """
     def __init__(self,*args,**kwargs):
+        try:
+            import transaction
+        except:
+            print("Unable to use ZODBSource. Cannot import transaction")
         RDFSource.__init__(self,*args,**kwargs)
+
         self.conf['rdf.store'] = "ZODB"
 
     def open(self):
         import ZODB
+        import transaction
         from ZODB.FileStorage import FileStorage
         self.path = self.conf['rdf.store_conf']
         openstr = os.path.abspath(self.path)
@@ -411,11 +414,12 @@ class ZODBSource(RDFSource):
                 transaction.abort()
             transaction.begin()
             self.graph.open(self.path)
-        except Exception as e:
+        except Exception:
             transaction.abort()
             raise Exception("ZODB format error. This may be a result of using two different version of ZODB, such as between Python 3.x and Python 2.x")
 
     def close(self):
+        import transaction
         if self.graph == False:
             return
 
@@ -423,7 +427,7 @@ class ZODBSource(RDFSource):
 
         try:
             transaction.commit()
-        except Exception as e:
+        except Exception:
             # catch commit exception and close db.
             # otherwise db would stay open and follow up tests
             # will detect the db in error state

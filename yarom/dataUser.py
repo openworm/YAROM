@@ -2,7 +2,6 @@ from rdflib import Graph, Namespace
 from rdflib.namespace import RDF, NamespaceManager
 import logging
 from .configure import Configureable
-import transaction
 from .data import Data
 from .rdfUtils import triples_to_bgp
 
@@ -102,6 +101,7 @@ class DataUser(Configureable):
                 self.conf['fuxi.infer_func'](gr, g)
 
         if self.conf['rdf.source'] == 'ZODB':
+            import transaction
             # Commit the current commit
             transaction.commit()
             # Fire off a new one

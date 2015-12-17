@@ -144,7 +144,7 @@ class MappedClass(type):
 
         Should make it possible to garbage collect
 
-        :method:``deregister`` never touches the RDF graph itself.
+        :meth:`deregister` never touches the RDF graph itself.
         """
         if getattr(Y, cls.__name__) == cls:
             delattr(Y, cls.__name__)
