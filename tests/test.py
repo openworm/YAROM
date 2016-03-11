@@ -78,6 +78,7 @@ def make_graph(size=100):
         o = rdflib.URIRef("http://somehost.com/o" + str(i))
         g.add((s, p, o))
     return g
+
 try:
     TEST_CONFIG = Configuration.open("tests/_test.conf")
 except:

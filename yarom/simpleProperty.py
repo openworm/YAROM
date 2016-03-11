@@ -114,6 +114,7 @@ class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
 class DatatypeProperty(DatatypePropertyMixin, SimpleProperty):
     pass
 
+
 class ObjectProperty(ObjectPropertyMixin, SimpleProperty):
     pass
 
@@ -121,6 +122,7 @@ class ObjectProperty(ObjectPropertyMixin, SimpleProperty):
 class UnionProperty(UnionPropertyMixin, SimpleProperty):
 
     """ A Property that can handle either DataObjects or basic types """
+
 
 class Rel(tuple):
 

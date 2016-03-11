@@ -9,6 +9,10 @@ __all__ = [
     "ComponentTripler",
     "IdentifierMissingException"]
 
+# Directions for traversal across triples
+UP = 'up'  # left, towards the subject
+DOWN = 'down'  # right, towards the object
+
 
 class Variable(int):
     pass
@@ -214,30 +218,34 @@ class ComponentTripler(object):
         self.results = set()
 
     def g(self, current_node, i=0):
-
         L.debug("g({},{})".format(current_node, i))
-        if id(current_node) in self.seen:
-            return
+        if not self.see_node(current_node):
+            if current_node.defined:
+                self.recurse_upwards(current_node, i)
+                self.recurse_downwards(current_node, i)
+
+    def recurse_upwards(self, current_node, depth):
+        for prop in current_node.owner_properties:
+            self.recurse(prop.owner, prop, current_node, UP, depth)
+
+    def recurse_downwards(self, current_node, depth):
+        for prop in current_node.properties:
+            for val in prop.values:
+                self.recurse(current_node, prop, val, DOWN, depth)
+
+    def recurse(self, lhs, via, rhs, direction, depth):
+        (ths, nxt) = (rhs, lhs) if direction is UP else (lhs, rhs)
+        if lhs.defined:
+            self.results.add((lhs.idl, via.link, rhs.idl))
+            self.g(nxt, depth + 1)
+
+    def see_node(self, node):
+        node_id = id(node)
+        if node_id in self.seen:
+            return True
         else:
-            self.seen.add(id(current_node))
-
-        if not current_node.defined:
-            return
-
-        for e in current_node.owner_properties:
-            p = e.owner
-            if p.defined:
-                self.results.add((p.idl, e.link, current_node.idl))
-                self.g(p, i + 1)
-
-        L.debug("current_node.properties = {}".format(current_node.properties))
-        for e in current_node.properties:
-            L.debug("values = {}".format(e.values))
-            for val in e.values:
-                L.debug("val = {}".format(val))
-                if val.defined:
-                    self.results.add((current_node.idl, e.link, val.idl))
-                    self.g(val, i + 1)
+            self.seen.add(node_id)
+            return False
 
     def __call__(self):
         self.g(self.start)
@@ -279,13 +287,13 @@ class _QueryPreparer(object):
             self,
             current_node,
             property_list,
-            is_inverse):
+            direction):
         L.debug("gpap: current_node %s", current_node)
         ret = []
         is_good = False
         for this_property in property_list:
             L.debug("this_property is %s", this_property)
-            if is_inverse:
+            if direction is UP:
                 others = [this_property.owner]
             else:
                 others = this_property.values
@@ -295,7 +303,7 @@ class _QueryPreparer(object):
                 if not other.defined:
                     other_id = self.var(other_id)
 
-                if is_inverse:
+                if direction is UP:
                     self.stack.append((other_id, this_property.link, None))
                 else:
                     self.stack.append((None, this_property.link, other_id))
@@ -338,11 +346,11 @@ class _QueryPreparer(object):
             owner_parts = self.gather_paths_along_properties(
                 current_node,
                 current_node.owner_properties,
-                True)
+                UP)
             owned_parts = self.gather_paths_along_properties(
                 current_node,
                 current_node.properties,
-                False)
+                DOWN)
 
             self.seen.pop()
             subpaths = owner_parts[1] + owner_parts[1]
