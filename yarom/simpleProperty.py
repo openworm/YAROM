@@ -10,7 +10,7 @@ from .propertyMixins import (
     UnionPropertyMixin)
 from .yProperty import Property
 from .propertyValue import PropertyValue
-from .mapper import MappedPropertyClass
+from .mappedProperty import MappedPropertyClass
 from random import random
 
 L = logging.getLogger(__name__)

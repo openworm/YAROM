@@ -42,6 +42,7 @@ __version__ = "0.7.2"
 __author__ = 'Mark Watts'
 
 import logging
+import rdflib
 from .configure import (Configuration, Configureable, ConfigValue, BadConf)
 from .data import (
     Data,
@@ -52,7 +53,8 @@ from .data import (
     SerializationSource)
 
 from .dataUser import DataUser
-from .mapper import (MappedClass, Mapper)
+from .mapper import Mapper
+from .mappedClass import MappedClass
 from .quantity import Quantity
 from .yProperty import Property
 from .rdfUtils import (

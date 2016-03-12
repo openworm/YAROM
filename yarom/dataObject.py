@@ -4,10 +4,9 @@ import hashlib
 import six
 import random
 
-from .mapper import (
-    MappedPropertyClass,
-    MappedClass,
-    Resolver)
+from .mapperTypeResolver import Resolver
+from .mappedClass import MappedClass
+from .mappedProperty import MappedPropertyClass
 from .dataUser import DataUser
 from .configure import BadConf
 from .simpleProperty import (SimpleProperty, DatatypeProperty, ObjectProperty)

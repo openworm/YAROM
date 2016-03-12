@@ -32,7 +32,6 @@ import six
 import traceback
 from yarom.zodb import ZODBSource
 
-HAS_BSDDB = False
 HAS_FUXI = False
 HAS_ZODB = False
 
@@ -65,12 +64,6 @@ def clear_graph(graph):
     graph.update("CLEAR ALL")
 
 
-def unlink_zodb_db(fname):
-    os.unlink(fname)
-    os.unlink(fname + '.index')
-    os.unlink(fname + '.tmp')
-    os.unlink(fname + '.lock')
-
 
 def make_graph(size=100):
     """ Make an rdflib graph """
@@ -82,39 +75,11 @@ def make_graph(size=100):
         g.add((s, p, o))
     return g
 
-try:
-    TEST_CONFIG = Configuration.open("tests/_test.conf")
-except:
-    TEST_CONFIG = Configuration.open("tests/test_default.conf")
-
 
 @unittest.skipIf(
     (TEST_CONFIG['rdf.source'] == 'Sleepycat') and (
         HAS_BSDDB == False),
     "Sleepycat store will not work without bsddb")
-class _DataTestB(unittest.TestCase):
-    TestConfig = TEST_CONFIG
-
-    def delete_dir(self):
-        self.path = self.TestConfig['rdf.store_conf']
-        try:
-            if self.TestConfig['rdf.source'] == "Sleepycat":
-                subprocess.call("rm -rf " + self.path, shell=True)
-            elif self.TestConfig['rdf.source'] == "ZODB":
-                unlink_zodb_db(self.path)
-        except OSError as e:
-            if e.errno == 2:
-                # The file may not exist and that's fine
-                pass
-            else:
-                raise e
-
-    def setUp(self):
-        self.delete_dir()
-
-    def tearDown(self):
-        self.delete_dir()
-
 
 class _DataTest(_DataTestB):
 
@@ -771,71 +736,6 @@ class PropertyTest(_DataTest):
         t.b = True
         self.assertEqual('12', t.one())
 
-
-class MapperTest(_DataTestB):
-
-    def setUp(self):
-        _DataTestB.setUp(self)
-        self.mapper = Mapper.get_instance()
-        Configureable.conf = self.TestConfig
-        Configureable.conf = Data()
-        Configureable.conf.openDatabase()
-        if hasattr(Y, 'dataObject'):
-            self.mapper.reload_module(yarom.dataObject)
-            self.mapper.reload_module(yarom.classRegistry)
-        else:
-            self.mapper.load_module('yarom.dataObject')
-            self.mapper.load_module('yarom.classRegistry')
-
-    def tearDown(self):
-        Configureable.conf.closeDatabase()
-        self.mapper.deregister_all()
-        _DataTestB.tearDown(self)
-
-    @unittest.expectedFailure
-    def test_addToGraph(self):
-        """Test that we can load a descendant of DataObject as a class"""
-        # TODO: See related TODO in mapper.py
-        dc = MappedClass("TestDOM", (Y.DataObject,), dict())
-        self.assertIn(
-            (dc.rdf_type,
-             R.RDFS['subClassOf'],
-             Y.DataObject.rdf_type),
-            dc.du.rdf)
-
-    def test_access_created_from_module(self):
-        """Test that we can add an object and then access it from the yarom module"""
-        MappedClass("TestDOM", (Y.DataObject,), dict())
-        self.assertTrue(hasattr(Y, "TestDOM"))
-
-    def test_object_from_id_class(self):
-        """ Ensure we get an object from just the class name """
-        dc = MappedClass("TestDOM", (Y.DataObject,), dict())
-        self.mapper.remap()
-        g = self.mapper.oid(dc.rdf_type)
-        self.assertIsInstance(g, Y.TestDOM)
-
-    def test_children_are_added(self):
-        """ Ensure that, on registration, children are added """
-        MappedClass("TestDOM", (Y.DataObject,), dict())
-        self.assertIn(
-            Y.TestDOM,
-            Y.DataObject.children,
-            msg="The test class is a child")
-
-    def test_children_are_deregistered(self):
-        """ Ensure that, on deregistration, DataObject types are cleared from the module namespace """
-        self.assertTrue(
-            hasattr(
-                Y,
-                'DataObject'),
-            "DataObject is in the yarom module")
-        self.mapper.deregister_all()
-        self.assertFalse(
-            hasattr(
-                Y,
-                'DataObject'),
-            "DataObject is no longer in the yarom module")
 
 
 class RDFPropertyTest(_DataTest):
