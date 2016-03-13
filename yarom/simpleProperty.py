@@ -12,6 +12,7 @@ from .yProperty import Property
 from .propertyValue import PropertyValue
 from .mappedProperty import MappedPropertyClass
 from random import random
+from .deprecation import deprecated
 
 L = logging.getLogger(__name__)
 
@@ -46,18 +47,40 @@ class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
         v = (random(), random())
         self._value = Variable("_" + hashlib.md5(str(v).encode()).hexdigest())
 
-    def hasValue(self):
+    def has_value(self):
         """ Returns true if the :meth:`set` has been called previously """
         return len(self._v) > 0
 
+    @deprecated('Please use has_value instead.')
+    def hasValue(self):
+        """ Returns true if the :meth:`set` has been called previously """
+        return self.has_value()
+
+    def has_defined_value(self):
+        """
+        Returns true if this property has a defined value
+        """
+        for x in self._v:
+            if x.defined:
+                return True
+        return False
+
     def _get(self):
+        """ Get values from a generator """
         for x in self._v:
             yield x
 
     @property
     def values(self):
+        """ Get all values """
         return self._v
 
+    @property
+    def defined_values(self):
+        """ Get values which are have their defined property set to True """
+        return tuple(x for x in self._v if x.defined)
+
+    @deprecated('Please use set instead.')
     def setValue(self, v):
         self.set(v)
 
