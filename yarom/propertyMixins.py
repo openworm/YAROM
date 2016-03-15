@@ -110,12 +110,7 @@ class UnionPropertyMixin(object):
                         ident +
                         '", for a DataObject. Creating a default-typed object')
                 else:
-                    try:
-                        the_type = self._resolver.type_resolver(types)
-                        L.debug("the_type = {}".format(the_type))
-                    except:
-                        L.warn(
-                            "UnionProperty.get: Couldn't resolve types for `{}'. "
-                            "Defaulting to a DataObject typed object".format(ident))
+                    the_type = self._resolver.type_resolver(types)
+                    L.debug("the_type = {}".format(the_type))
 
                 yield self._resolver.id2ob(ident, the_type)
