@@ -21,7 +21,7 @@ class MappedClass(type):
     Sets up the graph with things needed for MappedClasses
     """
     def __init__(cls, name, bases, dct):
-        L.debug("INITIALIZING", name)
+        L.debug("INITIALIZING %s", name)
         type.__init__(cls, name, bases, dct)
         cls.mapper = Mapper.get_instance()
         if 'auto_mapped' in dct:
@@ -100,7 +100,7 @@ class MappedClass(type):
 
         Also registers the properties of this DataObject
         """
-        L.debug("REGISTERING", cls.__name__)
+        L.debug("REGISTERING %s", cls.__name__)
         cls._du = DataUser()
         cls.children = []
         cls.mapper.MappedClasses[cls.__name__] = cls
@@ -111,7 +111,7 @@ class MappedClass(type):
 
         for parent in mapped_parents:
             sibs = cls.mapper.DataObjectsChildren.get(parent.__name__, set([]))
-            sibs.add(cls)
+            sibs.add(cls.__name__)
             cls.mapper.DataObjectsChildren[parent.__name__] = sibs
 
         for c in mapped_parents:
@@ -152,6 +152,7 @@ class MappedClass(type):
 
         :meth:`deregister` never touches the RDF graph itself.
         """
+        L.debug("DEREGISTERING %s", cls.__name__)
         if getattr(yarom, cls.__name__) == cls:
             delattr(yarom, cls.__name__)
         elif getattr(yarom, "_" + cls.__name__) == cls:
@@ -165,6 +166,7 @@ class MappedClass(type):
 
         for c in cls.parents:
             c.remove_child(cls)
+            cls.mapper.DataObjectsChildren[c.__name__].remove(cls.__name__)
 
     def remove_child(cls, child):
         if hasattr(cls, 'children'):
@@ -192,7 +194,7 @@ class MappedClass(type):
         """
         # NOTE: Map should be quick: it runs for every DataObject sub-class
         #       created and possibly several times in testing
-        L.debug("MAPPING", cls.__name__)
+        L.debug("MAPPING %s", cls.__name__)
         from .dataObject import TypeDataObject
         TypeDataObject.mapped = True
         if cls.rdf_type is None:
@@ -215,6 +217,7 @@ class MappedClass(type):
         """
         Unmaps the class
         """
+        L.debug("UNMAPPING %s", cls.__name__)
         del cls.mapper.RDFTypeTable[cls.rdf_type]
         # XXX: What else to do here?
 
@@ -230,7 +233,7 @@ class MappedClass(type):
 
     def _add_parents_to_graph(cls):
         from .dataObject import RDFSSubClassOfProperty, DataObject
-        L.debug('adding parents for', cls)
+        L.debug('adding parents for %s', cls)
         for parent in cls.parents:
             ancestors = (x for x in parent.mro() if issubclass(x, DataObject))
             for ancestor in ancestors:

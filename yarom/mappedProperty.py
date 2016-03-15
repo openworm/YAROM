@@ -10,7 +10,7 @@ L = logging.getLogger(__name__)
 class MappedPropertyClass(type):
 
     def __init__(cls, name, bases, dct):
-        L.debug("INITIALIZING", name)
+        L.debug("INITIALIZING %s", name)
         super(MappedPropertyClass, cls).__init__(name, bases, dct)
         cls.mapper = Mapper.get_instance()
         if 'link' in dct:
@@ -20,7 +20,7 @@ class MappedPropertyClass(type):
     def register(cls):
         # This is how we create the RDF predicate that points from the owner
         # to this property
-        L.debug("REGISTERING", cls.__name__)
+        L.debug("REGISTERING %s", cls.__name__)
         cls.mapper.MappedClasses[cls.__name__] = cls
         cls.mapper.DataObjectProperties[cls.__name__] = cls
         # XXX: Should we record class hierarchy of properties?
@@ -66,7 +66,7 @@ class MappedPropertyClass(type):
             RDFSDomainProperty,
             RDFSRangeProperty)
 
-        L.debug("MAPPING", cls.__name__)
+        L.debug("MAPPING %s", cls.__name__)
         if cls.link is None:
             if hasattr(cls, 'owner_type'):
                 cls.link = cls.owner_type.rdf_namespace[cls.linkName]
