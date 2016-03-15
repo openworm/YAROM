@@ -8,7 +8,9 @@ from .data import RDFSource
 
 L = logging.getLogger(__name__)
 
+
 class ZODBSource(RDFSource):
+
     """ Reads from and queries against a configured Zope Object Database.
 
         If the configured database does not exist, it is created.
@@ -21,8 +23,9 @@ class ZODBSource(RDFSource):
         Leaving unconfigured simply gives an in-memory data store.
     """
     name = "zodb"
-    def __init__(self,*args,**kwargs):
-        super(ZODBSource, self).__init__(*args,**kwargs)
+
+    def __init__(self, *args, **kwargs):
+        super(ZODBSource, self).__init__(*args, **kwargs)
         self.conf['rdf.store'] = "ZODB"
 
     def open(self):
@@ -32,9 +35,9 @@ class ZODBSource(RDFSource):
         openstr = os.path.abspath(self.path)
         try:
             fs = FileStorage(openstr)
-            self.zdb=ZODB.DB(fs)
-            self.conn=self.zdb.open()
-            root=self.conn.root()
+            self.zdb = ZODB.DB(fs)
+            self.conn = self.zdb.open()
+            root = self.conn.root()
             if 'rdflib' not in root:
                 root['rdflib'] = ConjunctiveGraph('ZODB')
             self.graph = root['rdflib']
@@ -51,10 +54,13 @@ class ZODBSource(RDFSource):
             self.graph.open(self.path)
         except Exception:
             transaction.abort()
-            raise Exception("ZODB format error. This may be a result of using two different version of ZODB, such as between Python 3.x and Python 2.x")
+            raise Exception(
+                "ZODB format error. This may be a result of using two"
+                " different versions of ZODB, such as between Python 3.x and"
+                " Python 2.x")
 
     def close(self):
-        if self.graph == False:
+        if self.graph is None:
             return
 
         self.graph.close()
@@ -70,5 +76,4 @@ class ZODBSource(RDFSource):
             transaction.abort()
         self.conn.close()
         self.zdb.close()
-        self.graph = False
-
+        self.graph = None
