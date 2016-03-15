@@ -47,7 +47,6 @@ from .configure import (Configuration, Configureable, ConfigValue, BadConf)
 from .data import (
     Data,
     SPARQLSource,
-    SleepyCatSource,
     DefaultSource,
     TrixSource,
     SerializationSource)
@@ -63,10 +62,17 @@ from .rdfUtils import (
     triples_to_bgp,
     deserialize_rdflib_term)
 
+import sys
+
 this_module = __import__('yarom')
 this_module.connected = False
 
 L = logging.getLogger(__name__)
+
+DEFAULT_MODULES_TO_LOAD = ["yarom.dataObject",
+                           "yarom.objectCollection",
+                           "yarom.relationship",
+                           "yarom.classRegistry"]
 
 
 def config(key=None, value=None):
@@ -114,7 +120,8 @@ def loadData(data, dataFormat):
 def connect(conf=False,
             do_logging=False,
             data=False,
-            dataFormat='n3'):
+            dataFormat='n3',
+            modulesToLoad=None):
     """Load desired configuration and open the database
 
     Parameters
@@ -140,11 +147,12 @@ def connect(conf=False,
 
     if do_logging:
         logging.basicConfig(level=logging.DEBUG)
+    if modulesToLoad is None:
+        modulesToLoad = DEFAULT_MODULES_TO_LOAD
 
     setConf(conf)
     dbconn = Configureable.conf
     dbconn.register_source(SPARQLSource)
-    dbconn.register_source(SleepyCatSource)
     dbconn.register_source(TrixSource)
     dbconn.register_source(SerializationSource)
 
@@ -153,21 +161,15 @@ def connect(conf=False,
 
     atexit.register(disconnect)
 
-    if hasattr(m, 'connected_before'):
-        mapper.reload_module(m.dataObject)
-        mapper.reload_module(m.objectCollection)
-        mapper.reload_module(m.relationship)
-        mapper.reload_module(m.classRegistry)
-    else:
-        mapper.load_module("yarom.dataObject")
-        mapper.load_module("yarom.objectCollection")
-        mapper.load_module("yarom.relationship")
-        mapper.load_module("yarom.classRegistry")
+    for mod in modulesToLoad:
+        if mod in sys.modules:
+            mapper.reload_module(sys.modules[mod])
+        else:
+            mapper.load_module(mod)
 
     mapper.remap()
     mapper.resolve_classes_from_rdf(dbconn['rdf.graph'])
     m.connected = True
-    m.connected_before = True
     if data:
         loadData(data, dataFormat)
 
