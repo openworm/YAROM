@@ -1,12 +1,11 @@
 from yarom import (Configuration, connect, disconnect)
 from yarom import config as C
+import rdflib
 import unittest
 import subprocess
 import os
 
-HAS_BSDDB = False
-TEST_NS = "http://github.com/mwatts15/YAROM/tests/"
-
+TEST_NS = rdflib.Namespace("YAROM/tests/")
 
 try:
     TEST_CONFIG = Configuration.open("tests/_test.conf")
@@ -16,6 +15,7 @@ except:
 
 class _DataTestB(unittest.TestCase):
     TestConfig = TEST_CONFIG
+    longMessage = True
 
     def delete_dir(self):
         self.path = self.TestConfig['rdf.store_conf']
@@ -38,28 +38,20 @@ class _DataTestB(unittest.TestCase):
         self.delete_dir()
 
 
-@unittest.skipIf(
-    (TEST_CONFIG['rdf.source'] == 'Sleepycat') and (not HAS_BSDDB),
-    "Sleepycat store will not work without bsddb")
-class _DataTest(_DataTestB):
-
-    def setUp(self):
-        self.TestConfig['rdf.namespace'] = TEST_NS
-        _DataTestB.setUp(self)
-        # Set do_logging to True if you like walls of text
-        connect(conf=self.TestConfig, do_logging=False)
-
-    def tearDown(self):
-        disconnect()
-        _DataTestB.tearDown(self)
-
-    @property
-    def config(self, *args):
-        return C(*args)
-
 
 def unlink_zodb_db(fname):
     os.unlink(fname)
     os.unlink(fname + '.index')
     os.unlink(fname + '.tmp')
     os.unlink(fname + '.lock')
+
+
+def make_graph(size=100):
+    """ Make an rdflib graph """
+    g = rdflib.Graph()
+    for i in range(size):
+        s = rdflib.URIRef(TEST_NS["s" + str(i)])
+        p = rdflib.URIRef(TEST_NS["p" + str(i)])
+        o = rdflib.URIRef(TEST_NS["o" + str(i)])
+        g.add((s, p, o))
+    return g

@@ -2,10 +2,6 @@
 
 import unittest
 
-import sys
-sys.path.insert(0, ".")
-
-
 import yarom
 from yarom import (
     Configuration,
@@ -15,87 +11,37 @@ from yarom import (
     DataUser,
     BadConf,
     Property,
-    MappedClass,
     Quantity)
-from yarom import mapper
 from yarom.mapper import Mapper
-from yarom.data import SleepyCatSource
 import yarom as Y
-import test_data as TD
 import rdflib
 import rdflib as R
 import pint as Q
 import os
-import subprocess
 import tempfile
 import six
 import traceback
-from yarom.zodb import ZODBSource
+from .base_test import TEST_CONFIG, TEST_NS
+from .data_test import _DataTest
+from . import test_data as TD
 
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 HAS_FUXI = False
-HAS_ZODB = False
 
-try:
-    import bsddb
-    HAS_BSDDB = True
-except ImportError:
-    try:
-        import bsddb3
-        HAS_BSDDB = True
-    except:
-        HAS_BSDDB = False
 
 try:
     import FuXi
+    print("FuXi:", FuXi.__file__)  # Quiets 'unused' warnings from pyflakes
     HAS_FUXI = True
 except ImportError:
     pass
-
-try:
-    import ZODB
-    HAS_ZODB = True
-except:
-    pass
-
-test_ns = "http://github.com/mwatts15/YAROM/tests/"
 
 
 def clear_graph(graph):
     graph.update("CLEAR ALL")
 
-
-
-def make_graph(size=100):
-    """ Make an rdflib graph """
-    g = R.Graph()
-    for i in range(size):
-        s = rdflib.URIRef("http://somehost.com/s" + str(i))
-        p = rdflib.URIRef("http://somehost.com/p" + str(i))
-        o = rdflib.URIRef("http://somehost.com/o" + str(i))
-        g.add((s, p, o))
-    return g
-
-
-@unittest.skipIf(
-    (TEST_CONFIG['rdf.source'] == 'Sleepycat') and (
-        HAS_BSDDB == False),
-    "Sleepycat store will not work without bsddb")
-
-class _DataTest(_DataTestB):
-
-    def setUp(self):
-        self.TestConfig['rdf.namespace'] = test_ns
-        _DataTestB.setUp(self)
-        # Set do_logging to True if you like walls of text
-        yarom.connect(conf=self.TestConfig, do_logging=False)
-
-    def tearDown(self):
-        yarom.disconnect()
-        _DataTestB.tearDown(self)
-
-    @property
-    def config(self):
-        return yarom.config()
 
 
 class ConfigureTest(unittest.TestCase):
@@ -217,23 +163,30 @@ class DataObjectTest(_DataTest):
         u = r.upload_date()
         self.assertIsNotNone(u)
 
-    @unittest.expectedFailure
     def test_triples_cycle(self):
-        """ Test that no duplicate triples are released when there's a cycle in the graph """
-        # TODO: This test is invalid
+        """
+        Test that no duplicate triples are released when there's a cycle in the
+        graph
+        """
         class T(Y.DataObject):
             objectProperties = ['s']
+            defined = True
+
+            def identifier(self):
+                return TEST_NS["soup"]
+
+        T.mapper.remap()
 
         t = T()
         s = T()
         t.s(s)
         s.s(t)
-        seen = set()
-        for x in t.triples(query=True):
-            if (x in seen):
-                self.fail("got a duplicate: " + str(x))
-            else:
-                seen.add(x)
+        g = rdflib.Graph()
+        g.namespace_manager = t.rdf.namespace_manager
+        trips = list(t.triples())
+        for e in trips:
+            g.add(e)
+        self.assertEquals(len(set(trips)), len(trips))
 
     def test_triples_clone_sibling(self):
         """ Test that no duplicate triples are released when there's a clone in the graph.
@@ -246,7 +199,7 @@ class DataObjectTest(_DataTest):
         """
         class T(Y.DataObject):
             objectProperties = ['s']
-        T.map()
+        T.mapper.remap()
         t = T(key="a")
         s = T(key="b")
         v = T(key="c")
@@ -366,9 +319,7 @@ class DataUserTestToo(unittest.TestCase):
         with sameAsRules(ex, pred) as rules_file:
             c = Configuration()
             c.copy(TEST_CONFIG)
-            c['rdf.source'] = 'zodb'
-            c['rdf.store_conf'] = 'zodb'
-            c['rdf.namespace'] = test_ns
+            c['rdf.namespace'] = TEST_NS
             Configureable.conf = c
             d = Data()
             Configureable.conf = d
@@ -382,7 +333,6 @@ class DataUserTestToo(unittest.TestCase):
             du.add_statements(graph)
             self.assertIn((ex['x'], ex['b'], ex['k']), du.rdf)
             self.assertIn((ex['x'], ex['d'], ex['e']), du.rdf)
-            unlink_zodb_db('zodb')
 
 
 class sameAsRules(object):
@@ -579,8 +529,6 @@ class QuantityTest(unittest.TestCase):
         q = Quantity(23, "milliliter")
         self.assertEqual(q, q_rdf.toPython())
 
-# class QuantityDataTest(_DataTest):
-
 
 class DataTest(unittest.TestCase):
 
@@ -588,7 +536,7 @@ class DataTest(unittest.TestCase):
         c = Configuration()
         c['rdf.source'] = 'default'
         c['rdf.store'] = 'default'
-        c['rdf.namespace'] = test_ns
+        c['rdf.namespace'] = TEST_NS
         Configureable.conf = c
         d = Data()
         d.openDatabase()
@@ -610,58 +558,6 @@ class DataTest(unittest.TestCase):
             traceback.print_exc()
             self.fail("Bad state")
 
-    @unittest.skipIf((HAS_ZODB == False), "ZODB persistence test requires ZODB")
-    def test_ZODB_persistence(self):
-        c = Configuration()
-        fname = 'ZODB.fs'
-        c['rdf.source'] = 'ZODB'
-        c['rdf.store_conf'] = fname
-        c['rdf.namespace'] = test_ns
-        Configureable.conf = c
-        d = Data()
-        d.register_source(ZODBSource)
-        try:
-            d.openDatabase()
-            g = make_graph(20)
-            for x in g:
-                d['rdf.graph'].add(x)
-            d.closeDatabase()
-
-            d.openDatabase()
-            self.assertEqual(20, len(list(d['rdf.graph'])))
-            d.closeDatabase()
-        except:
-            traceback.print_exc()
-            self.fail("Bad state")
-        unlink_zodb_db(fname)
-
-    @unittest.skipIf((HAS_BSDDB == False), "Sleepycat requires working bsddb")
-    def test_Sleepycat_persistence(self):
-        """ Should be able to init without these values """
-        c = Configuration()
-        fname = 'Sleepycat_store'
-        c['rdf.source'] = 'Sleepycat'
-        c['rdf.store_conf'] = fname
-        c['rdf.namespace'] = test_ns
-        Configureable.conf = c
-        d = Data()
-        d.register_source(SleepyCatSource)
-        try:
-            d.openDatabase()
-            g = make_graph(20)
-            for x in g:
-                d['rdf.graph'].add(x)
-            d.closeDatabase()
-
-            d.openDatabase()
-            self.assertEqual(20, len(list(d['rdf.graph'])))
-            d.closeDatabase()
-        except:
-            traceback.print_exc()
-            self.fail("Bad state")
-
-        subprocess.call("rm -rf " + fname, shell=True)
-
     def test_trix_source(self):
         """ Test that we can load the datbase up from an XML file.
         """
@@ -670,7 +566,7 @@ class DataTest(unittest.TestCase):
         c = Configuration()
         c['rdf.source'] = 'trix'
         c['rdf.store'] = 'default'
-        c['rdf.namespace'] = test_ns
+        c['rdf.namespace'] = TEST_NS
         c['trix_location'] = f[1]
 
         with open(f[1], 'w') as fo:
@@ -700,7 +596,7 @@ class DataTest(unittest.TestCase):
         c['rdf.serialization'] = f[1]
         c['rdf.serialization_format'] = 'trig'
         c['rdf.store'] = 'default'
-        c['rdf.namespace'] = test_ns
+        c['rdf.namespace'] = TEST_NS
         with open(f[1], 'w') as fo:
             fo.write(TD.Trig_data)
 
@@ -737,7 +633,6 @@ class PropertyTest(_DataTest):
         self.assertEqual('12', t.one())
 
 
-
 class RDFPropertyTest(_DataTest):
 
     def test_getInstanceTwice(self):
@@ -763,15 +658,15 @@ class SimplePropertyTest(_DataTest):
         # the class is created
         class K(Y.DataObject):
             datatypeProperties = [{'name': 'boots', 'multiple': False}, 'bets']
-
             objectProperties = [{'name': 'bats', 'multiple': False}, 'bits']
-        K.map()
+
+        K.mapper.remap()
         self.k = K
 
     def test_non_multiple_saves_single_values(self):
         class C(Y.DataObject):
             datatypeProperties = [{'name': 't', 'multiple': False}]
-        C.map()
+        C.mapper.remap()
         do = C(key="s")
         do.t("value1")
         do.t("vaule2")
@@ -841,7 +736,7 @@ class UnionPropertyTest(_DataTest):
         # the class is created
         class K(Y.DataObject):
             _ = ['name']
-        Y.remap()
+        Mapper.get_instance().remap()
         self.k = K
 
     def test_get_literal(self):
@@ -861,7 +756,7 @@ class UnionPropertyTest(_DataTest):
         self.assertIsInstance(
             val,
             self.k,
-            "stored DataObject is of the correct type")
+            '{} is a {}'.format(val, type(val)))
         self.assertEqual(val, j, "returned value equals stored value")
 
 
@@ -884,6 +779,7 @@ def main(*args, **kwargs):
     unittest.main(*args, **kwargs)
 
 if __name__ == '__main__':
+    import sys
     if len(sys.argv) == 3:
         main(defaultTest=sys.argv[1])
     else:
