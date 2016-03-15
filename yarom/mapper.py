@@ -1,5 +1,5 @@
 from __future__ import print_function
-
+import six
 import importlib as I
 import logging
 import rdflib as R
@@ -12,7 +12,6 @@ __all__ = [
     "Resolver"]
 
 L = logging.getLogger(__name__)
-
 
 
 class Mapper(object):
@@ -39,41 +38,38 @@ class Mapper(object):
         pclasses = set(self.DataObjectProperties.values())
         oclasses = classes - pclasses
 
-        ordering_map = self.get_class_ordering(oclasses)
-        print("oclasses", oclasses)
-        sorted_oclasses = sorted(oclasses, key=lambda y: ordering_map[y.__name__])
-
-        print("MAPPING: {}".format(sorted_oclasses))
+        ordering_map = self.get_class_ordering()
+        sorted_oclasses = sorted(
+            oclasses,
+            key=lambda y: ordering_map[y.__name__])
 
         for x in sorted_oclasses:
             x.map()
+
         for x in pclasses:
             x.map()
 
-    def get_class_ordering(self, l):
+    def get_class_ordering(self):
         res = dict()
         base = self.get_base_class()
-        print("base class", base)
-        def igen():
-            i = 0
-            while True:
-                yield i
-                i += 1
 
-        def helper(current, gen):
-            n = current.__name__
+        def helper(n, gen):
             res[n] = next(gen)
-            children = self.DataObjectsChildren.get(n,())
+            children = self.DataObjectsChildren.get(n, ())
             for c in children:
                 helper(c, gen)
-        helper(base, igen())
-        print(res)
+        helper(base.__name__, iter(six.moves.xrange(len(self.MappedClasses) + 1)))
         return res
 
     def get_base_class(self):
-        first = next(self.DataObjectsParents.iterkeys())
+        first = next(six.iterkeys(self.DataObjectsParents))
+
         def helper(key):
-            parents = self.DataObjectsParents[key]
+            try:
+                parents = self.DataObjectsParents[key]
+            except KeyError as e:
+                raise Exception('Couldn\'t find the class {} in DataObjectsParents. MappedClasses = {}'.format(key, self.MappedClasses))
+
             if len(parents) == 0:
                 return self.MappedClasses[key]
             else:
@@ -92,17 +88,18 @@ class Mapper(object):
     def resolve_classes_from_rdf(self, graph):
         """ Gathers Python classes from the RDF graph.
 
-        If there is a remote Python module registered in the RDF graph then an
+        If there is a remote Python module registered in the RDF graph, then an
         import of the module is attempted. If no remote module can be found (i.e.,
         none has been registered or the registered module cannot be retrieved) then
-        a subclass of DataObject is generated from data available in the graph
+        a subclass of the base class is generated from data available in the graph
         """
         # get the DataObject class resource
         # get the subclasses of DataObject, transitively
         # take the list of subclasses and resolve them into Python classes
+        base = self.get_base_class()
         for x in graph.transitive_subjects(
                 R.RDFS['subClassOf'],
-                Y.DataObject.rdf_type):
+                base.rdf_type):
             L.debug("RESOLVING {}".format(x))
             self.resolve_class(x)
 
@@ -145,13 +142,21 @@ class Mapper(object):
         return mod_data
 
     def load_module(self, module_name):
-        L.debug("LOADING", module_name)
+        """ Loads the module.
+
+        This is just a convenience method for the normal Python module load.
+        """
+        L.debug("LOADING %s", module_name)
         a = I.import_module(module_name)
         return a
 
     def reload_module(self, mod):
+        """ Reloads the module.
+
+        This is just a convenience method for the normal Python module reload.
+        """
         from six.moves import reload_module
-        L.debug("RE-LOADING", mod)
+        L.debug("RE-LOADING %s", mod)
         a = reload_module(mod)
         return a
 
@@ -190,18 +195,27 @@ class Mapper(object):
             o = c(generate_key=True)
         return o
 
+    def compare_types(self, a, b):
+        try:
+            ordr = self.get_class_ordering()
+            return ordr[a.__name__] - ordr[b.__name__]
+        except KeyError as e:
+            raise Exception(
+                "The given type is not in the class ordering: " +
+                str(e))
+
     def get_most_specific_rdf_type(self, types):
         """ Gets the most specific rdf_type.
 
-        Returns the URI corresponding to the lowest in the DataObject class
-        hierarchy from among the given URIs.
+        Returns the URI corresponding to the lowest in the class hierarchy from
+        among the given URIs.
         """
         # TODO: Use the MappedClasses and DataObjectsParents to get the root
-        do = self.load_module('yarom.dataObject')
-        least = do.DataObject
+        least = self.get_base_class()
         for x in types:
             try:
-                if self.RDFTypeTable[x] < least:
+                xtype = self.RDFTypeTable[x]
+                if self.compare_types(xtype, least) > 0:
                     least = self.RDFTypeTable[x]
             except KeyError:
                 pass
