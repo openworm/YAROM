@@ -535,7 +535,7 @@ class IdentifierMissingException(Exception):
         question, but there is none """
 
     def __init__(self, dataObject="[unspecified object]", *args, **kwargs):
-        super().__init__(
+        super(IdentifierMissingException, self).__init__(
             "An identifier should be provided for {}".format(
                 str(dataObject)),
             *args,

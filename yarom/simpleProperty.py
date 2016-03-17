@@ -127,8 +127,8 @@ class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
         return hash(self.link)
 
     def __str__(self):
-        return str(
-            self.linkName + "(" + str(" ".join(repr(x) for x in self._v)) + ")")
+        return "{}({})".format(self.linkName,
+                               " ".join(repr(x) for x in self._v))
 
     def __repr__(self):
         return str(self)
