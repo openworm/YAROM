@@ -192,6 +192,12 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
                 'dataObject.identifier_hash',
                 'md5'))(o)
 
+    def set_property_values(self, values):
+        for k in six.iterkeys(values.keys):
+            o = values[k]
+            if o is not None:
+                setattr(self, k, o)
+
     def make_identifier_from_properties(self, *properties):
         if len(properties) == 0:
             raise Exception("No properties provided to make identifier")
