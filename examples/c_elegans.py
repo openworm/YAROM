@@ -1,7 +1,10 @@
 import yarom as Y
+from yarom.utils import slice_dict
+import six
+
 
 class Worm(Y.DataObject):
-    datatypeProperties = [{'name':'scientific_name', 'multiple':False}]
+    datatypeProperties = [{'name': 'scientific_name', 'multiple': False}]
     objectProperties = ['neuron_network', 'muscle']
 
     def defined_augment(self):
@@ -11,6 +14,7 @@ class Worm(Y.DataObject):
 
     def identifier_augment(self):
         return self.make_identifier_from_properties('scientific_name')
+
 
 class Evidence(Y.DataObject):
     _ = ['title', 'asserts']
@@ -27,7 +31,9 @@ class Evidence(Y.DataObject):
     def identifier_augment(self):
         return self.make_identifier_from_properties('title')
 
+
 class Cell(Y.DataObject):
+
     """
     A biological cell.
 
@@ -47,10 +53,10 @@ class Cell(Y.DataObject):
     Attributes
     ----------
     name : DatatypeProperty
-        The 'adult' name of the cell typically used by biologists when discussing C. elegans
+        The 'adult' name of the cell typically used by biologists when
+        discussing C. elegans
     lineageName : DatatypeProperty
         The lineageName of the cell
-
     description : DatatypeProperty
         A description of the cell
     divisionVolume : DatatypeProperty
@@ -64,15 +70,15 @@ class Cell(Y.DataObject):
             >>> c = Cell(lineageName="AB plapaaaap")
             >>> c.divisionVolume(v)
     """
-    datatypeProperties = [ 'lineageName',
-            {'name':'name', 'multiple':False},
-            'divisionVolume',
-            'description' ]
+    datatypeProperties = ['lineageName',
+                          {'name': 'name', 'multiple': False},
+                          'divisionVolume',
+                          'description']
 
     def __init__(self, name=False, **kwargs):
         if name:
             kwargs['name'] = name
-        Y.DataObject.__init__(self, **kwargs)
+        super(Cell, self).__init__(**kwargs)
 
     def _ident_data(self):
         return [self.name.values]
@@ -88,6 +94,7 @@ class Cell(Y.DataObject):
 
 
 class Neuron(Cell):
+
     """
     A neuron.
 
@@ -104,18 +111,25 @@ class Neuron(Cell):
         >>> aval.type()
         set([u'interneuron'])
 
-        #show how many connections go out of AVAL
+        # show how many connections go out of AVAL
         >>> aval.connection.count('pre')
         77
 
         >>> aval.name()
         u'AVAL'
 
-        #list all known receptors
+        # list all known receptors
         >>> sorted(aval.receptors())
-        [u'GGR-3', u'GLR-1', u'GLR-2', u'GLR-4', u'GLR-5', u'NMR-1', u'NMR-2', u'UNC-8']
+        [u'GGR-3',
+         u'GLR-1',
+         u'GLR-2',
+         u'GLR-4',
+         u'GLR-5',
+         u'NMR-1',
+         u'NMR-2',
+         u'UNC-8']
 
-        #show how many chemical synapses go in and out of AVAL
+        # show how many chemical synapses go in and out of AVAL
         >>> aval.Syn_degree()
         90
 
@@ -135,7 +149,8 @@ class Neuron(Cell):
     neurotransmitter : DatatypeProperty
         Neurotransmitters associated with this neuron
     neuropeptide : DatatypeProperty
-        Name of the gene corresponding to the neuropeptide produced by this neuron
+        Name of the gene corresponding to the neuropeptide produced by this
+        neuron
     neighbor : Property
         Get neurons connected to this neuron if called with no arguments, or
         with arguments, state that neuronName is a neighbor of this Neuron
@@ -144,26 +159,32 @@ class Neuron(Cell):
         junctions between this neuron and others
 
     """
+
     datatypeProperties = [
         "type",
         "receptor",
         "innexin",
         "neurotransmitter",
         "neuropeptide"]
+
     objectProperties = [
-            "neighbor",
-            "connection"
-            ]
+        "neighbor",
+        "connection"
+    ]
 
     def __init__(self, *args, **kwargs):
+        super(Neuron, self).__init__(*args, **kwargs)
+        self.set_property_values(slice_dict(kwargs, self.datatypeProperties))
+        self.set_property_values(slice_dict(kwargs, self.objectProperties))
 
-        Cell.__init__(self, *args, **kwargs)
 
 class SynapseType:
     Chemical = "send"
     GapJunction = "gapJunction"
 
+
 class Connection(Y.DataObject):
+
     """Connection between neurons
 
     Parameters
@@ -178,19 +199,22 @@ class Connection(Y.DataObject):
         The kind of synaptic connection. 'gapJunction' indicates
         a gap junction and 'send' a chemical synapse
     synclass : string, optional
-        The kind of Neurotransmitter (if any) sent between `pre_cell` and `post_cell`
+        The kind of Neurotransmitter (if any) sent between `pre_cell` and
+        `post_cell`
     """
     datatypeProperties = ['syntype',
-                'synclass',
-                'number']
+                          'synclass',
+                          'number']
     objectProperties = ['pre_cell', 'post_cell']
-    def __init__(self,**kwargs):
-        Y.DataObject.__init__(self,**kwargs)
 
+    def __init__(self, **kwargs):
+        super(Connection, self).__init__(**kwargs)
 
         pre_cell = kwargs.get('pre_cell', None)
         post_cell = kwargs('post_cell', None)
         number = kwargs('number', None)
+        syntype = kwargs('syntype', None)
+        synclass = kwargs('synclass', None)
 
         if isinstance(pre_cell, Y.Neuron):
             self.pre_cell(pre_cell)
@@ -202,21 +226,25 @@ class Connection(Y.DataObject):
         elif post_cell is not None:
             self.post_cell(Y.Neuron(name=post_cell, conf=self.conf))
 
-        if isinstance(number,int):
+        if isinstance(number, int):
             self.number(int(number))
         elif number is not None:
-            raise Exception("Connection number must be an int, given %s" % number)
+            raise Exception(
+                "Connection number must be an int, given %s" %
+                number)
 
-        if isinstance(syntype,basestring):
-            syntype=syntype.lower()
+        if isinstance(syntype, six.string_types):
+            syntype = syntype.lower()
             if syntype in ('send', SynapseType.Chemical):
                 self.syntype(SynapseType.Chemical)
             elif syntype in ('gapjunction', SynapseType.GapJunction):
                 self.syntype(SynapseType.GapJunction)
-        if isinstance(synclass,basestring):
+        if isinstance(synclass, six.string_types):
             self.synclass(synclass)
 
+
 class Muscle(Cell):
+
     """A single muscle cell.
 
     See what neurons innervate a muscle:
@@ -241,9 +269,11 @@ class Muscle(Cell):
     datatypeProperties = ['receptor']
 
     def __init__(self, name=False, **kwargs):
-        Cell.__init__(self, name=name, **kwargs)
+        super(Muscle, self).__init__(name=name, **kwargs)
+
 
 class Network(Y.DataObject):
+
     """A network of neurons
 
     Attributes
@@ -256,4 +286,4 @@ class Network(Y.DataObject):
     objectProperties = ['synapse', 'neuron']
 
     def __init__(self, **kwargs):
-        Y.DataObject.__init__(self,**kwargs)
+        super(Network, self).__init__(**kwargs)
