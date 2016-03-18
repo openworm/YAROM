@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 
 """
-Most statements correspond to some action on the database.
-Some of these actions may be complex, but intuitively ``a.B()``, the Query form,
-will query against the database for the value or values that are related to ``a`` through ``B``;
-on the other hand, ``a.B(c)``, the Update form, will add a statement to the database that ``a``
-relates to ``c`` through ``B``. For the Update form, a Relationship object describing the
-relationship stated is returned as a side-effect of the update.
+Most statements correspond to some action on the database. Some of these
+actions may be complex, but intuitively ``a.B()``, the Query form, will query
+against the database for the value or values that are related to ``a`` through
+``B``; on the other hand, ``a.B(c)``, the Update form, will add a statement to
+the database that ``a`` relates to ``c`` through ``B``. For the Update form, a
+Relationship object describing the relationship stated is returned as a side-
+effect of the update.
 
-The Update form can also be accessed through the set() method of a Property and the Query form through the get()
-method like::
+The Update form can also be accessed through the set() method of a Property and
+the Query form through the get() method like::
 
     a.B.set(c)
 
@@ -17,13 +18,16 @@ and::
 
     a.B.get()
 
-The get() method also allows for parameterizing the query in ways specific to the Property.
+The get() method also allows for parameterizing the query in ways specific to
+the Property.
 
 Notes:
 
-- Of course, when these methods communicate with an external database, they may fail due to the database being
-  unavailable and the user should be notified if a connection cannot be established in a reasonable time. Also, some
-  objects are created by querying the database; these may be made out-of-date in that case.
+- Of course, when these methods communicate with an external database, they may
+  fail due to the database being unavailable and the user should be notified if
+  a connection cannot be established in a reasonable time. Also, some objects
+  are created by querying the database; these may be made out-of-date in that
+  case.
 
 - ``a : {x_0,...,x_n}`` means ``a`` could have the value of any one of ``x_0`` through ``x_n``
 
@@ -38,8 +42,6 @@ Classes
 .. automodule:: yarom.mapper
 """
 
-__version__ = "0.7.2"
-__author__ = 'Mark Watts'
 
 import logging
 import rdflib
@@ -64,6 +66,9 @@ from .rdfUtils import (
 
 import sys
 
+__version__ = "0.7.2"
+__author__ = 'Mark Watts'
+
 this_module = __import__('yarom')
 this_module.connected = False
 
@@ -73,6 +78,27 @@ DEFAULT_MODULES_TO_LOAD = ["yarom.dataObject",
                            "yarom.objectCollection",
                            "yarom.relationship",
                            "yarom.classRegistry"]
+
+__all__ = ['ConfigValue',
+           'BadConf',
+           'Configuration',
+           'Data',
+           'SPARQLSource',
+           'DefaultSource',
+           'DataUser',
+           'MappedClass',
+           'Quantity',
+           'Property',
+           'triples_to_bgp',
+           'print_graph',
+           'serialize_rdflib_term',
+           'deserialize_rdflib_term',
+           'setConf',
+           'config',
+           'loadConfig',
+           'loadData',
+           'connect',
+           'disconnect']
 
 
 def config(key=None, value=None):
@@ -133,9 +159,11 @@ def connect(conf=False,
     data : str or rdflib.ConjunctiveGraph, optional
         If provided, specifies a file to load into the library.
     dataFormat : str, optional
-        If provided, specifies the file format of the file pointed specified by `data`.
+        If provided, specifies the file format of the file pointed specified by
+        `data`.
 
-        The formats available are those accepted by RDFLib's serializer plugins. 'n3' is the default.
+        The formats available are those accepted by RDFLib's serializer
+        plugins. 'n3' is the default.
     """
     import atexit
     m = this_module
@@ -182,9 +210,12 @@ def setConf(conf):
     conf : str, Data, Configuration or dict, optional
         The configuration to load.
 
-        If a Data object is provided, then it's used as is for the configuration.
+        If a Data object is provided, then it's used as is for the
+        configuration.
+
         If either a Python dict or a Configuration object are provided, then the
         contents of that object is used to make a Data object for configuration.
+
         If a string is provided, then the file is read in as JSON to be parsed as
         a dict and from there is treated as if you had passed that dict to
         connect.
