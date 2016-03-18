@@ -3,7 +3,6 @@ import traceback
 
 from yarom.configure import Configuration, Configureable
 from yarom.data import Data
-from yarom.zodb import ZODBSource
 from .base_test import unlink_zodb_db, TEST_NS, make_graph
 
 HAS_ZODB = False
@@ -12,13 +11,13 @@ try:
     import ZODB
     print("ZODB:", ZODB.__file__)  # Quiets 'unused' warnings from pyflakes
     HAS_ZODB = True
+    from yarom.zodb import ZODBSource
 except:
     pass
 
 
+@unittest.skipIf((not HAS_ZODB), "ZODB persistence test requires ZODB")
 class DataTest(unittest.TestCase):
-
-    @unittest.skipIf((not HAS_ZODB), "ZODB persistence test requires ZODB")
     def test_ZODB_persistence(self):
         c = Configuration()
         fname = 'ZODB.fs'
