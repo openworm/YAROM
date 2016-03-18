@@ -12,3 +12,4 @@ if [ $ZODB ] ; then
    pip install -r zodb.requirements.txt
 fi
 
+python setup.py develop
