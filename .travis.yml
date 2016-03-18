@@ -14,4 +14,4 @@ env:
 install: ./.travis.sh
 
 script:  
-  - py.test tests/test.py
+  - py.test tests
