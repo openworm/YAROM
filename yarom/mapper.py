@@ -3,13 +3,9 @@ import six
 import importlib as I
 import logging
 import rdflib as R
-from yarom import DataUser
 import yarom as Y
 
-__all__ = [
-    "MappedClass",
-    "MappedPropertyClass",
-    "Resolver"]
+__all__ = ["Mapper"]
 
 L = logging.getLogger(__name__)
 
@@ -58,7 +54,8 @@ class Mapper(object):
             children = self.DataObjectsChildren.get(n, ())
             for c in children:
                 helper(c, gen)
-        helper(base.__name__, iter(six.moves.xrange(len(self.MappedClasses) + 1)))
+        helper(base.__name__,
+               iter(six.moves.xrange(len(self.MappedClasses) + 1)))
         return res
 
     def get_base_class(self):
@@ -67,8 +64,12 @@ class Mapper(object):
         def helper(key):
             try:
                 parents = self.DataObjectsParents[key]
-            except KeyError as e:
-                raise Exception('Couldn\'t find the class {} in DataObjectsParents. MappedClasses = {}'.format(key, self.MappedClasses))
+            except KeyError:
+                raise Exception(
+                    'Couldn\'t find the class {} in' +
+                    ' DataObjectsParents. MappedClasses = {}'.format(
+                        key,
+                        self.MappedClasses))
 
             if len(parents) == 0:
                 return self.MappedClasses[key]
@@ -89,9 +90,10 @@ class Mapper(object):
         """ Gathers Python classes from the RDF graph.
 
         If there is a remote Python module registered in the RDF graph, then an
-        import of the module is attempted. If no remote module can be found (i.e.,
-        none has been registered or the registered module cannot be retrieved) then
-        a subclass of the base class is generated from data available in the graph
+        import of the module is attempted. If no remote module can be found
+        (i.e., none has been registered or the registered module cannot be
+        retrieved) then a subclass of the base class is generated from data
+        available in the graph
         """
         # get the DataObject class resource
         # get the subclasses of DataObject, transitively

@@ -2,8 +2,8 @@
 # Inherit from the DataUser class to access data of all kinds (listed above)
 
 import rdflib
-from rdflib import Literal, Graph, Namespace, ConjunctiveGraph
-from rdflib.namespace import RDFS, NamespaceManager
+from rdflib import Graph, Namespace, ConjunctiveGraph
+from rdflib.namespace import NamespaceManager
 from .quantity import Quantity
 from datetime import datetime as DT
 import datetime
@@ -17,7 +17,6 @@ __all__ = [
     "SerializationSource",
     "TrixSource",
     "SPARQLSource",
-    "SleepyCatSource",
     "DefaultSource"]
 
 L = logging.getLogger(__name__)
@@ -189,13 +188,13 @@ class RDFSource(ConfigValue, Configureable):
         self.graph = False
 
     def get(self):
-        if self.graph == False:
+        if self.graph is False:
             raise Exception(
                 "Must call openDatabase on Data object before using the database")
         return self.graph
 
     def close(self):
-        if self.graph == False:
+        if self.graph is False:
             return
         self.graph.close()
         self.graph = False

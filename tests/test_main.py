@@ -21,7 +21,7 @@ import os
 import tempfile
 import six
 import traceback
-from .base_test import TEST_CONFIG, TEST_NS
+from .base_test import TEST_CONFIG, TEST_NS, make_graph
 from .data_test import _DataTest
 from . import test_data as TD
 
@@ -425,11 +425,6 @@ class RDFLibTest(unittest.TestCase):
             R.Literal(
                 "1", datatype=R.XSD['integer']), R.Literal(
                 "01", datatype=R.XSD['integer']))
-
-# class TimeTest(unittest.TestCase):
-    # def test_datetime_isoformat_has_timezone(self):
-        #time_stamp = now(utc).isoformat()
-        #self.assertRegexp(time_stamp, r'.*[+-][0-9][0-9]:[0-9][0-9]$')
 
 
 class PintTest(unittest.TestCase):
