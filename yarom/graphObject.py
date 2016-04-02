@@ -220,7 +220,6 @@ class ComponentTripler(object):
         self.traverse_undefined = traverse_undefined
 
     def g(self, current_node, i=0):
-        L.debug("g({},{})".format(current_node, i))
         if not self.see_node(current_node):
             if self.traverse_undefined or current_node.defined:
                 for x in chain(self.recurse_upwards(current_node, i),
@@ -376,10 +375,20 @@ class DescendantTripler(object):
 
     """ Gets triples that the object points to, transitively. """
 
-    def __init__(self, start):
+    def __init__(self, start, graph=None):
+        """
+        Parameters
+        ----------
+        start : GraphObject
+            the node to start from
+        graph : rdflib.graph.Graph, optional
+            if given, the graph to draw descedants from. Otherwise the object
+            graph is used
+        """
         self.seen = set()
         self.start = start
-        self.graph = set()
+        self.graph = graph
+        self.results = set()
 
     def g(self, current_node):
         if current_node in self.seen:
@@ -390,15 +399,38 @@ class DescendantTripler(object):
         if not current_node.defined:
             return
 
-        for e in current_node.properties:
-            for val in e.values:
-                if val.defined:
-                    self.graph.add((current_node.idl, e.link, val.idl))
-                    self.g(val)
+        if self.graph is not None:
+            for triple in self.graph.triples((current_node.idl, None, None)):
+                self.results.add(triple)
+                self.g(_DTWrapper(triple[2]))
+        else:
+            for e in current_node.properties:
+                for val in e.values:
+                    if val.defined:
+                        self.results.add((current_node.idl, e.link, val.idl))
+                        self.g(val)
 
     def __call__(self):
         self.g(self.start)
-        return self.graph
+        return self.results
+
+
+class _DTWrapper():
+    """ Used by DescendantTripler to wrap identifiers in GraphObjects """
+    defined = True
+    __slots__ = ['idl']
+
+    def __init__(self, ident):
+        self.idl = ident
+
+    def __hash__(self):
+        return hash(self.idl)
+
+    def __eq__(self, other):
+        if type(other) == type(self):
+            return (other is self) or (other.idl == self.idl)
+        else:
+            return False
 
 
 class LegendFinder(object):
