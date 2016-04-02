@@ -25,7 +25,6 @@ setup(
     name="YAROM",
     install_requires=REQUIRED,
     dependency_links=[
-        "git://github.com/NeuralEnsemble/libNeuroML.git#egg=libNeuroML",
         "git://github.com/zopefoundation/ZODB.git#egg=ZODB",
         "git://github.com/RDFLib/rdflib-zodb.git#egg=rdflib_zodb-1.0.0",
     ],
