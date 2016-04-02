@@ -60,11 +60,15 @@ class ObjectPropertyMixin(object):
 
             types = set()
             types.add(self.value_rdf_type)
-
-            for rdf_type in super(
-                    ObjectPropertyMixin, self).rdf.objects(
-                    ident, rdflib.RDF['type']):
-                types.add(rdf_type)
+            sup = super(ObjectPropertyMixin, self)
+            if hasattr(sup, 'rdf'):
+                for rdf_type in sup.rdf.objects(
+                        ident, rdflib.RDF['type']):
+                    types.add(rdf_type)
+            else:
+                L.warn('ObjectProperty.get: base type is missing an "rdf"'
+                       ' property. Retrieved values will be created as ' +
+                       str(self.value_rdf_type))
 
             the_type = self._resolver.type_resolver(types)
             yield self._resolver.id2ob(ident, the_type)
