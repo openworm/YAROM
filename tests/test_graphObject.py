@@ -58,9 +58,8 @@ class ComponentTriplerTest(unittest.TestCase):
         P(z, b)
         P(b, c)
         P(a, d)
-        g = ComponentTripler(z)()
         expected = set([(2, P.link, 4), (4, P.link, 6), (4, P.link, 7)])
-        self.assertEqual(expected, g)
+        self.assert_component_matches(expected, z)
 
     def test_over_owner(self):
         """ Verify that we can get the triples pointing to a node """
@@ -69,9 +68,8 @@ class ComponentTriplerTest(unittest.TestCase):
         b = G(4)
         P(a, z)
         P(b, z)
-        g = ComponentTripler(z)()
         expected = set([(4, P.link, 1), (2, P.link, 1)])
-        self.assertEqual(expected, g)
+        self.assert_component_matches(expected, z)
 
     def test_no_traverse_undef(self):
         """ Verify undefined graph objects are not traversed """
@@ -84,5 +82,5 @@ class ComponentTriplerTest(unittest.TestCase):
         self.assert_component_matches(expected, z)
 
     def assert_component_matches(self, expected, start_node):
-        g = ComponentTripler(start_node)()
+        g = ComponentTripler(start_node, generator=False)()
         self.assertEqual(expected, g)

@@ -253,7 +253,11 @@ class ComponentTripler(object):
             return False
 
     def __call__(self):
-        return set(self.g(self.start))
+        x = self.g(self.start)
+        if self.generator:
+            return x
+        else:
+            return set(x)
 
 
 class _QueryPathElement(tuple):
