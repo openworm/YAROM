@@ -213,7 +213,7 @@ class ComponentTripler(object):
     uses the properties attached to the object.
     """
 
-    def __init__(self, start, traverse_undefined=False, generator=True):
+    def __init__(self, start, traverse_undefined=False, generator=False):
         self.start = start
         self.seen = set()
         self.generator = generator

@@ -304,7 +304,7 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
         return p
 
     def get_defined_component(self):
-        g = ComponentTripler(self)()
+        g = ComponentTripler(self, generator=True)()
         if not isinstance(g, R.Graph):
             h = R.Graph()
             for t in g:
@@ -445,11 +445,9 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
         contrast to :meth:`load`, this method requires that the object already
         has its identifier.
         """
-        print("RESOLVING", self)
+
         for p in self.properties:
-            print("PROPERTY", p)
             values = set(p.get())
-            print("VALUES", values)
             for v in values:
                 p.set(v)
 
