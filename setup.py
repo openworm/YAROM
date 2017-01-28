@@ -23,6 +23,7 @@ LONG_DESCRIPTION = open("README.rst").read()
 
 setup(
     name="YAROM",
+    setup_requires=['six>=1.9.0'],
     install_requires=REQUIRED,
     dependency_links=[
         "git://github.com/zopefoundation/ZODB.git#egg=ZODB",
