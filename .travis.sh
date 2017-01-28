@@ -1,6 +1,6 @@
 #!/bin/sh
 
-pip install 'six>=1.9'
+pip install --upgrade 'setuptools' 'six>=1.9'
 echo pip install -r requirements.txt
 pip install -r requirements.txt
 if [ $INFERENCE ] ; then
