@@ -58,9 +58,9 @@ def write_version_to_file(version):
 
 def tag_vcs_commit_with_version(version):
     vtag_name = "v" + version
-    if call_with_prompt_on_error("git tag --annotate " + vtag_name, "add VCS tag"):
+    if call_with_prompt_on_error("git tag -s --annotate " + vtag_name, "add VCS tag"):
         if yes_no_prompt("force tag creation?"):
-            if call_with_prompt_on_error("git tag --force --annotate " + vtag_name, "add VCS tag"):
+            if call_with_prompt_on_error("git tag -s --force --annotate " + vtag_name, "add VCS tag"):
                 print("Coluldn't append tag to commit")
 
 
