@@ -1,10 +1,17 @@
 language: python
+sudo: false
 
 python:
+  - "2.7"
+  - "3.2"
   - "3.4"
 
-install:
-  - "python setup.py develop"
+env:
+  - INFERENCE=1
+  - ZODB=1
+  - INFERENCE=1 ZODB=1
+
+install: ./.travis.sh
 
 script:  
-  - python tests/test.py
+  - py.test tests

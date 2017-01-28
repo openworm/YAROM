@@ -1,18 +1,54 @@
-import rdflib as R
+import logging
+from itertools import chain
+from pprint import pformat
+
+L = logging.getLogger(__name__)
+
+__all__ = [
+    "GraphObject",
+    "GraphObjectQuerier",
+    "ComponentTripler",
+    "IdentifierMissingException"]
+
+# Directions for traversal across triples
+UP = 'up'  # left, towards the subject
+DOWN = 'down'  # right, towards the object
+
+
+class Variable(int):
+    pass
+
 
 class GraphObject(object):
-    """ An object which can be included in the object graph. """
-    def __init__(self):
+
+    """ An object which can be included in the object graph.
+
+    An abstract base class.
+    """
+
+    def __init__(self, **kwargs):
+        super(GraphObject, self).__init__(**kwargs)
         self.properties = []
         self.owner_properties = []
 
     def identifier(self):
-        """ Must return an rdflib.term.URIRef object representing this object
-            or else raise an Exception. """
+        """ Must return an object representing this object or else
+        raise an Exception. """
         raise NotImplementedError()
 
+    @property
     def defined(self):
-        """ Returns true if an :meth:`identifier` would return an identifier """
+        """ Returns true if an :meth:`identifier` would return an identifier
+        """
+        raise NotImplementedError()
+
+    def variable(self):
+        """ Must return a :class:`Variable` object that identifies
+        this :class:`GraphObject` in queries.
+
+        The variable can be randomly generated when the object is created and
+        stored in the object.
+        """
         raise NotImplementedError()
 
     @property
@@ -37,18 +73,88 @@ class GraphObject(object):
         else:
             return id(self) < id(other)
 
+
 class GraphObjectQuerier(object):
+
+    """ Performs queries for objects in the given graph.
+
+    The querier queries for objects at the center of a star graph. In SPARQL,
+    the query has the form::
+
+        SELECT ?x WHERE {
+            ?x  <p1> ?o1 .
+            ?o1 <p2> ?o2 .
+             ...
+            ?on <pn> <a> .
+
+            ?x  <q1> ?n1 .
+            ?n1 <q2> ?n2 .
+             ...
+            ?nn <qn> <b> .
+        }
+
+    It is allowed that ``<px> == <py>`` for ``x != y``.
+
+    Queries such as::
+
+        SELECT ?x WHERE {
+            ?x  <p1> ?o1 .
+             ...
+            ?on <pn>  ?y .
+        }
+
+    or::
+
+        SELECT ?x WHERE {
+            ?x  <p1> ?o1 .
+             ...
+            ?on <pn>  ?x .
+        }
+
+    or::
+
+        SELECT ?x WHERE {
+            ?x  ?z ?o .
+        }
+
+    or::
+
+        SELECT ?x WHERE {
+            ?x  ?z <a> .
+        }
+
+    are not supported and will be ignored without error.
+
+    """
+
     def __init__(self, q, graph):
+        """ Initialize the querier.
+
+        Call the GraphObjectQuerier object to perform the query.
+
+        Parameters
+        ----------
+        q : :class:`GraphObject`
+            The object which is queried on
+        graph : :class:`object`
+            The graph from which the objects are queried. Must implement a
+            method :meth:`triples` that takes a triple pattern, ``t``, and
+            returns a set of triples matching that pattern. The pattern for
+            ``t`` is ``t[i] = None``, 0 <= i <= 2, indicates that the i'th
+            position can take any value.
+        """
+
         self.query_object = q
         self.graph = graph
 
     def do_query(self):
-        qu = QU(self.query_object)
-        h = self.hoc(qu())
-        return self.qpr(h)
+        qp = _QueryPreparer(self.query_object)
+        h = self.merge_paths(qp())
+        return self.query_path_resolver(h)
 
-    def hoc(self,l):
+    def merge_paths(self, l):
         res = dict()
+        L.debug("merge_paths: {}".format(l))
         for x in l:
             if len(x) > 0:
                 tmp = res.get(x[0], [])
@@ -56,11 +162,11 @@ class GraphObjectQuerier(object):
                 res[x[0]] = tmp
 
         for x in res:
-            res[x] = self.hoc(res[x])
+            res[x] = self.merge_paths(res[x])
 
         return res
 
-    def qpr(self, h, i=0):
+    def query_path_resolver(self, h, i=0):
         join_args = []
         for x in h:
             sub_answers = set()
@@ -71,8 +177,8 @@ class GraphObjectQuerier(object):
             else:
                 other_idx = 2
 
-            if isinstance(x[other_idx], R.Variable):
-                for z in self.qpr(sub, i+1):
+            if isinstance(x[other_idx], Variable):
+                for z in self.query_path_resolver(sub, i + 1):
                     if idx == 2:
                         qx = (z, x[1], None)
                     else:
@@ -97,43 +203,72 @@ class GraphObjectQuerier(object):
         res = self.do_query()
         return res
 
-class SV(object):
-    def __init__(self):
+
+class ComponentTripler(object):
+
+    """ Gets a set of triples that are connected to the given object by
+    objects which have an identifier.
+
+    The ComponentTripler does not query against a backing graph, but instead
+    uses the properties attached to the object.
+    """
+
+    def __init__(self, start, traverse_undefined=False, generator=False):
+        self.start = start
         self.seen = set()
-        self.results = R.Graph()
+        self.generator = generator
+        self.traverse_undefined = traverse_undefined
 
     def g(self, current_node, i=0):
-        if current_node in self.seen:
-            return
+        if not self.see_node(current_node):
+            if self.traverse_undefined or current_node.defined:
+                for x in chain(self.recurse_upwards(current_node, i),
+                               self.recurse_downwards(current_node, i)):
+                    yield x
+
+    def recurse_upwards(self, current_node, depth):
+        for prop in current_node.owner_properties:
+            for x in self.recurse(prop.owner, prop, current_node, UP, depth):
+                yield x
+
+    def recurse_downwards(self, current_node, depth):
+        for prop in current_node.properties:
+            for val in prop.values:
+                for x in self.recurse(current_node, prop, val, DOWN, depth):
+                    yield x
+
+    def recurse(self, lhs, via, rhs, direction, depth):
+        (ths, nxt) = (rhs, lhs) if direction is UP else (lhs, rhs)
+        if self.traverse_undefined or nxt.defined:
+            yield (lhs.idl, via.link, rhs.idl)
+            for x in self.g(nxt, depth + 1):
+                yield x
+
+    def see_node(self, node):
+        node_id = id(node)
+        if node_id in self.seen:
+            return True
         else:
-            self.seen.add(current_node)
+            self.seen.add(node_id)
+            return False
 
-        if not current_node.defined:
-            return
+    def __call__(self):
+        x = self.g(self.start)
+        if self.generator:
+            return x
+        else:
+            return set(x)
 
-        for e in current_node.owner_properties:
-            p = e.owner
-            if p.defined:
-                self.results.add((p.idl, e.link, current_node.idl))
-                self.g(p,i+1)
 
-        for e in current_node.properties:
-            for val in e.values:
-                if val.defined:
-                    self.results.add((current_node.idl, e.link, val.idl))
-                    self.g(val,i+1)
+class _QueryPathElement(tuple):
 
-    def __call__(self, current_node):
-        self.g(current_node)
-        return self.results
-
-class QN(tuple):
     def __new__(cls):
-        return tuple.__new__(cls, ([],[]))
+        return tuple.__new__(cls, ([], []))
 
     @property
     def subpaths(self):
         return self[0]
+
     @subpaths.setter
     def subpaths(self, toset):
         del self[0][:]
@@ -143,75 +278,121 @@ class QN(tuple):
     def path(self):
         return self[1]
 
-class QU(object):
+
+class _QueryPreparer(object):
+
     def __init__(self, start):
         self.seen = list()
-        self.lean = list()
+        self.stack = list()
         self.paths = list()
         self.start = start
+        self.variables = dict()
+        self.vcount = 0
+        # TODO: Refactor. The return values are not actually
+        # used for anything
 
-    def b(self, CUR, LIST, IS_INV):
+    def gather_paths_along_properties(
+            self,
+            current_node,
+            property_list,
+            direction):
+        L.debug("gpap: current_node %s", current_node)
         ret = []
         is_good = False
-
-        for e in LIST:
-            if IS_INV:
-                p = [e.owner]
+        for this_property in property_list:
+            L.debug("this_property is %s", this_property)
+            if direction is UP:
+                others = [this_property.owner]
             else:
-                p = e.values
+                others = this_property.values
 
-            for x in p:
-                if IS_INV:
-                    self.lean.append((x.idl, e.link, None))
+            for other in others:
+                other_id = other.idl
+                if not other.defined:
+                    other_id = self.var(other_id)
+
+                if direction is UP:
+                    self.stack.append((other_id, this_property.link, None))
                 else:
-                    self.lean.append((None, e.link, x.idl))
+                    self.stack.append((None, this_property.link, other_id))
+                L.debug("gpap: preparing %s from %s", other, this_property)
+                subpath = self.prepare(other)
 
-                subpath = self.g(x)
-                if len(self.lean) > 0:
-                    self.lean.pop()
+                if len(self.stack) > 0:
+                    self.stack.pop()
 
                 if subpath[0]:
                     is_good = True
-                    subpath[1].path.insert(0, (CUR.idl, e, x.idl))
+                    subpath[1].path.insert(
+                        0, (current_node.idl, this_property, other.idl))
                     ret.insert(0, subpath[1])
+
+        L.debug("gpap: exiting %s", "good" if is_good else "bad")
         return is_good, ret
 
-    def k(self):
-        pass
+    def var(self, v):
+        if v in self.variables:
+            return self.variables[v]
+        else:
+            var = Variable(self.vcount)
+            self.variables[v] = var
+            self.vcount += 1
+            return var
 
-    def g(self, current_node):
+    def prepare(self, current_node):
+        L.debug("prepare: current_node %s", current_node)
         if current_node.defined:
-            if len(self.lean) > 0:
-                tmp = list(self.lean)
+            if len(self.stack) > 0:
+                tmp = list(self.stack)
                 self.paths.append(tmp)
-            return True, QN()
+            return True, _QueryPathElement()
         else:
             if current_node in self.seen:
-                return False, QN()
+                return False, _QueryPathElement()
             else:
                 self.seen.append(current_node)
-
-            retp = self.b(current_node, current_node.owner_properties, True)
-            reto = self.b(current_node, current_node.properties, False)
+            owner_parts = self.gather_paths_along_properties(
+                current_node,
+                current_node.owner_properties,
+                UP)
+            owned_parts = self.gather_paths_along_properties(
+                current_node,
+                current_node.properties,
+                DOWN)
 
             self.seen.pop()
-            subpaths = retp[1]+reto[1]
-            if (len(subpaths) == 1):
+            subpaths = owner_parts[1] + owner_parts[1]
+            if len(subpaths) == 1:
                 ret = subpaths[0]
             else:
-                ret = QN()
+                ret = _QueryPathElement()
                 ret.subpaths = subpaths
-            return (retp[0] or reto[0], ret)
+            return (owner_parts[0] or owned_parts[0], ret)
 
     def __call__(self):
-        self.g(self.start)
+        self.prepare(self.start)
+        L.debug("_QueryPreparer paths:" + str(pformat(self.paths)))
         return self.paths
 
+
 class DescendantTripler(object):
-    def __init__(self, start):
+
+    """ Gets triples that the object points to, transitively. """
+
+    def __init__(self, start, graph=None):
+        """
+        Parameters
+        ----------
+        start : GraphObject
+            the node to start from
+        graph : rdflib.graph.Graph, optional
+            if given, the graph to draw descedants from. Otherwise the object
+            graph is used
+        """
         self.seen = set()
         self.start = start
-        self.graph = R.Graph()
+        self.graph = graph
+        self.results = set()
 
     def g(self, current_node):
         if current_node in self.seen:
@@ -222,21 +403,51 @@ class DescendantTripler(object):
         if not current_node.defined:
             return
 
-        for e in current_node.properties:
-            for val in e.values:
-                if val.defined:
-                    self.graph.add((current_node.idl, e.link, val.idl))
-                    self.g(val)
+        if self.graph is not None:
+            for triple in self.graph.triples((current_node.idl, None, None)):
+                self.results.add(triple)
+                self.g(_DTWrapper(triple[2]))
+        else:
+            for e in current_node.properties:
+                for val in e.values:
+                    if val.defined:
+                        self.results.add((current_node.idl, e.link, val.idl))
+                        self.g(val)
 
     def __call__(self):
         self.g(self.start)
-        return self.graph
+        return self.results
 
-class Legends(object):
-    """ Gets a list of the objects which can not be deleted freely from the transitive closure.
+
+class _DTWrapper():
+    """ Used by DescendantTripler to wrap identifiers in GraphObjects """
+    defined = True
+    __slots__ = ['idl']
+
+    def __init__(self, ident):
+        self.idl = ident
+
+    def __hash__(self):
+        return hash(self.idl)
+
+    def __eq__(self, other):
+        if type(other) == type(self):
+            return (other is self) or (other.idl == self.idl)
+        else:
+            return False
+
+
+class LegendFinder(object):
+
+    """ Gets a list of the objects which can not be deleted freely from the
+    transitive closure.
+
+    Essentially, this is the 'mark' phase of the "mark-and-sweep" garbage
+    collection algorithm.
 
     "Heroes get remembered, but legends never die."
     """
+
     def __init__(self, start, graph=None):
         self.talked_about = dict()
         self.seen = set()
@@ -252,7 +463,7 @@ class Legends(object):
                 if value != self.start:
                     count = self.count(value)
                     self.talked_about[value] = count - 1
-                    self.legends(value, depth+1)
+                    self.legends(value, depth + 1)
 
     def count(self, o):
         if o in self.talked_about:
@@ -272,16 +483,18 @@ class Legends(object):
         self.legends(self.start)
         return {x for x in self.talked_about if self.talked_about[x] > 0}
 
+
 class HeroTripler(object):
+
     def __init__(self, start, graph=None, legends=None):
         self.seen = set()
         self.start = start
         self.heroslist = set()
-        self.results = R.Graph()
+        self.results = set()
         self.graph = graph
 
         if legends is None:
-            self.legends = Legends(self.start, graph)()
+            self.legends = LegendFinder(self.start, graph)()
         else:
             self.legends = legends
 
@@ -299,7 +512,7 @@ class HeroTripler(object):
         for prop in o.properties:
             for value in prop.values:
                 if not self.isLegend(value):
-                    self.heros(value, depth+1)
+                    self.heros(value, depth + 1)
                     self.hero(value)
 
     def hero(self, o):
@@ -319,8 +532,47 @@ class HeroTripler(object):
         self.hero(self.start)
         return self.results
 
+
+class ReferenceTripler(object):
+
+    def __init__(self, start, graph=None):
+        self.seen = set()
+        self.start = start
+        self.results = set()
+        self.graph = graph
+
+    def refs(self, o):
+        if self.graph is not None:
+            from itertools import chain
+            for trip in chain(
+                self.graph.triples(
+                    (None, None, o.idl)),
+                self.graph.triples(
+                    (o.idl, None, None))):
+                self.results.add(trip)
+        else:
+            for e in o.properties:
+                for val in e.values:
+                    if val.defined:
+                        self.results.add((o.idl, e.link, val.idl))
+
+            for e in o.owner_properties:
+                if e.owner.defined:
+                    self.results.add((e.owner.idl, e.link, o.idl))
+
+    def __call__(self):
+        self.refs(self.start)
+        return self.results
+
+
 class IdentifierMissingException(Exception):
+
     """ Indicates that an identifier should be available for the object in
         question, but there is none """
+
     def __init__(self, dataObject="[unspecified object]", *args, **kwargs):
-        super().__init__("An identifier should be provided for {}".format(str(dataObject)), *args, **kwargs)
+        super(IdentifierMissingException, self).__init__(
+            "An identifier should be provided for {}".format(
+                str(dataObject)),
+            *args,
+            **kwargs)

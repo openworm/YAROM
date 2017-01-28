@@ -1,27 +1,44 @@
-from .rdfUtils import *
-from .variable import Variable
-from .graphObject import *
-from .yProperty import Property
-from .mapper import MappedPropertyClass
-from random import random
-import rdflib
 import logging
 import hashlib
+import six
+
+from .variable import Variable
+from .graphObject import GraphObjectQuerier
+from .propertyMixins import (
+    DatatypePropertyMixin,
+    ObjectPropertyMixin,
+    UnionPropertyMixin)
+from .yProperty import Property
+from .propertyValue import PropertyValue
+from .mappedProperty import MappedPropertyClass
+from random import random
+from .deprecation import deprecated
 
 L = logging.getLogger(__name__)
 
-__all__ = ["SimpleProperty", "DatatypeProperty", "ObjectProperty"]
+__all__ = [
+    "SimpleProperty",
+    "DatatypeProperty",
+    "ObjectProperty",
+    "NoRelationshipException"]
 
-class SimpleProperty(Property, metaclass=MappedPropertyClass):
+
+class NoRelationshipException(Exception):
+
+    """ Indicates that a Relationship was asked for but one could not be given. """
+
+
+class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
+
     """ A property that has one or more links to literals or DataObjects """
 
-    def __init__(self,**kwargs):
+    def __init__(self, **kwargs):
         # The 'linkName' must be made up from the class name if one isn't set
         # before initialization (typically in mapper._create_property)
+        super(SimpleProperty, self).__init__(**kwargs)
         if not hasattr(self, 'linkName'):
             self.__class__.linkName = self.__class__.__name__ + "property"
 
-        Property.__init__(self, name=self.linkName, **kwargs)
         #
         # 'v' holds values that have been set on this SimpleProperty. It acts
         # as a sort of staging area before saving the values to the graph.
@@ -30,18 +47,40 @@ class SimpleProperty(Property, metaclass=MappedPropertyClass):
         v = (random(), random())
         self._value = Variable("_" + hashlib.md5(str(v).encode()).hexdigest())
 
-    def hasValue(self):
-        """ Returns true if the ``Property`` has had ``load`` called previously and some value was available or if ``set`` has been called previously """
+    def has_value(self):
+        """ Returns true if the :meth:`set` has been called previously """
         return len(self._v) > 0
 
+    @deprecated('Please use has_value instead.')
+    def hasValue(self):
+        """ Returns true if the :meth:`set` has been called previously """
+        return self.has_value()
+
+    def has_defined_value(self):
+        """
+        Returns true if this property has a defined value
+        """
+        for x in self._v:
+            if x.defined:
+                return True
+        return False
+
     def _get(self):
+        """ Get values from a generator """
         for x in self._v:
             yield x
 
     @property
     def values(self):
+        """ Get all values """
         return self._v
 
+    @property
+    def defined_values(self):
+        """ Get values which are have their defined property set to True """
+        return tuple(x for x in self._v if x.defined)
+
+    @deprecated('Please use set instead.')
     def setValue(self, v):
         self.set(v)
 
@@ -50,7 +89,7 @@ class SimpleProperty(Property, metaclass=MappedPropertyClass):
         the resulting values. Also queries the configured rdf graph for values
         which are set for the ``Property``'s owner.
         """
-        v = Variable("var"+str(id(self)))
+        v = Variable("var" + str(id(self)))
         self.set(v)
         results = GraphObjectQuerier(v, self.rdf)()
         self.unset(v)
@@ -65,8 +104,10 @@ class SimpleProperty(Property, metaclass=MappedPropertyClass):
         else:
             raise Exception("Can't find value {}".format(v))
 
-    def set(self,v):
-        import bisect
+    def set(self, v):
+        if isinstance(v, Rel):
+            v = v.rel()
+
         if not hasattr(v, "idl"):
             v = PropertyValue(v)
 
@@ -74,141 +115,52 @@ class SimpleProperty(Property, metaclass=MappedPropertyClass):
             v.owner_properties.append(self)
 
         if self.multiple:
-            bisect.insort(self._v, v)
+            self._v.append(v)
         else:
             self._v = [v]
         return Rel(self.owner, self, v)
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.link == other.link
+        return isinstance(other, self.__class__) and (self.link == other.link)
 
     def __hash__(self):
         return hash(self.link)
 
     def __str__(self):
-        return str(self.linkName + "(" + str(" ".join(repr(x) for x in self._v)) + ")")
+        return "{}({})".format(self.linkName,
+                               " ".join(repr(x) for x in self._v))
 
     def __repr__(self):
         return str(self)
 
-class DatatypeProperty(SimpleProperty):
-    def set(self, v):
-        from .dataObject import DataObject
-        if isinstance(v, DataObject):
-            L.warn('You are attempting to set a DataObject where a literal is expected.')
-        return SimpleProperty.set(self,v)
 
-    def get(self):
-        for val in SimpleProperty.get(self):
-            yield deserialize_rdflib_term(val)
+class DatatypeProperty(DatatypePropertyMixin, SimpleProperty):
+    pass
 
-class ObjectProperty(SimpleProperty):
-    def set(self, v):
-        from .dataObject import DataObject
-        if not isinstance(v, (DataObject, Variable)):
-            raise Exception("An ObjectProperty only accepts DataObject instances")
-        return SimpleProperty.set(self, v)
 
-    def get(self):
-        from .dataObject import DataObject
-        from .mapper import oid,get_most_specific_rdf_type
+class ObjectProperty(ObjectPropertyMixin, SimpleProperty):
+    pass
 
-        for ident in SimpleProperty.get(self):
-            if not isinstance(ident, rdflib.URIRef):
-                L.warn('ObjectProperty.get: Skipping non-URI term, "'+ident+'", returned for a data object.')
-                continue
-            types = set()
-            for rdf_type in self.rdf.objects(ident, R.RDF['type']):
-                types.add(rdf_type)
-            if len(types) == 0:
-                L.warn('ObjectProperty.get: Retrieved un-typed URI, "'+ident+'", for a DataObject. Creating a default-typed object')
-                the_type = DataObject.rdf_type
-            else:
-                the_type = get_most_specific_rdf_type(types)
 
-            yield oid(ident, the_type)
+class UnionProperty(UnionPropertyMixin, SimpleProperty):
 
-class UnionProperty(SimpleProperty):
     """ A Property that can handle either DataObjects or basic types """
-    def set(self, v):
-        from .dataObject import DataObject
-        return SimpleProperty.set(self, v)
 
-    def get(self):
-        from .dataObject import DataObject
-        from .mapper import oid,get_most_specific_rdf_type
-
-        for ident in SimpleProperty.get(self):
-            if isinstance(ident, rdflib.Literal):
-                yield deserialize_rdflib_term(ident)
-            elif isinstance(ident, rdflib.BNode):
-                L.warn('UnionProperty.get: Retrieved BNode, "'+ident+'". BNodes are not supported in yarom')
-            else:
-                types = set()
-                for rdf_type in self.rdf.objects(ident, R.RDF['type']):
-                    types.add(rdf_type)
-
-                if len(types) == 0:
-                    L.warn('ObjectProperty.get: Retrieved un-typed URI, "'+ident+'", for a DataObject. Creating a default-typed object')
-                    the_type = DataObject.rdf_type
-                else:
-                    try:
-                        the_type = get_most_specific_rdf_type(types)
-                    except:
-                        the_type = DataObject.rdf_type
-
-                yield oid(ident, the_type)
-
-class PropertyValue(GraphObject):
-    """ Holds a literal value for a property """
-    def __init__(self, value):
-        super().__init__()
-        if not isinstance(value, rdflib.term.Identifier):
-            self.value = R.Literal(value)
-
-    def triples(self, *args, **kwargs):
-        return []
-
-    def identifier(self):
-        return self.value
-
-    @property
-    def defined(self):
-        return True
-
-    @property
-    def idl(self):
-        return self.identifier()
-
-    def __hash__(self):
-        return hash(self.value)
-
-    def __str__(self):
-        return str(self.value)
-
-    def __repr__(self):
-        return str(self)
-
-    def __lt__(self, other):
-        return self.value < other.value
-
-    def __eq__(self, other):
-        if id(self) == id(other):
-            return True
-        elif isinstance(other, PropertyValue):
-            return self.value == other.value
-        else:
-            return self.value == R.Literal(other)
 
 class Rel(tuple):
-    _map=dict(s=0,p=1,o=2)
+
+    """ A container for a relationship-assignment """
+    _map = dict(s=0, p=1, o=2)
+
     def __new__(cls, s, p, o):
-        return super(Rel, cls).__new__(cls, (s,p,o))
+        return super(Rel, cls).__new__(cls, (s, p, o))
 
     def __getattr__(self, n):
         return self[Rel._map[n]]
 
-
     def rel(self):
         from .relationship import Relationship
-        return Relationship(subject=self.s, property=self.p.rdf_object, object=self.o)
+        return Relationship(
+            subject=self.s,
+            property=self.p.rdf_object,
+            object=self.o)

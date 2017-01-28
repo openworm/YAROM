@@ -3,8 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to |pow|'s documentation!
-==================================
+|pow| documentation
+===================
 
 Contents
 --------
@@ -13,6 +13,7 @@ Contents
 
    making_dataObjects
    adding_data
+   data_stores
    docs
 
 API

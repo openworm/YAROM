@@ -1,11 +1,15 @@
-from rdflib import URIRef, Literal, Graph, Namespace, ConjunctiveGraph
-from rdflib.namespace import RDFS, RDF, NamespaceManager
-from .configure import Configureable,BadConf
-import transaction
+from rdflib import Graph, Namespace
+from rdflib.namespace import RDF, NamespaceManager
+import logging
+from .configure import Configureable
 from .data import Data
 from .rdfUtils import triples_to_bgp
 
+L = logging.getLogger(__name__)
+
 __all__ = ["DataUser"]
+
+
 class DataUser(Configureable):
     """ A convenience wrapper for users of the database
 
@@ -13,7 +17,8 @@ class DataUser(Configureable):
     """
 
     # TODO: Make these metadata accessible for configuration managers
-    # TODO: Illustrate how setting variables in a config file translates into these configurations
+    # TODO: Illustrate how setting variables in a config file translates into
+    #       these configurations
     configuration_variables = {
             "rdf.namespace" : {
                 "description" : "The base namespace for user objects and information.",
@@ -34,8 +39,9 @@ class DataUser(Configureable):
                 "type" : NamespaceManager
                 }
             }
+
     def __init__(self, **kwargs):
-        Configureable.__init__(self)
+        super(DataUser, self).__init__(**kwargs)
 
         if not isinstance(self.conf, Data):
             Configureable.setConf(Data())
@@ -61,8 +67,8 @@ class DataUser(Configureable):
         return self.conf['rdf.namespace_manager']
 
     def _remove_from_store(self, g):
-        # Note the assymetry with _add_to_store. You must add actual elements, but deletes
-        # can be performed as a query
+        # Note the assymetry with _add_to_store. You must add actual elements,
+        # but deletes can be performed as a query
         for group in grouper(g, 1000):
             temp_graph = Graph()
             for x in group:
@@ -76,8 +82,9 @@ class DataUser(Configureable):
 
     def _add_to_store(self, g, graph_name=False):
         if self.conf['rdf.store'] == 'SPARQLUpdateStore':
-            # XXX With Sesame, for instance, it is probably faster to do a PUT with over
-            #     the endpoint's rest interface. Just need to do it for some common endpoints
+            # XXX With Sesame, for instance, it is probably faster to do a PUT
+            #     with over the endpoint's rest interface. Just need to do it
+            #     for some common endpoints
 
             try:
                 gs = g.serialize(format="nt")
@@ -98,6 +105,7 @@ class DataUser(Configureable):
                 self.conf['fuxi.infer_func'](gr, g)
 
         if self.conf['rdf.source'] == 'ZODB':
+            import transaction
             # Commit the current commit
             transaction.commit()
             # Fire off a new one
@@ -109,7 +117,7 @@ class DataUser(Configureable):
 
         Parameters
         ----------
-        triples : iter of (URIRef, URIRef, URIRef)
+        triples : iter of (:class:`rdflib.term.URIRef`, :class:`rdflib.term.URIRef`, :class:`rdflib.term.URIRef`)
             A set of triples to remove
         """
         for x in statements:
@@ -129,12 +137,12 @@ class DataUser(Configureable):
 
         Parameters
         ----------
-        triples : iter of (URIRef, URIRef, URIRef)
+        triples : iter of (:class:`rdflib.term.URIRef`, :class:`rdflib.term.URIRef`, :class:`rdflib.term.URIRef`)
             A set of triples to add to the graph
         """
         self._add_to_store(graph)
 
-    def _reify(self,g,s):
+    def _reify(self, g, s):
         """
         Add a statement object to g that binds to s
         """
@@ -144,6 +152,7 @@ class DataUser(Configureable):
         g.add((n, RDF['predicate'], s[1]))
         g.add((n, RDF['object'], s[2]))
         return n
+
 
 def grouper(iterable, n, fillvalue=None):
     """Collect data into fixed-length chunks or blocks"""

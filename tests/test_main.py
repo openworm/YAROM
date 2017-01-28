@@ -2,94 +2,50 @@
 
 import unittest
 
-import sys
-sys.path.insert(0,".")
-
 import yarom
+from yarom import (
+    Configuration,
+    ConfigValue,
+    Data,
+    Configureable,
+    DataUser,
+    BadConf,
+    Property,
+    Quantity)
+from yarom.mapper import Mapper
 import yarom as Y
-from yarom import *
-import tests
-import test_data as TD
 import rdflib
 import rdflib as R
 import pint as Q
 import os
-import subprocess
 import tempfile
+import six
+import traceback
+from .base_test import TEST_CONFIG, TEST_NS, make_graph
+from .data_test import _DataTest
+from . import test_data as TD
+
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+HAS_FUXI = False
+
 
 try:
-    import bsddb
-    has_bsddb = True
+    import FuXi
+    print("FuXi:", FuXi.__file__)  # Quiets 'unused' warnings from pyflakes
+    HAS_FUXI = True
 except ImportError:
-    try:
-        import bsddb3
-        has_bsddb = True
-    except:
-        has_bsddb = False
+    pass
 
-test_ns = "http://github.com/mwatts15/YAROM/tests/"
 
 def clear_graph(graph):
     graph.update("CLEAR ALL")
 
-def unlink_zodb_db(fname):
-    os.unlink(fname)
-    os.unlink(fname + '.index')
-    os.unlink(fname + '.tmp')
-    os.unlink(fname + '.lock')
 
-def make_graph(size=100):
-    """ Make an rdflib graph """
-    g = R.Graph()
-    for i in range(size):
-        s = rdflib.URIRef("http://somehost.com/s"+str(i))
-        p = rdflib.URIRef("http://somehost.com/p"+str(i))
-        o = rdflib.URIRef("http://somehost.com/o"+str(i))
-        g.add((s,p,o))
-    return g
-try:
-    TEST_CONFIG = Configuration.open("tests/_test.conf")
-except:
-    TEST_CONFIG = Configuration.open("tests/test_default.conf")
-
-@unittest.skipIf((TEST_CONFIG['rdf.source'] == 'Sleepycat') and (has_bsddb==False), "Sleepycat store will not work without bsddb")
-class _DataTestB(unittest.TestCase):
-    TestConfig = TEST_CONFIG
-    def delete_dir(self):
-        self.path = self.TestConfig['rdf.store_conf']
-        try:
-            if self.TestConfig['rdf.source'] == "Sleepycat":
-                subprocess.call("rm -rf "+self.path, shell=True)
-            elif self.TestConfig['rdf.source'] == "ZODB":
-                unlink_zodb_db(self.path)
-        except OSError as e:
-            if e.errno == 2:
-                # The file may not exist and that's fine
-                pass
-            else:
-                raise e
-    def setUp(self):
-        self.delete_dir()
-
-    def tearDown(self):
-        self.delete_dir()
-
-
-class _DataTest(_DataTestB):
-    def setUp(self):
-        _DataTestB.setUp(self)
-        # Set do_logging to True if you like walls of text
-        yarom.connect(conf=self.TestConfig, do_logging=False)
-
-    def tearDown(self):
-        yarom.disconnect()
-        _DataTestB.tearDown(self)
-
-    @property
-    def config(self):
-        return yarom.config()
 
 class ConfigureTest(unittest.TestCase):
+
     def test_fake_config(self):
         """ Try to retrieve a config value that hasn't been set """
         with self.assertRaises(KeyError):
@@ -105,16 +61,20 @@ class ConfigureTest(unittest.TestCase):
     def test_ConfigValue(self):
         """ Assign a ConfigValue"""
         c = Configuration()
+
         class pipe(ConfigValue):
+
             def get(self):
                 return "sign"
         c['seven'] = pipe()
-        self.assertEqual("sign",c['seven'])
+        self.assertEqual("sign", c['seven'])
 
     def test_getter_no_ConfigValue(self):
         """ Assign a method with a "get". Should return a the object rather than calling its get method """
         c = Configuration()
+
         class pipe:
+
             def get(self):
                 return "sign"
         c['seven'] = pipe()
@@ -123,8 +83,10 @@ class ConfigureTest(unittest.TestCase):
     def test_late_get(self):
         """ "get" shouldn't be called until the value is *dereferenced* """
         c = Configuration()
-        a = {'t' : False}
+        a = {'t': False}
+
         class pipe(ConfigValue):
+
             def get(self):
                 a['t'] = True
                 return "sign"
@@ -146,17 +108,20 @@ class ConfigureTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             Data.open("tests/bad_test.conf")
 
+
 class ConfigureableTest(unittest.TestCase):
+
     def test_init_empty(self):
         """Ensure Configureable gets init'd with the defalut if nothing's given"""
         i = Configureable()
-        self.assertEqual(Configureable.conf,i.conf)
+        self.assertEqual(Configureable.conf, i.conf)
+
 
 class DataObjectTest(_DataTest):
 
     def test_DataUser(self):
         do = Y.DataObject()
-        self.assertTrue(isinstance(do,yarom.DataUser))
+        self.assertTrue(isinstance(do, yarom.DataUser))
 
     def test_identifier(self):
         """ Test that we can set and return an identifier """
@@ -166,10 +131,9 @@ class DataObjectTest(_DataTest):
     def test_call_graph_pattern_twice(self):
         """ Be sure that we can call graph pattern on the same object multiple times and not have it die on us """
 
-        g = make_graph(20)
-        d = Y.DataObject(triples=g, key="id")
-        self.assertNotEqual(0,len(d.graph_pattern()))
-        self.assertNotEqual(0,len(d.graph_pattern()))
+        d = Y.DataObject(key="id")
+        self.assertNotEqual(0, len(d.graph_pattern()))
+        self.assertNotEqual(0, len(d.graph_pattern()))
 
     @unittest.skip("Enable output of a graph pattern for a query")
     def test_call_graph_pattern_twice_query(self):
@@ -177,15 +141,15 @@ class DataObjectTest(_DataTest):
 
         g = make_graph(20)
         d = Y.DataObject(triples=g)
-        self.assertNotEqual(0,len(d.graph_pattern(True)))
-        self.assertNotEqual(0,len(d.graph_pattern(True)))
+        self.assertNotEqual(0, len(d.graph_pattern(True)))
+        self.assertNotEqual(0, len(d.graph_pattern(True)))
 
     @unittest.skip("Should be tracked by version control")
     def test_uploader(self):
         """ Make sure that we're marking a statement with it's uploader """
 
         g = make_graph(20)
-        r = Y.DataObject(triples=g,conf=self.config)
+        r = Y.DataObject(triples=g, conf=self.config)
         r.save()
         u = r.uploader()
         self.assertEqual(self.config['user.email'], u)
@@ -200,20 +164,29 @@ class DataObjectTest(_DataTest):
         self.assertIsNotNone(u)
 
     def test_triples_cycle(self):
-        """ Test that no duplicate triples are released when there's a cycle in the graph """
+        """
+        Test that no duplicate triples are released when there's a cycle in the
+        graph
+        """
         class T(Y.DataObject):
             objectProperties = ['s']
+            defined = True
+
+            def identifier(self):
+                return TEST_NS["soup"]
+
+        T.mapper.remap()
 
         t = T()
         s = T()
         t.s(s)
         s.s(t)
-        seen = set()
-        for x in t.triples(query=True):
-            if (x in seen):
-                self.fail("got a duplicate: "+ str(x))
-            else:
-                seen.add(x)
+        g = rdflib.Graph()
+        g.namespace_manager = t.rdf.namespace_manager
+        trips = list(t.triples())
+        for e in trips:
+            g.add(e)
+        self.assertEquals(len(set(trips)), len(trips))
 
     def test_triples_clone_sibling(self):
         """ Test that no duplicate triples are released when there's a clone in the graph.
@@ -226,7 +199,7 @@ class DataObjectTest(_DataTest):
         """
         class T(Y.DataObject):
             objectProperties = ['s']
-
+        T.mapper.remap()
         t = T(key="a")
         s = T(key="b")
         v = T(key="c")
@@ -234,9 +207,9 @@ class DataObjectTest(_DataTest):
         t.s(v)
         v.s(s)
         seen = set()
-        for x in t.triples(query=True):
+        for x in t.triples():
             if (x in seen):
-                self.fail("got a duplicate: "+ str(x))
+                self.fail("got a duplicate: " + str(x))
             else:
                 seen.add(x)
 
@@ -246,6 +219,7 @@ class DataObjectTest(_DataTest):
             objectProperties = ['load']
         with self.assertRaises(Exception):
             T()
+
 
 class DataUserTest(_DataTest):
 
@@ -259,14 +233,6 @@ class DataUserTest(_DataTest):
 
         Configureable.conf = c
 
-    def test_init_no_config_with_default(self):
-        """ Should suceed if the default configuration is a Data object """
-        DataUser()
-
-    def test_init_False_with_default(self):
-        """ Should suceed if the default configuration is a Data object """
-        DataUser(conf=False)
-
     @unittest.skip("Should be tracked by version control")
     def test_add_statements_has_uploader(self):
         """ Assert that each statement has an uploader annotation """
@@ -278,7 +244,7 @@ class DataUserTest(_DataTest):
         o = rdflib.URIRef("http://somehost.com/o")
 
         # Add it to an RDF graph
-        g.add((s,p,o))
+        g.add((s, p, o))
 
         # Make a datauser
         du = DataUser(self.config)
@@ -287,14 +253,15 @@ class DataUserTest(_DataTest):
             # Add all of the statements in the graph
             du.add_statements(g)
         except Exception as e:
-            self.fail("Should be able to add statements in the first place: "+str(e))
+            self.fail(
+                "Should be able to add statements in the first place: " +
+                str(e))
 
         g0 = du.conf['rdf.graph']
 
         # These are the properties that we should find
         uploader_n3_uri = du.conf['rdf.namespace']['uploader'].n3()
         upload_date_n3_uri = du.conf['rdf.namespace']['upload_date'].n3()
-        uploader_email = du.conf['user.email']
 
         # This is the query to get uploader information
         q = """
@@ -307,12 +274,12 @@ class DataUserTest(_DataTest):
          <http://somehost.com/o> .
         }
 
-        ?g """+uploader_n3_uri+""" ?u.
-        ?g """+upload_date_n3_uri+""" ?t.
+        ?g """ + uploader_n3_uri + """ ?u.
+        ?g """ + upload_date_n3_uri + """ ?t.
         } LIMIT 1
         """
         for x in g0.query(q):
-            self.assertEqual(du.conf['user.email'],str(x['u']))
+            self.assertEqual(du.conf['user.email'], str(x['u']))
 
     def test_add_statements_completes(self):
         """ Test that we can upload lots of triples.
@@ -324,11 +291,13 @@ class DataUserTest(_DataTest):
             s = rdflib.URIRef("http://somehost.com/s%d" % i)
             p = rdflib.URIRef("http://somehost.com/p%d" % i)
             o = rdflib.URIRef("http://somehost.com/o%d" % i)
-            g.add((s,p,o))
+            g.add((s, p, o))
         du = DataUser(conf=self.config)
         du.add_statements(g)
 
+
 class DataUserTestToo(unittest.TestCase):
+
     @unittest.skip("Decide what to do with this case")
     def test_init_config_no_Data(self):
         """ Should fail if given a non-Data configuration """
@@ -340,16 +309,17 @@ class DataUserTestToo(unittest.TestCase):
             DataUser()
         Configureable.conf = tmp
 
+    @unittest.skipIf(
+        (HAS_FUXI == False),
+        "Cannot test inference without the FuXi package")
     def test_inference(self):
         """ A simple test on the inference engine """
         ex = R.Namespace("http://example.org/")
         pred = ex['sameAs']
-        with sameAsRules(ex,pred) as rules_file:
+        with sameAsRules(ex, pred) as rules_file:
             c = Configuration()
             c.copy(TEST_CONFIG)
-            c['rdf.source'] = 'zodb'
-            c['rdf.store_conf'] = 'zodb'
-            c['rdf.namespace'] = test_ns
+            c['rdf.namespace'] = TEST_NS
             Configureable.conf = c
             d = Data()
             Configureable.conf = d
@@ -363,9 +333,10 @@ class DataUserTestToo(unittest.TestCase):
             du.add_statements(graph)
             self.assertIn((ex['x'], ex['b'], ex['k']), du.rdf)
             self.assertIn((ex['x'], ex['d'], ex['e']), du.rdf)
-            unlink_zodb_db('zodb')
+
 
 class sameAsRules(object):
+
     def __init__(self, ns=False, predicate='sameAs'):
         self.rules = None
         self.ns = ns
@@ -375,36 +346,38 @@ class sameAsRules(object):
         """ make a rules file with a simple 'sameAs' rule and return the file name """
         self.rules = tempfile.mkstemp()[1]
         f = open(self.rules, "w")
-        if self.ns:
-            ex = self.ns
-        else:
-            ex = R.Namespace(ns)
-        v = {"x" : R.Variable('x').n3(),
-                "y" : self.predicate.n3(),
-                "z" : R.Variable('z').n3(),
-                "m" : R.Variable('m').n3(),
-                "n" : R.Variable('n').n3() }
-        f.write("{ %(x)s %(y)s %(z)s . %(z)s %(m)s %(n)s } => { %(x)s %(m)s %(n)s } .\n" % v)
+        v = {"x": R.Variable('x').n3(),
+             "y": self.predicate.n3(),
+             "z": R.Variable('z').n3(),
+             "m": R.Variable('m').n3(),
+             "n": R.Variable('n').n3()}
+        f.write(
+            "{ %(x)s %(y)s %(z)s . %(z)s %(m)s %(n)s } => { %(x)s %(m)s %(n)s } .\n" %
+            v)
         f.close()
         return self.rules
 
-    def __exit__(self, *args,**kwargs):
+    def __exit__(self, *args, **kwargs):
         os.unlink(self.rules)
 
+
 class RDFLibTest(unittest.TestCase):
+
     """Test for RDFLib."""
 
     @classmethod
     def setUpClass(cls):
-        cls.ns = {"ns1" : "http://example.org/"}
+        cls.ns = {"ns1": "http://example.org/"}
+
     def test_uriref_not_url(self):
         try:
             rdflib.URIRef("daniel@example.com")
         except:
             self.fail("Doesn't actually fail...which is weird")
+
+    @unittest.skipIf(six.PY2, "In Python 2.7, no error is thrown by rdflib")
     def test_uriref_not_id(self):
         """ Test that rdflib throws up a warning when we do something bad """
-        #XXX: capture the logged warning
         import io
         import logging
         out = io.StringIO()
@@ -416,9 +389,13 @@ class RDFLibTest(unittest.TestCase):
         finally:
             out.flush()
             logger.removeHandler(stream_handler)
+
         v = out.getvalue()
         out.close()
-        self.assertRegex(str(v), r".*some random string.*")
+        if six.PY2:
+            six.assertRegex(self, str(v), r".*some random string.*")
+        else:
+            self.assertRegex(str(v), ".*some random string.*")
 
     def test_BNode_equality1(self):
         a = rdflib.BNode("some random string")
@@ -444,18 +421,19 @@ class RDFLibTest(unittest.TestCase):
                "01"^^xs:integer
         __eq__ for literals in rdflib do not follow this.
         """
-        self.assertTrue(R.Literal("1", datatype=R.XSD['integer']), R.Literal("01", datatype=R.XSD['integer']))
+        self.assertTrue(
+            R.Literal(
+                "1", datatype=R.XSD['integer']), R.Literal(
+                "01", datatype=R.XSD['integer']))
 
-#class TimeTest(unittest.TestCase):
-    #def test_datetime_isoformat_has_timezone(self):
-        #time_stamp = now(utc).isoformat()
-        #self.assertRegexp(time_stamp, r'.*[+-][0-9][0-9]:[0-9][0-9]$')
 
 class PintTest(unittest.TestCase):
+
     @classmethod
     def setUpClass(self):
         self.ur = Q.UnitRegistry()
         self.Q = self.ur.Quantity
+
     def test_atomic_short(self):
         q = self.Q(23, "mL")
         self.assertEqual("milliliter", str(q.units))
@@ -472,12 +450,12 @@ class PintTest(unittest.TestCase):
         self.assertEqual(23, q.magnitude)
 
     def test_atomic_long_plural_to_string(self):
-        #XXX: Maybe there's a way to have the unit name pluralized...
+        # XXX: Maybe there's a way to have the unit name pluralized...
         q = self.Q(23, "milliliters")
         self.assertEqual("23 milliliter", str(q))
 
     def test_string_init_long_plural_to_string(self):
-        #XXX: Maybe there's a way to have the unit name pluralized...
+        # XXX: Maybe there's a way to have the unit name pluralized...
         q = self.Q("23 milliliters")
         self.assertEqual("23 milliliter", str(q))
 
@@ -510,7 +488,9 @@ class PintTest(unittest.TestCase):
         q = self.Q("worm", "milliliters")
         self.assertEqual("worm", q.magnitude)
 
+
 class QuantityTest(unittest.TestCase):
+
     def test_string_init_short(self):
         q = Quantity.parse("23 mL")
         self.assertEqual("milliliter", q.unit)
@@ -540,22 +520,25 @@ class QuantityTest(unittest.TestCase):
         rdf_datatype = rdflib.URIRef("http://example.com/datatypes/quantity")
         rdflib.term.bind(rdf_datatype, Quantity, Quantity.parse)
         q_rdf = rdflib.Literal("23 mL", datatype=rdf_datatype)
-        q = Quantity(23, "milliliter")
         self.assertEqual("23 milliliter", str(q_rdf))
+        q = Quantity(23, "milliliter")
+        self.assertEqual(q, q_rdf.toPython())
 
-#class QuantityDataTest(_DataTest):
 
 class DataTest(unittest.TestCase):
+
     def test_namespace_manager(self):
         c = Configuration()
         c['rdf.source'] = 'default'
         c['rdf.store'] = 'default'
-        c['rdf.namespace'] = test_ns
+        c['rdf.namespace'] = TEST_NS
         Configureable.conf = c
         d = Data()
         d.openDatabase()
 
-        self.assertIsInstance(d['rdf.namespace_manager'], R.namespace.NamespaceManager)
+        self.assertIsInstance(
+            d['rdf.namespace_manager'],
+            R.namespace.NamespaceManager)
 
     def test_init_no_rdf_store(self):
         """ Should be able to init without these values """
@@ -570,73 +553,22 @@ class DataTest(unittest.TestCase):
             traceback.print_exc()
             self.fail("Bad state")
 
-    def test_ZODB_persistence(self):
-        """ Should be able to init without these values """
-        c = Configuration()
-        fname ='ZODB.fs'
-        c['rdf.source'] = 'ZODB'
-        c['rdf.store_conf'] = fname
-        c['rdf.namespace'] = test_ns
-        Configureable.conf = c
-        d = Data()
-        try:
-            d.openDatabase()
-            g = make_graph(20)
-            for x in g:
-                d['rdf.graph'].add(x)
-            d.closeDatabase()
-
-            d.openDatabase()
-            self.assertEqual(20, len(list(d['rdf.graph'])))
-            d.closeDatabase()
-        except:
-            traceback.print_exc()
-            self.fail("Bad state")
-        unlink_zodb_db(fname)
-
-    @unittest.skipIf((has_bsddb==False), "Sleepycat requires working bsddb")
-    def test_Sleepycat_persistence(self):
-        """ Should be able to init without these values """
-        c = Configuration()
-        fname='Sleepycat_store'
-        c['rdf.source'] = 'Sleepycat'
-        c['rdf.store_conf'] = fname
-        c['rdf.namespace'] = test_ns
-        Configureable.conf = c
-        d = Data()
-        try:
-            d.openDatabase()
-            g = make_graph(20)
-            for x in g:
-                d['rdf.graph'].add(x)
-            d.closeDatabase()
-
-            d.openDatabase()
-            self.assertEqual(20, len(list(d['rdf.graph'])))
-            d.closeDatabase()
-        except:
-            traceback.print_exc()
-            self.fail("Bad state")
-
-        subprocess.call("rm -rf "+fname, shell=True)
-
     def test_trix_source(self):
         """ Test that we can load the datbase up from an XML file.
         """
-        t = tempfile.mkdtemp()
         f = tempfile.mkstemp()
 
         c = Configuration()
         c['rdf.source'] = 'trix'
         c['rdf.store'] = 'default'
-        c['rdf.namespace'] = test_ns
+        c['rdf.namespace'] = TEST_NS
         c['trix_location'] = f[1]
 
-        with open(f[1],'w') as fo:
+        with open(f[1], 'w') as fo:
             fo.write(TD.TriX_data)
 
-        connect(conf=c)
-        c = config()
+        yarom.connect(conf=c)
+        c = yarom.config()
 
         try:
             g = c['rdf.graph']
@@ -646,13 +578,12 @@ class DataTest(unittest.TestCase):
         except ImportError:
             pass
         finally:
-            disconnect()
+            yarom.disconnect()
         os.unlink(f[1])
 
     def test_trig_source(self):
         """ Test that we can load the datbase up from a trig file.
         """
-        t = tempfile.mkdtemp()
         f = tempfile.mkstemp()
 
         c = Configuration()
@@ -660,12 +591,12 @@ class DataTest(unittest.TestCase):
         c['rdf.serialization'] = f[1]
         c['rdf.serialization_format'] = 'trig'
         c['rdf.store'] = 'default'
-        c['rdf.namespace'] = test_ns
-        with open(f[1],'w') as fo:
+        c['rdf.namespace'] = TEST_NS
+        with open(f[1], 'w') as fo:
             fo.write(TD.Trig_data)
 
-        connect(conf=c)
-        c = config()
+        yarom.connect(conf=c)
+        c = yarom.config()
 
         try:
             g = c['rdf.graph']
@@ -675,12 +606,15 @@ class DataTest(unittest.TestCase):
         except ImportError:
             pass
         finally:
-            disconnect()
+            yarom.disconnect()
+
 
 class PropertyTest(_DataTest):
+
     def test_one(self):
         """ `one` should return None if there isn't a value or just the value if there is one """
         class T(Property):
+
             def __init__(self):
                 Property.__init__(self)
                 self.b = False
@@ -690,40 +624,12 @@ class PropertyTest(_DataTest):
                     yield "12"
         t = T()
         self.assertIsNone(t.one())
-        t.b=True
+        t.b = True
         self.assertEqual('12', t.one())
 
-class MapperTest(_DataTestB):
-    def setUp(self):
-        _DataTestB.setUp(self)
-        Configureable.conf = self.TestConfig
-        Configureable.conf = Data()
-        Configureable.conf.openDatabase()
-
-    def tearDown(self):
-        Configureable.conf.closeDatabase()
-        _DataTestB.tearDown(self)
-
-    @unittest.expectedFailure
-    def test_addToGraph(self):
-        """Test that we can load a descendant of DataObject as a class"""
-        # TODO: See related TODO in mapper.py
-        dc = MappedClass("TestDOM", (Y.DataObject,), dict())
-        self.assertIn((dc.rdf_type, R.RDFS['subClassOf'], Y.DataObject.rdf_type), dc.du.rdf)
-
-    def test_access_created_from_module(self):
-        """Test that we can add an object and then access it from the yarom module"""
-        dc = MappedClass("TestDOM", (Y.DataObject,), dict())
-        self.assertTrue(hasattr(Y,"TestDOM"))
-
-    def test_object_from_id_class(self):
-        """ Ensure we get an object from just the class name """
-        MappedClass("TestDOM", (Y.DataObject,), dict())
-        MappedClass.remap()
-        g = mapper.oid(Configureable.conf['rdf.namespace']['TestDOM'])
-        self.assertIsInstance(g,Y.TestDOM)
 
 class RDFPropertyTest(_DataTest):
+
     def test_getInstanceTwice(self):
         from yarom.dataObject import RDFProperty
         self.assertEqual(RDFProperty.getInstance(), RDFProperty.getInstance())
@@ -733,87 +639,29 @@ class RDFPropertyTest(_DataTest):
             yarom.dataObject.RDFProperty()
 
     def test_type_is_class(self):
-        from yarom.dataObject import RDFProperty,RDFSClass
+        from yarom.dataObject import RDFProperty, RDFSClass
         types = RDFProperty.getInstance().rdf_type_property.values
         self.assertIn(RDFSClass.getInstance(), types)
 
+
 class SimplePropertyTest(_DataTest):
-    def __init__(self,*args,**kwargs):
-        _DataTest.__init__(self,*args,**kwargs)
-        id_tests = []
 
     def setUp(self):
         _DataTest.setUp(self)
 
-        # Done dynamically to ensure that all of the yarom setup happens before the class is created
+        # Done dynamically to ensure that all of the yarom setup happens before
+        # the class is created
         class K(Y.DataObject):
-            datatypeProperties = [{'name':'boots', 'multiple':False}, 'bets']
+            datatypeProperties = [{'name': 'boots', 'multiple': False}, 'bets']
+            objectProperties = [{'name': 'bats', 'multiple': False}, 'bits']
 
-            objectProperties = [{'name':'bats', 'multiple':False}, 'bits']
+        K.mapper.remap()
         self.k = K
-
-    # XXX: auto generate some of these tests...
-    @unittest.skip
-    def test_same_value_same_id_not_empty(self):
-        """
-        Test that two SimpleProperty with the same name have the same identifier()
-        XXX: Make this evoke the related relation object and compare those
-        """
-        do = self.k(key="a")
-        do1 = self.k(key="a")
-        do.boots('partition')
-        do1.boots('partition')
-        self.assertEqual(do.boots.identifier(),do1.boots.identifier())
-
-    @unittest.skip
-    def test_same_value_same_id_not_empty_object_property(self):
-        """
-        Test that two SimpleProperty with the same name have the same identifier()
-        XXX: Make this evoke the related relation object and compare those
-        """
-        do = self.k(key="a")
-        do1 = self.k(key="a")
-        dz = self.k(key="b")
-        dz1 = self.k(key="b")
-        do.bats(dz)
-        do1.bats(dz1)
-        self.assertEqual(do.bats.identifier(),do1.bats.identifier())
-
-    @unittest.skip
-    def test_diff_value_diff_id_not_empty(self):
-        """
-        Test that two SimpleProperty with the same name have the same identifier()
-        XXX: Make this evoke the related relation object and compare those
-        """
-        do = self.k(key="a")
-        do1 = self.k(key="a")
-        do.boots('join')
-        do1.boots('partition')
-        self.assertNotEqual(do.boots.link,do1.boots.link)
-
-    @unittest.skip
-    def test_diff_value_insert_order_same_id_object_property(self):
-        """
-        Test that two SimpleProperty with the same name have the same identifier()
-        XXX: Make this evoke the related relation object and compare those
-        """
-        do = self.k(key="a")
-        do1 = self.k(key="a")
-        oa = self.k(key="1")
-        ob = self.k(key="2")
-        oc = self.k(key="3")
-
-        do.bits(oa)
-        do.bits(ob)
-        do.bits(oc)
-        do1.bits(oc)
-        do1.bits(oa)
-        do1.bits(ob)
-        self.assertEqual(do.bits.identifier(), do1.bits.identifier())
 
     def test_non_multiple_saves_single_values(self):
         class C(Y.DataObject):
-            datatypeProperties = [{'name':'t', 'multiple':False}]
+            datatypeProperties = [{'name': 't', 'multiple': False}]
+        C.mapper.remap()
         do = C(key="s")
         do.t("value1")
         do.t("vaule2")
@@ -838,7 +686,6 @@ class SimplePropertyTest(_DataTest):
         self.assertEqual(len(boots.values), 0)
 
     def test_unset_single_by_identifier(self):
-        from yarom.simpleProperty import PropertyValue
         bats = self.k().bats
 
         o = self.k(key='blah')
@@ -865,35 +712,53 @@ class SimplePropertyTest(_DataTest):
         with self.assertRaises(Exception):
             bits.unset("random")
 
+
+class PropertyValueTest(unittest.TestCase):
+
+    def test_init_identifier(self):
+        from yarom.simpleProperty import PropertyValue
+        pv = PropertyValue(R.URIRef("http://example.com"))
+        self.assertTrue(hasattr(pv, "value"))
+        self.assertIsNotNone(getattr(pv, "value"))
+
+
 class UnionPropertyTest(_DataTest):
+
     def setUp(self):
         _DataTest.setUp(self)
 
-        # Done dynamically to ensure that all of the yarom setup happens before the class is created
+        # Done dynamically to ensure that all of the yarom setup happens before
+        # the class is created
         class K(Y.DataObject):
             _ = ['name']
-        Y.remap()
+        Mapper.get_instance().remap()
         self.k = K
 
     def test_get_literal(self):
-        k=self.k(generate_key=True)
+        k = self.k(generate_key=True)
         k.name('val')
         k.save()
         k.name.unset('val')
         self.assertIn('val', k.name(), "stored literal is returned")
 
     def test_get_DataObject(self):
-        j=self.k(generate_key=True)
-        k=self.k(generate_key=True)
+        j = self.k(generate_key=True)
+        k = self.k(generate_key=True)
         k.name(j)
         k.save()
         k.name.unset(j)
         val = k.name.one()
-        self.assertIsInstance(val, self.k, "stored DataObject is of the correct type")
+        self.assertIsInstance(
+            val,
+            self.k,
+            '{} is a {}'.format(val, type(val)))
         self.assertEqual(val, j, "returned value equals stored value")
 
+
 class ObjectCollectionTest(_DataTest):
+
     """ Tests for the simple container class """
+
     def test_member_can_be_restored(self):
         """ Test that we can retrieve a saved collection and its members """
         oc = Y.ObjectCollection('test')
@@ -904,10 +769,12 @@ class ObjectCollectionTest(_DataTest):
         dor = ocr.member.one()
         self.assertEqual(do, dor)
 
-def main(*args,**kwargs):
-    unittest.main(*args,**kwargs)
+
+def main(*args, **kwargs):
+    unittest.main(*args, **kwargs)
 
 if __name__ == '__main__':
+    import sys
     if len(sys.argv) == 3:
         main(defaultTest=sys.argv[1])
     else:

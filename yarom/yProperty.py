@@ -1,20 +1,18 @@
 from .dataUser import DataUser
 
-__all__ = ["Property", 'NoRelationshipException']
+__all__ = ["Property"]
 
-class NoRelationshipException(Exception):
-    """ Indicates that a Relationship was asked for but one could not be given. """
 
-# Define a property by writing the get
 class Property(DataUser):
+
     """ Store a value associated with a DataObject
 
     Properties can be be accessed like methods. A method call like::
 
         a.P()
 
-    for a property ``P`` will return values appropriate to that property for ``a``,
-    the `owner` of the property.
+    for a property ``P`` will return values appropriate to that property for
+    ``a``, the `owner` of the property.
 
     Parameters
     ----------
@@ -29,15 +27,16 @@ class Property(DataUser):
 
     # Indicates whether the Property is multi-valued
     multiple = False
+    link = None
+    linkName = None
 
-    def __init__(self, name=False, owner=False, **kwargs):
-        DataUser.__init__(self, **kwargs)
+    def __init__(self, owner=False, **kwargs):
+        super(Property, self).__init__(**kwargs)
         self.owner = owner
-        # XXX: Default implementation is a box for a value
-        self._value = False
 
-    def get(self,*args):
-        """ Get the things which are on the other side of this property
+    def get(self, *args):
+        """
+        Get the things which are on the other side of this property
 
         The return value must be iterable. For a ``get`` that just returns
         a single value, an easy way to make an iterable is to wrap the
@@ -45,19 +44,22 @@ class Property(DataUser):
 
         Derived classes must override.
         """
-        # This should run a query or return a cached value
+
         raise NotImplementedError()
 
-    def set(self,*args,**kwargs):
-        """ Set the value of this property
+    def set(self, *args, **kwargs):
+        """
+        Set the value of this property
 
         Derived classes must override.
         """
-        # This should set some values and call DataObject.save()
+
         raise NotImplementedError()
 
     def one(self):
-        """ Returns a single value for the ``Property`` whether or not it is multivalued.
+        """
+        Returns a single value for the ``Property`` whether or not it is
+        multivalued.
         """
 
         try:
@@ -67,23 +69,30 @@ class Property(DataUser):
             return None
 
     def hasValue(self):
-        """ Returns true if the Property has any values set on it.
+        """
+        Returns true if the Property has any values set on it.
 
         This may be defined differently for each property
         """
-        return True
+        return False
 
-    def __call__(self,*args,**kwargs):
-        """ If arguments are passed to the ``Property``, its ``set`` method
-        is called. Otherwise, the ``get`` method is called. If the ``multiple``
-        member for the ``Property`` is set to ``True``, then a Python set containing
-        the associated values is returned. Otherwise, a single bare value is returned.
+    @property
+    def values(self):
+        raise NotImplementedError()
+
+    def __call__(self, *args, **kwargs):
+        """
+        If arguments are passed to the ``Property``, its ``set`` method is
+        called. Otherwise, the ``get`` method is called. If the ``multiple``
+        member for the ``Property`` is set to ``True``, then a Python set
+        containing the associated values is returned. Otherwise, a single bare
+        value is returned.
         """
 
         if len(args) > 0 or len(kwargs) > 0:
-            return self.set(*args,**kwargs)
+            return self.set(*args, **kwargs)
         else:
-            r = self.get(*args,**kwargs)
+            r = self.get(*args, **kwargs)
             if self.multiple:
                 return set(r)
             else:
