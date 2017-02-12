@@ -153,6 +153,17 @@ class GraphObjectQuerier(object):
         return self.query_path_resolver(h)
 
     def merge_paths(self, l):
+        """ Combines a list of lists into a multi-level table with
+        the elements of the lists as the keys. For given::
+
+            [[a, b, c], [a, b, d], [a, e, d]]
+
+        merge_paths returns::
+
+            {a: {b: {c: {},
+                     d: {}},
+                 e: {d: {}}}}
+        """
         res = dict()
         L.debug("merge_paths: {}".format(l))
         for x in l:
@@ -172,18 +183,11 @@ class GraphObjectQuerier(object):
             sub_answers = set()
             sub = h[x]
             idx = x.index(None)
-            if idx == 2:
-                other_idx = 0
-            else:
-                other_idx = 2
+            other_idx = 0 if (idx == 2) else 2
 
             if isinstance(x[other_idx], Variable):
                 for z in self.query_path_resolver(sub, i + 1):
-                    if idx == 2:
-                        qx = (z, x[1], None)
-                    else:
-                        qx = (None, x[1], z)
-
+                    qx = (z, x[1], None) if idx == 2 else (None, x[1], z)
                     for y in self.graph.triples(qx):
                         sub_answers.add(y[idx])
             else:

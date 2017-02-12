@@ -102,9 +102,8 @@ class UnionPropertyMixin(object):
                     '". BNodes are not supported in yarom')
             else:
                 types = set()
-                for rdf_type in super(
-                        UnionPropertyMixin, self).rdf.objects(
-                        ident, rdflib.RDF['type']):
+                rdf = super(UnionPropertyMixin, self).rdf
+                for rdf_type in rdf.objects(ident, rdflib.RDF['type']):
                     types.add(rdf_type)
                 L.debug("{} <- types, {} <- ident".format(types, ident))
                 the_type = self._resolver.base_type
