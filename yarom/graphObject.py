@@ -1,6 +1,7 @@
 import logging
 from itertools import chain
 from pprint import pformat
+import threading
 
 L = logging.getLogger(__name__)
 
@@ -145,7 +146,10 @@ class GraphObjectQuerier(object):
         """
 
         self.query_object = q
-        self.graph = graph
+        if hasattr(graph, 'triples'):
+            self.graph = graph
+        else:
+            self.graph_iter = graph
 
     def do_query(self):
         qp = _QueryPreparer(self.query_object)
@@ -177,31 +181,55 @@ class GraphObjectQuerier(object):
 
         return res
 
-    def query_path_resolver(self, h, i=0):
+    def query_path_resolver(self, h):
         join_args = []
+        cv = threading.Condition()
+        tcount = 0
         for x in h:
-            sub_answers = set()
+            graph = self.graph if self.graph else next(self.graph_iter)
+
+            def f():
+                self._qpr_helper(h, x, join_args, cv, graph)
+            t = threading.Thread(target=f)
+            t.start()
+            tcount += 1
+
+        with cv:
+            while len(join_args) < tcount:
+                cv.wait()
+
+        if len(join_args) > 0:
+            res = set(join_args[0])
+            for x in join_args[1:]:
+                lres = res
+                res = set()
+                for z in x:
+                    if z in lres:
+                        res.add(z)
+            return res
+        else:
+            return set()
+
+    def _qpr_helper(self, h, x, join_args, cv, graph):
+        seen = set()
+        try:
             sub = h[x]
             idx = x.index(None)
             other_idx = 0 if (idx == 2) else 2
 
             if isinstance(x[other_idx], Variable):
-                for z in self.query_path_resolver(sub, i + 1):
+                for z in self.query_path_resolver(sub):
                     qx = (z, x[1], None) if idx == 2 else (None, x[1], z)
-                    for y in self.graph.triples(qx):
-                        sub_answers.add(y[idx])
+                    for y in graph.triples(qx):
+                        seen.add(y[idx])
             else:
-                for y in self.graph.triples(x):
-                    sub_answers.add(y[idx])
-            join_args.append(sub_answers)
-
-        if len(join_args) > 0:
-            res = join_args[0]
-            for x in join_args[1:]:
-                res = res & x
-            return res
-        else:
-            return set()
+                for y in graph.triples(x):
+                    seen.add(y[idx])
+            L.debug("Done with {} {}".format(x, len(seen)))
+        finally:
+            with cv:
+                join_args.append(seen)
+                cv.notify()
 
     def __call__(self):
         res = self.do_query()
