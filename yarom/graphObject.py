@@ -128,7 +128,7 @@ class GraphObjectQuerier(object):
 
     """
 
-    def __init__(self, q, graph):
+    def __init__(self, q, graph, parallel=False):
         """ Initialize the querier.
 
         Call the GraphObjectQuerier object to perform the query.
@@ -150,6 +150,8 @@ class GraphObjectQuerier(object):
             self.graph = graph
         else:
             self.graph_iter = graph
+
+        self.parallel = parallel
 
     def do_query(self):
         qp = _QueryPreparer(self.query_object)
@@ -186,12 +188,17 @@ class GraphObjectQuerier(object):
         cv = threading.Condition()
         tcount = 0
         for x in h:
-            graph = self.graph if self.graph else next(self.graph_iter)
+            if hasattr(self, 'graph'):
+                graph = self.graph
+            else:
+                graph = next(self.graph_iter)
 
             def f():
                 self._qpr_helper(h, x, join_args, cv, graph)
             t = threading.Thread(target=f)
             t.start()
+            if not self.parallel:
+                t.join()
             tcount += 1
 
         with cv:
