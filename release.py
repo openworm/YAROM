@@ -7,7 +7,7 @@ import subprocess
 def main(args):
     if len(args) <= 2:
         print(
-            "Must provide a version (e.g., 0.0.1-alpha) and the package name to {}".format(args[0]))
+            "Must provide the package name and a version (e.g., 0.0.1-alpha) to {}".format(args[0]))
         return
     project = args[1]
     version = args[2]
