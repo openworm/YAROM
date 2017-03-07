@@ -185,8 +185,12 @@ class GraphObjectQuerier(object):
 
     def query_path_resolver(self, h):
         join_args = []
-        cv = threading.Condition()
-        tcount = 0
+        if self.parallel:
+            cv = threading.Condition()
+            tcount = 0
+        else:
+            cv = None
+
         for x in h:
             if hasattr(self, 'graph'):
                 graph = self.graph
@@ -195,15 +199,18 @@ class GraphObjectQuerier(object):
 
             def f():
                 self._qpr_helper(h, x, join_args, cv, graph)
-            t = threading.Thread(target=f)
-            t.start()
-            if not self.parallel:
-                t.join()
-            tcount += 1
 
-        with cv:
-            while len(join_args) < tcount:
-                cv.wait()
+            if self.parallel:
+                t = threading.Thread(target=f)
+                t.start()
+                tcount += 1
+            else:
+                f()
+
+        if self.parallel:
+            with cv:
+                while len(join_args) < tcount:
+                    cv.wait()
 
         if len(join_args) > 0:
             res = set(join_args[0])
@@ -234,9 +241,12 @@ class GraphObjectQuerier(object):
                     seen.add(y[idx])
             L.debug("Done with {} {}".format(x, len(seen)))
         finally:
-            with cv:
+            if self.parallel:
+                with cv:
+                    join_args.append(seen)
+                    cv.notify()
+            else:
                 join_args.append(seen)
-                cv.notify()
 
     def __call__(self):
         res = self.do_query()
