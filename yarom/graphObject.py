@@ -183,31 +183,32 @@ class GraphObjectQuerier(object):
 
         return res
 
-    def query_path_resolver(self, h):
+    def query_path_resolver(self, path_table):
         join_args = []
-        if self.parallel:
+        par = self.parallel and len(path_table) > 1
+        if par:
             cv = threading.Condition()
             tcount = 0
         else:
             cv = None
 
-        for x in h:
+        for hop in path_table:
             if hasattr(self, 'graph'):
                 graph = self.graph
             else:
                 graph = next(self.graph_iter)
 
             def f():
-                self._qpr_helper(h, x, join_args, cv, graph)
+                self._qpr_helper(path_table[hop], hop, join_args, cv, graph)
 
-            if self.parallel:
+            if par:
                 t = threading.Thread(target=f)
                 t.start()
                 tcount += 1
             else:
                 f()
 
-        if self.parallel:
+        if par:
             with cv:
                 while len(join_args) < tcount:
                     cv.wait()
@@ -224,24 +225,26 @@ class GraphObjectQuerier(object):
         else:
             return set()
 
-    def _qpr_helper(self, h, x, join_args, cv, graph):
+    def _qpr_helper(self, sub, search_triple, join_args, cv, graph):
         seen = set()
         try:
-            sub = h[x]
-            idx = x.index(None)
+            idx = search_triple.index(None)
             other_idx = 0 if (idx == 2) else 2
 
-            if isinstance(x[other_idx], Variable):
+            if isinstance(search_triple[other_idx], Variable):
                 for z in self.query_path_resolver(sub):
-                    qx = (z, x[1], None) if idx == 2 else (None, x[1], z)
+                    if idx == 2:
+                        qx = (z, search_triple[1], None)
+                    else:
+                        qx = (None, search_triple[1], z)
                     for y in graph.triples(qx):
                         seen.add(y[idx])
             else:
-                for y in graph.triples(x):
+                for y in graph.triples(search_triple):
                     seen.add(y[idx])
-            L.debug("Done with {} {}".format(x, len(seen)))
+            L.debug("Done with {} {}".format(search_triple, len(seen)))
         finally:
-            if self.parallel:
+            if cv:
                 with cv:
                     join_args.append(seen)
                     cv.notify()
