@@ -228,7 +228,6 @@ class GraphObjectQuerier(object):
                 for z in x:
                     if z in lres:
                         res.add(z)
-            #self.results[goal] = self.results.get(goal, res) & res
             return res
         else:
             return set()
@@ -247,11 +246,10 @@ class GraphObjectQuerier(object):
                 else:
                     qx = (None, search_triple[1], sub_results)
 
-                for y in self.triples_choices(qx):
-                    seen.add(y[idx])
+                trips = self.triples_choices(qx)
             else:
-                for y in self.triples(search_triple[:-1]):
-                    seen.add(y[idx])
+                trips = self.triples(search_triple[:-1])
+            seen = set(y[idx] for y in trips)
             L.debug("Done with {} {}".format(search_triple, len(seen)))
         finally:
             if cv:
