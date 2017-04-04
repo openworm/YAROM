@@ -152,10 +152,13 @@ class GraphObjectQuerier(object):
             self.graph_iter = graph
 
         self.parallel = parallel
+        self.results = dict()
+        self.triples_cache = dict()
 
     def do_query(self):
         qp = _QueryPreparer(self.query_object)
         h = self.merge_paths(qp())
+        L.debug(pformat(h))
         return self.query_path_resolver(h)
 
     def merge_paths(self, l):
@@ -191,8 +194,11 @@ class GraphObjectQuerier(object):
             tcount = 0
         else:
             cv = None
-
+        if par:
+            L.debug("Executing queries in parallel")
+        goal = None
         for hop in path_table:
+            goal = hop[3]
             if hasattr(self, 'graph'):
                 graph = self.graph
             else:
@@ -214,6 +220,7 @@ class GraphObjectQuerier(object):
                     cv.wait()
 
         if len(join_args) > 0:
+            L.debug("Joining {} args on {}".format(len(join_args), goal))
             res = set(join_args[0])
             for x in join_args[1:]:
                 lres = res
@@ -221,6 +228,7 @@ class GraphObjectQuerier(object):
                 for z in x:
                     if z in lres:
                         res.add(z)
+            #self.results[goal] = self.results.get(goal, res) & res
             return res
         else:
             return set()
@@ -232,15 +240,17 @@ class GraphObjectQuerier(object):
             other_idx = 0 if (idx == 2) else 2
 
             if isinstance(search_triple[other_idx], Variable):
-                for z in self.query_path_resolver(sub):
-                    if idx == 2:
-                        qx = (z, search_triple[1], None)
-                    else:
-                        qx = (None, search_triple[1], z)
-                    for y in graph.triples(qx):
-                        seen.add(y[idx])
+                sub_results = list(self.query_path_resolver(sub))
+
+                if idx == 2:
+                    qx = (sub_results, search_triple[1], None)
+                else:
+                    qx = (None, search_triple[1], sub_results)
+
+                for y in self.triples_choices(qx):
+                    seen.add(y[idx])
             else:
-                for y in graph.triples(search_triple):
+                for y in self.triples(search_triple[:-1]):
                     seen.add(y[idx])
             L.debug("Done with {} {}".format(search_triple, len(seen)))
         finally:
@@ -251,8 +261,15 @@ class GraphObjectQuerier(object):
             else:
                 join_args.append(seen)
 
+    def triples_choices(self, query_triple):
+        return self.graph.triples_choices(query_triple)
+
+    def triples(self, query_triple):
+        return self.graph.triples(query_triple)
+
     def __call__(self):
         res = self.do_query()
+        L.debug(pformat(self.results))
         return res
 
 
@@ -364,9 +381,11 @@ class _QueryPreparer(object):
                     other_id = self.var(other_id)
 
                 if direction is UP:
-                    self.stack.append((other_id, this_property.link, None))
+                    self.stack.append((other_id, this_property.link, None,
+                                       current_node))
                 else:
-                    self.stack.append((None, this_property.link, other_id))
+                    self.stack.append((None, this_property.link, other_id,
+                                       current_node))
                 L.debug("gpap: preparing %s from %s", other, this_property)
                 subpath = self.prepare(other)
 
@@ -395,8 +414,7 @@ class _QueryPreparer(object):
         L.debug("prepare: current_node %s", current_node)
         if current_node.defined:
             if len(self.stack) > 0:
-                tmp = list(self.stack)
-                self.paths.append(tmp)
+                self.paths.append(list(self.stack))
             return True, _QueryPathElement()
         else:
             if current_node in self.seen:
