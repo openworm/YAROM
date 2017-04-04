@@ -66,7 +66,7 @@ from .rdfUtils import (
 
 import sys
 
-__version__ = "0.9.1"
+__version__ = "0.10.0"
 __author__ = 'Mark Watts'
 
 this_module = __import__('yarom')
