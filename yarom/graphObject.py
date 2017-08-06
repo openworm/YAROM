@@ -8,12 +8,14 @@ L = logging.getLogger(__name__)
 __all__ = [
     "GraphObject",
     "GraphObjectQuerier",
+    "GraphObjectChecker",
     "ComponentTripler",
     "IdentifierMissingException"]
 
 # Directions for traversal across triples
 UP = 'up'  # left, towards the subject
 DOWN = 'down'  # right, towards the object
+EMPTY_SET = frozenset([])
 
 
 class Variable(int):
@@ -73,6 +75,28 @@ class GraphObject(object):
             return self.idl < other.idl
         else:
             return id(self) < id(other)
+
+
+class GraphObjectChecker(object):
+    def __init__(self, query_object, graph, parallel=False, sort_first=False):
+        self.query_object = query_object
+        self.graph = graph
+
+    def __call__(self):
+        tripler = ComponentTripler(self.query_object)
+        for x in sorted(tripler()):
+            if x not in self.graph:
+                return False
+        return True
+
+
+class GraphObjectValidator(object):
+    def __init__(self, query_object, graph, parallel=False):
+        self.query_object = query_object
+        self.graph = graph
+
+    def __call__(self):
+        return True
 
 
 class GraphObjectQuerier(object):
@@ -143,6 +167,12 @@ class GraphObjectQuerier(object):
             returns a set of triples matching that pattern. The pattern for
             ``t`` is ``t[i] = None``, 0 <= i <= 2, indicates that the i'th
             position can take any value.
+
+            The ``graph`` method can optionally implement the 'range query'
+            'interface':
+                the graph must have a property ``supports_range_queries``
+                equal to ``True`` and ``triples`` must accept, in any position
+                of the
         """
 
         self.query_object = q
@@ -156,8 +186,18 @@ class GraphObjectQuerier(object):
         self.triples_cache = dict()
 
     def do_query(self):
+        if self.query_object.defined:
+            gv = GraphObjectChecker(self.query_object, self.graph)
+            if gv():
+                return set([self.query_object])
+            else:
+                return EMPTY_SET
+
         qp = _QueryPreparer(self.query_object)
-        h = self.merge_paths(qp())
+        paths = qp()
+        if len(paths) == 0:
+            return EMPTY_SET
+        h = self.merge_paths(paths)
         L.debug(pformat(h))
         return self.query_path_resolver(h)
 
@@ -224,13 +264,14 @@ class GraphObjectQuerier(object):
             res = set(join_args[0])
             for x in join_args[1:]:
                 lres = res
-                res = set()
+                res = set([])
                 for z in x:
                     if z in lres:
                         res.add(z)
+            L.debug("Joined {} args on {}".format(len(join_args), goal))
             return res
         else:
-            return set()
+            return EMPTY_SET
 
     def _qpr_helper(self, sub, search_triple, join_args, cv, graph):
         seen = set()
@@ -409,7 +450,7 @@ class _QueryPreparer(object):
             return var
 
     def prepare(self, current_node):
-        L.debug("prepare: current_node %s", current_node)
+        L.debug("prepare: current_node %s", repr(current_node))
         if current_node.defined:
             if len(self.stack) > 0:
                 self.paths.append(list(self.stack))

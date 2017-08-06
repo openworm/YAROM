@@ -1,7 +1,7 @@
 import unittest
 from logging import getLogger
 from random import random
-from yarom.graphObject import GraphObject, ComponentTripler
+from yarom.graphObject import GraphObject, ComponentTripler, GraphObjectQuerier
 
 L = getLogger(__name__)
 
@@ -31,14 +31,91 @@ class G(GraphObject):
         return self._k is not None
 
 
+class Graph(object):
+    def __init__(self):
+        self.s = set([])
+
+    def __contains__(self, o):
+        return o in self.s
+
+    def add(self, o):
+        self.s.add(o)
+
+    def triples(self, q):
+        s = q[0]
+        p = q[1]
+        o = q[2]
+        if s is None:
+            if p is None:
+                if o is None:
+                    return set(self.s)
+                else:
+                    return set((x for x in self.s if x[2] == o))
+            else:
+                if o is None:
+                    return set((x for x in self.s if x[1] == p))
+                else:
+                    return set((x for x in self.s if x[1] == p and x[2] == o))
+        else:
+            if p is None:
+                if o is None:
+                    return set((x for x in self.s if x[0] == s))
+                else:
+                    return set((x for x in self.s if x[0] == s and x[2] == o))
+            else:
+                if o is None:
+                    return set((x for x in self.s if x[0] == s and x[1] == p))
+                else:
+                    return set([q]) if q in self.s else set([])
+
+
 class P(object):
     link = '->'
 
-    def __init__(self, x, y):
+    def __init__(self, x, y, graph=None):
         self.values = [y]
         self.owner = x
         y.owner_properties.append(self)
         x.properties.append(self)
+        if graph is not None and x.defined and y.defined:
+            graph.add((x.identifier(), P.link, y.identifier()))
+
+
+class GraphObjectQuerierTest(unittest.TestCase):
+
+    def test_query_defined_and_in_graph_returns_self(self):
+        a = G(3)
+        b = G(1)
+        c = G(2)
+        d = G(7)
+        g = Graph()
+        P(a, b, g)
+        P(c, d, g)
+        P(a, d, g)
+
+        at = G(3)
+        r = list(GraphObjectQuerier(at, g, parallel=False)())
+        self.assertListEqual([at], r)
+
+    def test_query_defined_validates(self):
+        """
+        Query that starts with a defined value
+        """
+        a = G(3)
+        b = G(1)
+        c = G(2)
+        d = G(7)
+        g = Graph()
+        P(a, b, g)
+        P(c, d, g)
+        P(a, d, g)
+
+        at = G(3)
+        kt = G(5)
+        P(at, kt)
+
+        r = list(GraphObjectQuerier(at, g, parallel=False)())
+        self.assertListEqual([], r)
 
 
 class ComponentTriplerTest(unittest.TestCase):
@@ -53,7 +130,7 @@ class ComponentTriplerTest(unittest.TestCase):
         b = G(4)
         c = G(6)
         d = G(7)
-        print(a, b)
+
         P(z, a)
         P(z, b)
         P(b, c)

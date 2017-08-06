@@ -10,8 +10,11 @@ env:
   - INFERENCE=1
   - ZODB=1
   - INFERENCE=1 ZODB=1
+  global:
+    secure: "maYggIWCt6+Oj+B/+XDP9VAPBr6h9iiUyeyQimbQDrqoiygmX9RI4fPlJfztNk+1iI4BHSXQjXziOd/6iAUhAt6PLUNaR7UxLPNhiDXkmQlrMsIAVXOIhPSlZLpMs0MbYQT6UFAR3ZE+kIObNtj4eqNjBs6uVAmeA103Xa0XR4A="
 
 install: ./.travis.sh
 
 script:  
   - py.test tests
+  - ./codespeed-submit.sh

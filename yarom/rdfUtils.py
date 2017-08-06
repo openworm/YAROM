@@ -21,11 +21,27 @@ def deserialize_rdflib_term(x):
     return x
 
 
-def triples_to_bgp(trips, namespace_manager=None):
+def triples_to_bgp(trips, namespace_manager=None, show_namespaces=False):
     # XXX: Collisions could result between the variable names of different
     # objects
     g = ""
+    ns = set([])
     for y in trips:
-        g += " ".join(serialize_rdflib_term(x, namespace_manager)
-                      for x in y) + " .\n"
+        p = ''
+        for x in y:
+            s = serialize_rdflib_term(x, namespace_manager)
+            if isinstance(x, R.URIRef) and s[0] != '<':
+                ns.add(s.split(':', 1)[0])
+            elif isinstance(x, R.Literal) and '^^' in s and s[-1] != '>':
+                ns.add(s.split('^^', 1)[1].split(':', 1)[0])
+
+            p += s + ' '
+        g += p + ".\n"
+
+    if (namespace_manager is not None) and show_namespaces:
+        g = "".join('@prefix ' + str(x) + ': ' + y.n3() + ' .\n'
+                    for x, y
+                    in namespace_manager.namespaces()
+                    if x in ns) + g
+
     return g
