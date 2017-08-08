@@ -44,9 +44,6 @@ class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
         # as a sort of staging area before saving the values to the graph.
         self._v = []
 
-        v = (random(), random())
-        self._value = Variable("_" + hashlib.md5(str(v).encode()).hexdigest())
-
     def has_value(self):
         """ Returns true if the :meth:`set` has been called previously """
         return len(self._v) > 0
@@ -136,7 +133,6 @@ class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
 
 class DatatypeProperty(DatatypePropertyMixin, SimpleProperty):
     pass
-
 
 class ObjectProperty(ObjectPropertyMixin, SimpleProperty):
     pass

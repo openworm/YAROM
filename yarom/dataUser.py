@@ -154,16 +154,16 @@ class DataUser(Configureable):
         return n
 
 
-def grouper(iterable, n, fillvalue=None):
+def grouper(iterable, n):
     """Collect data into fixed-length chunks or blocks"""
-    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx
+    # grouper('ABCDEFG', 3) --> ABC DEF G
     args = [iter(iterable)] * n
     while True:
         l = []
         try:
             for x in args:
                 l.append(next(x))
-        except:
+        except StopIteration:
             pass
         yield l
         if len(l) < n:
