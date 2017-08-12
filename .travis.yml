@@ -11,10 +11,14 @@ env:
   - ZODB=1
   - INFERENCE=1 ZODB=1
   global:
-    secure: "maYggIWCt6+Oj+B/+XDP9VAPBr6h9iiUyeyQimbQDrqoiygmX9RI4fPlJfztNk+1iI4BHSXQjXziOd/6iAUhAt6PLUNaR7UxLPNhiDXkmQlrMsIAVXOIhPSlZLpMs0MbYQT6UFAR3ZE+kIObNtj4eqNjBs6uVAmeA103Xa0XR4A="
+  - secure: "maYggIWCt6+Oj+B/+XDP9VAPBr6h9iiUyeyQimbQDrqoiygmX9RI4fPlJfztNk+1iI4BHSXQjXziOd/6iAUhAt6PLUNaR7UxLPNhiDXkmQlrMsIAVXOIhPSlZLpMs0MbYQT6UFAR3ZE+kIObNtj4eqNjBs6uVAmeA103Xa0XR4A="
+  - secure: "MzPh6i5mG7huxFspgu3us2d32+bRYwQRD34u0pcP2WvElsHkbAz/Y+5Gw3PEaP8U8UWdnFBeOM/siyJRMxFMSAIbweyGCwJzW0XpdiWNK0yU1bMbrCSRb8p+rlYECoNCEK3NgfY689A4z8bhE6c6xmwFtEND3XAVhw7qiktPNbg="
 
 install: ./.travis.sh
 
 script:  
   - py.test tests
   - ./codespeed-submit.sh
+
+after_success:
+  - ./travis-downstream-trigger.sh
