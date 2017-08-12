@@ -3,7 +3,9 @@
 pip install --upgrade 'setuptools' 'six>=1.9'
 pip install -r requirements.txt
 if [ $DEPLOY ] ; then
+    apt-get install ruby
     pip install twine
+    gem install travis
 else
     if [ $INFERENCE ] ; then
         echo pip install -r inference.requirements.txt
