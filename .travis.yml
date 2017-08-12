@@ -28,5 +28,5 @@ script:
 
 after_success:
   - ./codespeed-submit.sh
-  - ./travis-downstream-trigger.sh
   - ./deploy.sh
+  - ./travis-downstream-trigger.sh

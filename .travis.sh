@@ -1,16 +1,19 @@
-#!/bin/sh
+#!/bin/sh -ex
 
 pip install --upgrade 'setuptools' 'six>=1.9'
-echo pip install -r requirements.txt
 pip install -r requirements.txt
-if [ $INFERENCE ] ; then
-   echo pip install -r inference.requirements.txt
-   pip install -r inference.requirements.txt
+if [ $DEPLOY ] ; then
+    pip install twine
+else
+    if [ $INFERENCE ] ; then
+        echo pip install -r inference.requirements.txt
+        pip install -r inference.requirements.txt
 
-fi
-if [ $ZODB ] ; then
-   echo pip install -r zodb.requirements.txt
-   pip install -r zodb.requirements.txt
-fi
+    fi
+    if [ $ZODB ] ; then
+        echo pip install -r zodb.requirements.txt
+        pip install -r zodb.requirements.txt
+    fi
 
-python setup.py develop
+    python setup.py develop
+fi
