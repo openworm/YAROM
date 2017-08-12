@@ -18,7 +18,7 @@ install: ./.travis.sh
 
 script:  
   - py.test tests
-  - ./codespeed-submit.sh
 
 after_success:
+  - ./codespeed-submit.sh
   - ./travis-downstream-trigger.sh
