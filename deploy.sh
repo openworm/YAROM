@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -xe
 
 if [ $DEPLOY ] ; then
   python setup.py egg_info --tag-build=-$(date +"%Y%m%d%H%M%S") sdist
