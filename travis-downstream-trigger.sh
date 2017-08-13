@@ -1,4 +1,4 @@
-#!/bin/bash -xe
+#!/bin/bash -e
 
 LAST_CACHE=0
 CACHE_INTERVAL=2
@@ -31,14 +31,16 @@ if [ $DEPLOY ] ; then
     total_jobs=$(get_total_jobs)
     passed_jobs=$(get_passed_jobs)
     failed_jobs=$(get_failed_jobs)
+    echo 'Waiting for other jobs to finish ...'
     while [ $failed_jobs -lt 1 -a $total_jobs -ne $passed_jobs ] ; do
         sleep 10
+        echo .
         passed_jobs=$(get_passed_jobs)
         failed_jobs=$(get_failed_jobs)
     done
 
     if [ $total_jobs -ne $passed_jobs ] ; then
-        echo "Build failed. Not triggering downstream builds"
+        echo "One or more jobs failed. Not triggering downstream builds"
         exit
     fi
 
