@@ -7,11 +7,12 @@ from yarom import disconnect, connect
 
 
 def setup():
-    connect(configFile='tests/test_default.conf')
+    connect(conf='tests/test_default.conf')
 
 
 def teardown():
     disconnect()
+
 
 def test_do_create():
     for i in range(10000):
