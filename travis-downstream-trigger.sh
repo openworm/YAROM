@@ -2,7 +2,7 @@
 
 LAST_CACHE=0
 CACHE_INTERVAL=2
-CACHED_TRAVIS_JOBS=$(mktemp)
+CACHED_TRAVIS_JOBS=$(mktemp travis-downstream-trigger.XXXXXXXXXX)
 
 get_cached_travis_jobs () {
     NOW=$(date +"%s")
