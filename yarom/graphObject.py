@@ -1,6 +1,7 @@
 import logging
 from itertools import chain
 from pprint import pformat
+from .rangedObjects import InRange
 import threading
 
 L = logging.getLogger(__name__)
@@ -10,7 +11,8 @@ __all__ = [
     "GraphObjectQuerier",
     "GraphObjectChecker",
     "ComponentTripler",
-    "IdentifierMissingException"]
+    "IdentifierMissingException"
+    ]
 
 # Directions for traversal across triples
 UP = 'up'  # left, towards the subject
@@ -19,6 +21,10 @@ EMPTY_SET = frozenset([])
 
 
 class Variable(int):
+    pass
+
+
+class _Range(InRange):
     pass
 
 
@@ -304,7 +310,20 @@ class GraphObjectQuerier(object):
         return self.graph.triples_choices(query_triple)
 
     def triples(self, query_triple):
-        return self.graph.triples(query_triple)
+        if isinstance(query_triple[2], _Range):
+            in_range = query_triple[2]
+            if in_range.defined:
+                if (hasattr(self.graph, 'supports_range_queries')
+                        and self.graph.supports_range_queries):
+                    return self.graph.triples(query_triple)
+                else:
+                    qt = (query_triple[0], query_triple[1], None)
+                    return set(x for x in self.graph.triples(qt) if in_range(x[2]))
+            else:
+                qt = (query_triple[0], query_triple[1], None)
+                return self.graph.triples(qt)
+        else:
+            return self.graph.triples(query_triple)
 
     def __call__(self):
         res = self.do_query()
@@ -416,7 +435,9 @@ class _QueryPreparer(object):
 
             for other in others:
                 other_id = other.idl
-                if not other.defined:
+                if isinstance(other, InRange):
+                    other_id = _Range(other.min_value, other.max_value)
+                elif not other.defined:
                     other_id = self.var(other_id)
 
                 if direction is UP:
@@ -451,7 +472,7 @@ class _QueryPreparer(object):
 
     def prepare(self, current_node):
         L.debug("prepare: current_node %s", repr(current_node))
-        if current_node.defined:
+        if current_node.defined or isinstance(current_node, InRange):
             if len(self.stack) > 0:
                 self.paths.append(list(self.stack))
             return True, _QueryPathElement()
@@ -479,7 +500,8 @@ class _QueryPreparer(object):
             return (owner_parts[0] or owned_parts[0], ret)
 
     def __call__(self):
-        self.prepare(self.start)
+        x = self.prepare(self.start)
+        L.debug("self.prepare() result:" + str(x))
         L.debug("_QueryPreparer paths:" + str(pformat(self.paths)))
         return self.paths
 

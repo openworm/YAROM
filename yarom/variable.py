@@ -1,9 +1,10 @@
 import rdflib
 from .graphObject import GraphObject, IdentifierMissingException
 
+
 class Variable(GraphObject):
-    def __init__(self, name):
-        GraphObject.__init__(self)
+    def __init__(self, name, **kwargs):
+        super(Variable, self).__init__()
         self.var = rdflib.Variable(name)
 
     def identifier(self):

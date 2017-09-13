@@ -1,5 +1,5 @@
 import logging
-import hashlib
+import sys
 import six
 
 from .variable import Variable
@@ -8,11 +8,12 @@ from .propertyMixins import (
     DatatypePropertyMixin,
     ObjectPropertyMixin,
     UnionPropertyMixin)
+from .rangedObjects import InRange
 from .yProperty import Property
 from .propertyValue import PropertyValue
 from .mappedProperty import MappedPropertyClass
-from random import random
 from .deprecation import deprecated
+from random import randint
 
 L = logging.getLogger(__name__)
 
@@ -105,6 +106,12 @@ class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
         if isinstance(v, Rel):
             v = v.rel()
 
+        if isinstance(v, InRange):
+            vcname = 'Variable' + v.__class__.__name__
+            vclass = v.__class__
+            v.__class__ = type(vcname, (vclass, Variable), {})
+            Variable.__init__(v, '_' + hex(randint(0, sys.maxsize))[2:])
+
         if not hasattr(v, "idl"):
             v = PropertyValue(v)
 
@@ -133,6 +140,7 @@ class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
 
 class DatatypeProperty(DatatypePropertyMixin, SimpleProperty):
     pass
+
 
 class ObjectProperty(ObjectPropertyMixin, SimpleProperty):
     pass
