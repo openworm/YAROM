@@ -4,12 +4,11 @@ import hashlib
 import six
 import random
 
-from .mapperTypeResolver import Resolver
+from yarom import yarom_import
 from .mappedClass import MappedClass
 from .mappedProperty import MappedPropertyClass
 from .dataUser import DataUser
 from .configure import BadConf
-from .simpleProperty import (SimpleProperty, DatatypeProperty, ObjectProperty)
 from .rdfUtils import triples_to_bgp
 from .graphObject import (
     GraphObject,
@@ -19,6 +18,11 @@ from .graphObject import (
     ReferenceTripler,
     DescendantTripler,
     IdentifierMissingException)
+
+SimpleProperty, DatatypeProperty, ObjectProperty = \
+        yarom_import('yarom.simpleProperty', ('SimpleProperty',
+                                              'DatatypeProperty',
+                                              'ObjectProperty'))
 
 """
 .. autoclass:: DataObject
@@ -119,9 +123,9 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
 
         if not self.__class__.mapped:
             raise Exception(
-                ("The class `{0}` has not been mapped. You should call "
+                ("The class `{0}({1})` has not been mapped. You should call "
                  "`{0}.map()` before creating any instances.").format(
-                    self.__class__.__name__))
+                    self.__class__.__name__, ", ".join(p.__name__ + '@' + hex(id(p)) for p in self.__class__.mro())))
 
         self._id = False
 
@@ -292,7 +296,7 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
         if not hasattr(prop, 'linkName'):
             raise Exception("The given property class cannot be attached"
                             " because it has no `linkName` attribute")
-        p = prop(resolver=Resolver.get_instance(), owner=self)
+        p = prop(resolver=self.mapper.resolver, owner=self)
 
         if hasattr(self, prop.linkName):
             raise Exception(
@@ -368,11 +372,13 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
     def identifier(self):
         """ The identifier for this object in the rdf graph.
 
-        This identifier may be randomly generated, but an identifier returned from the
-        graph can be used to retrieve the specific object that it refers to.
+        This identifier may be randomly generated, but an identifier returned
+        from the graph can be used to retrieve the specific object that it
+        refers to.
 
-        If it is desireable to customize the identifier, a subclass of DataObject should
-        override :meth:`identifier_augment` rather than this method.
+        If it is desireable to customize the identifier, a subclass of
+        DataObject should override :meth:`identifier_augment` rather than this
+        method.
 
         Returns
         -------
@@ -400,7 +406,8 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
         raise IdentifierMissingException(self)
 
     def triples(self):
-        """ Returns 3-tuples of the connected component of the object graph starting from this object.
+        """ Returns 3-tuples of the connected component of the object graph
+        starting from this object.
 
         Returns
         --------
@@ -558,7 +565,7 @@ class DataObjectSingleton(DataObject):
         return cls.instance
 
 
-class RDFSClass(DataObjectSingleton):  # This maybe becomes a DataObject later
+class RDFSClass(DataObjectSingleton):
 
     """ The DataObject corresponding to rdfs:Class """
     # XXX: This class may be changed from a singleton later to facilitate dumping

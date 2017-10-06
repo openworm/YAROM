@@ -2,6 +2,9 @@ import six
 import rdflib as R
 
 import yarom as Y
+from yarom import yarom_import
+
+DataObject = yarom_import('yarom.dataObject.DataObject')
 
 # TODO Generate key for the RegistryEntry type as a combination of the
 #      ClassDescription.classKey and rdfClass
@@ -11,23 +14,29 @@ rns = R.Namespace("yarom/PythonClassRegistry/schema#")
 
 class _RegistryEntryType(Y.mappedClass.MappedClass):
 
-    def __init__(cls, *args):
-        cls.rdf_type = rns["RegistryEntry"]
-        cls.rdf_namespace = R.Namespace(
-            cls.conf['rdf.namespace']['PythonClassRegistry'] + "/")
-        super(_RegistryEntryType, cls).__init__(*args)
+    def __init__(self, *args):
+        super(_RegistryEntryType, self).__init__(*args)
+        self.rdf_type = rns["RegistryEntry"]
+
+    def on_mapper_add_class(self, mapper):
+        super(_RegistryEntryType, self).on_mapper_add_class(mapper)
+        self.rdf_namespace = R.Namespace(
+            mapper.base_namespace['PythonClassRegistry'] + "/")
 
 
 class _ClassDescriptionType(Y.mappedClass.MappedClass):
 
-    def __init__(cls, *args):
-        cls.rdf_type = rns["ClassDescription"]
-        cls.rdf_namespace = R.Namespace(
-            cls.conf['rdf.namespace']['ClassDescription'] + "/")
-        super(_ClassDescriptionType, cls).__init__(*args)
+    def __init__(self, *args):
+        super(_ClassDescriptionType, self).__init__(*args)
+        self.rdf_type = rns["ClassDescription"]
+
+    def on_mapper_add_class(self, mapper):
+        super(_ClassDescriptionType, self).on_mapper_add_class(mapper)
+        self.rdf_namespace = R.Namespace(
+            mapper.base_namespace['ClassDescription'] + "/")
 
 
-class RegistryEntry(six.with_metaclass(_RegistryEntryType, Y.DataObject)):
+class RegistryEntry(six.with_metaclass(_RegistryEntryType, DataObject)):
 
     """ A mapping from a Python class to an RDF class.
 
@@ -37,5 +46,5 @@ class RegistryEntry(six.with_metaclass(_RegistryEntryType, Y.DataObject)):
     _ = ["pythonClass", "rdfClass"]
 
 
-class ClassDescription(six.with_metaclass(_ClassDescriptionType, Y.DataObject)):
+class ClassDescription(six.with_metaclass(_ClassDescriptionType, DataObject)):
     _ = ["classKey", "className", "moduleName", "moduleLocation", "priority"]

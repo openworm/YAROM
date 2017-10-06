@@ -1,5 +1,8 @@
 import logging
+import rdflib as R
 import yarom as Y
+
+import traceback
 
 from .mapper import Mapper
 from .mapperUtils import log_raise_mismapping_exception
@@ -12,21 +15,19 @@ class MappedPropertyClass(type):
     def __init__(cls, name, bases, dct):
         L.debug("INITIALIZING %s", name)
         super(MappedPropertyClass, cls).__init__(name, bases, dct)
-        cls.mapper = Mapper.get_instance()
         if 'link' in dct:
             cls.link = dct['link']
-        cls.register()
 
-    def register(cls):
+    def on_mapper_add_class(self, mapper):
+        self.mapper = mapper
         # This is how we create the RDF predicate that points from the owner
         # to this property
-        L.debug("REGISTERING %s", cls.__name__)
-        cls.mapper.MappedClasses[cls.__name__] = cls
-        cls.mapper.DataObjectProperties[cls.__name__] = cls
+        L.debug("REGISTERING %s", self.__name__)
         # XXX: Should we record class hierarchy of properties?
-        setattr(Y, cls.__name__, cls)
+        setattr(Y, self.__name__, self)
+        self.rdf_type = R.RDF['Property']
 
-        return cls
+        return self
 
     def deregister(cls):
         if cls.mapper.MappedClasses.get(cls.__name__, False) == cls:
@@ -40,7 +41,7 @@ class MappedPropertyClass(type):
 
         if cls.mapper.DataObjectProperties.get(
                 cls.__name__,
-                False) == cls:
+                None) == cls:
             del cls.mapper.DataObjectProperties[cls.__name__]
         else:
             log_raise_mismapping_exception(

@@ -175,6 +175,7 @@ class DataObjectTest(_DataTest):
             def identifier(self):
                 return TEST_NS["soup"]
 
+        T.mapper.add_class(T)
         T.mapper.remap()
 
         t = T()
@@ -199,6 +200,7 @@ class DataObjectTest(_DataTest):
         """
         class T(Y.DataObject):
             objectProperties = ['s']
+        T.mapper.add_class(T)
         T.mapper.remap()
         t = T(key="a")
         s = T(key="b")
@@ -217,6 +219,8 @@ class DataObjectTest(_DataTest):
         """ Creating a property with the same name as a method should be disallowed """
         class T(Y.DataObject):
             objectProperties = ['load']
+        T.mapper.add_class(T)
+        T.mapper.remap()
         with self.assertRaises(Exception):
             T()
 
@@ -655,12 +659,14 @@ class SimplePropertyTest(_DataTest):
             datatypeProperties = [{'name': 'boots', 'multiple': False}, 'bets']
             objectProperties = [{'name': 'bats', 'multiple': False}, 'bits']
 
+        K.mapper.add_class(K)
         K.mapper.remap()
         self.k = K
 
     def test_non_multiple_saves_single_values(self):
         class C(Y.DataObject):
             datatypeProperties = [{'name': 't', 'multiple': False}]
+        C.mapper.add_class(C)
         C.mapper.remap()
         do = C(key="s")
         do.t("value1")
@@ -731,8 +737,9 @@ class UnionPropertyTest(_DataTest):
         # the class is created
         class K(Y.DataObject):
             _ = ['name']
-        Mapper.get_instance().remap()
         self.k = K
+        self.k.mapper.add_class(self.k)
+        self.k.mapper.remap()
 
     def test_get_literal(self):
         k = self.k(generate_key=True)

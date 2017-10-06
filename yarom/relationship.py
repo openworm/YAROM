@@ -1,4 +1,7 @@
-from .dataObject import DataObject
+from yarom import yarom_import
+
+DataObject = yarom_import('yarom.dataObject.DataObject')
+
 
 class Relationship(DataObject):
     """ A Relationship is typically related to a property and is an object that
@@ -6,9 +9,10 @@ class Relationship(DataObject):
 
         For SimpleProperty objects, this acts like a RDF Reified triple.
         """
-    _ = [{'name':'subject', 'multiple': False},
-         {'name':'property', 'multiple': False},
-         {'name':'object', 'multiple': False}]
+    _ = [{'name': 'subject', 'multiple': False},
+         {'name': 'property', 'multiple': False},
+         {'name': 'object', 'multiple': False}]
+
     def _ident_data(self):
         return [self.subject.values,
                 self.property.values,
@@ -21,5 +25,7 @@ class Relationship(DataObject):
         return True
 
     def identifier_augment(self):
-        x = self.make_identifier_from_properties('subject','property','object')
+        x = self.make_identifier_from_properties('subject',
+                                                 'property',
+                                                 'object')
         return x

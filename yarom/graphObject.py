@@ -204,7 +204,7 @@ class GraphObjectQuerier(object):
         if len(paths) == 0:
             return EMPTY_SET
         h = self.merge_paths(paths)
-        L.debug(pformat(h))
+        L.debug('do_query: merge_paths_result: {}'.format(pformat(h)))
         return self.query_path_resolver(h)
 
     def merge_paths(self, l):
@@ -269,6 +269,7 @@ class GraphObjectQuerier(object):
             L.debug("Joining {} args on {}".format(len(join_args), goal))
             res = set(join_args[0])
             for x in join_args[1:]:
+                #res.intersection_update(x)
                 lres = res
                 res = set([])
                 for z in x:
@@ -327,7 +328,7 @@ class GraphObjectQuerier(object):
 
     def __call__(self):
         res = self.do_query()
-        L.debug(pformat(self.results))
+        L.debug('GOQ: results:{}'.format(str(pformat(self.results))))
         return res
 
 
@@ -523,7 +524,7 @@ class DescendantTripler(object):
         self.seen = set()
         self.start = start
         self.graph = graph
-        self.results = set()
+        self.results = list()
 
     def g(self, current_node):
         if current_node in self.seen:
@@ -536,13 +537,13 @@ class DescendantTripler(object):
 
         if self.graph is not None:
             for triple in self.graph.triples((current_node.idl, None, None)):
-                self.results.add(triple)
+                self.results.append(triple)
                 self.g(_DTWrapper(triple[2]))
         else:
             for e in current_node.properties:
                 for val in e.values:
                     if val.defined:
-                        self.results.add((current_node.idl, e.link, val.idl))
+                        self.results.append((current_node.idl, e.link, val.idl))
                         self.g(val)
 
     def __call__(self):

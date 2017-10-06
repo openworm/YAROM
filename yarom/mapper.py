@@ -1,43 +1,141 @@
 from __future__ import print_function
-import six
-import importlib as I
+import sys
+import importlib as IM
 import logging
 import rdflib as R
-import yarom as Y
+import yarom
+from itertools import count
+from .rdfTypeResolver import RDFTypeResolver
+from six.moves import reload_module
+from .mapperUtils import parents_str
 
 __all__ = ["Mapper"]
 
 L = logging.getLogger(__name__)
 
 
+def _FCN(cls):
+    return cls.__module__ + '.' + cls.__name__
+
+
 class Mapper(object):
-    instance = None
+    _instances = dict()
 
     @classmethod
-    def get_instance(cls):
-        if cls.instance is None:
-            cls.instance = Mapper()
-        return cls.instance
+    def get_instance(cls, *args):
+        if args not in cls._instances:
+            cls._instances[args] = Mapper(*args)
 
-    def __init__(self):
-        self.MappedClasses = dict()  # class names to classes
-        # class names to parents of the related class
+        return cls._instances[args]
+
+    def __init__(self, base_class_names, base_namespace=None):
+
+        """ Maps class names to classes """
+        self.MappedClasses = dict()
+
+        """ Maps class names to parents of the related class """
         self.DataObjectsParents = dict()
+
+        """ Maps class names to children of the related class """
         self.DataObjectsChildren = dict()
-        self.DataObjectProperties = dict()  # Property classes to
-        self.RDFTypeTable = dict()  # class rdf types to classes
-        self.instance = self
+
+        """ Maps class names to properties of the related class """
+        self.DataObjectProperties = dict()
+
+        """ Maps RDF types to properties of the related class """
+        self.RDFTypeTable = dict()
+
+        if not isinstance(base_class_names, (tuple, list)):
+            raise Exception('base_class_names argument must be either a tuple'
+                            ' or list')
+        """ Names for the base classes """
+        self.base_class_names = tuple(base_class_names)
+        self.base_modules = set(n.rsplit('.', 1)[0] for n in base_class_names)
+
+        """ The base class for objects that will be mapped.
+
+        Defined once the module containing the class is loaded
+        """
+        self.base_classes = dict()
+
+        if base_namespace is None:
+            base_namespace = R.Namespace("http://example.com#")
+        elif not isinstance(base_namespace, R.Namespace):
+            base_namespace = R.Namespace(base_namespace)
+
+        """ Base namespace used if a mapped class doesn't define its own """
+        self.base_namespace = base_namespace
+
+        """ Resolver can only be resolved once the base class is found """
+        self.resolver = None
+        self.mapdepth = 0
+
+        """ Modules that have already been loaded """
+        self.modules = dict()
+
+        """ Module relationships """
+        self.ModuleDependencies = dict()
+        self.ModuleDependents = dict()
+
+        self.loading_module = None
+        for m in self.base_modules:
+            self.load_module(m)
+
+    def add_class(self, cls):
+        cname = _FCN(cls)
+        maybe_cls = self.MappedClasses.get(cname, None)
+        if maybe_cls is not None:
+            if maybe_cls is cls:
+                return
+            else:
+                if hasattr(maybe_cls, 'on_mapper_remove_class'):
+                    maybe_cls.on_mapper_remove_class(self)
+        else:
+            L.debug("Adding class %s@0x%x", cls, id(cls))
+
+        self.MappedClasses[cname] = cls
+        parents = cls.__bases__
+        L.debug('parents %s', parents_str(cls))
+        # cls is the child to mapped parents
+        mapped_parents = tuple(x for x in parents
+                               if x in self.MappedClasses.values())
+        self.DataObjectsParents[cname] = mapped_parents
+
+        for parent in mapped_parents:
+            pname = _FCN(parent)
+            sibs = self.DataObjectsChildren.get(pname, set([]))
+            sibs.add(cname)
+            self.DataObjectsChildren[pname] = sibs
+
+        for child_name, parents in self.DataObjectsParents.iteritems():
+            child = self.MappedClasses[child_name]
+            if cls in child.__bases__ and cls not in parents:
+                # cls is the parent to a mapped child
+                self.DataObjectsParents[child_name] = (cls,) + parents
+                children = self.DataObjectsChildren.get(cname, set([]))
+                children.add(child_name)
+                self.DataObjectsChildren[cname] = children
+
+        if hasattr(cls, 'on_mapper_add_class'):
+            cls.on_mapper_add_class(self)
+
+        # This part happens after the on_mapper_add_class has run since the
+        # class has an opportunity to set its RDF type based on what we provide
+        # in the Mapper.
+        self.RDFTypeTable[cls.rdf_type] = cls
+        self.class_ordering = self._compute_class_ordering()
+        L.debug(self.class_ordering)
 
     def remap(self):
         """ Calls `map` on all of the registered classes """
         classes = set(self.MappedClasses.values())
         pclasses = set(self.DataObjectProperties.values())
         oclasses = classes - pclasses
+        ordering_map = self.class_ordering
 
-        ordering_map = self.get_class_ordering()
         sorted_oclasses = sorted(
             oclasses,
-            key=lambda y: ordering_map[y.__name__])
+            key=lambda y: ordering_map[_FCN(y)])
 
         for x in sorted_oclasses:
             x.map()
@@ -45,46 +143,63 @@ class Mapper(object):
         for x in pclasses:
             x.map()
 
-    def get_class_ordering(self):
+    def _compute_class_ordering(self):
         res = dict()
-        base = self.get_base_class()
+        base_names = self.base_class_names
 
         def helper(n, gen):
             res[n] = next(gen)
             children = self.DataObjectsChildren.get(n, ())
             for c in children:
                 helper(c, gen)
-        helper(base.__name__,
-               iter(six.moves.xrange(len(self.MappedClasses) + 1)))
+        it = count(0)
+        for base in base_names:
+            helper(base, it)
+
         return res
-
-    def get_base_class(self):
-        first = next(six.iterkeys(self.DataObjectsParents))
-
-        def helper(key):
-            try:
-                parents = self.DataObjectsParents[key]
-            except KeyError:
-                raise Exception(
-                    'Couldn\'t find the class {} in' +
-                    ' DataObjectsParents. MappedClasses = {}'.format(
-                        key,
-                        self.MappedClasses))
-
-            if len(parents) == 0:
-                return self.MappedClasses[key]
-            else:
-                return helper(parents[0].__name__)
-        return helper(first)
 
     def unmap_all(self):
         for cls in self.MappedClasses:
             cls.unmap()
 
     def deregister_all(self):
-        keys = list(self.MappedClasses.keys())
+        keys = self.base_class_names
         for cname in keys:
-            self.MappedClasses[cname].deregister()
+            L.debug("Removing class %s", cname)
+            maybe_base_class = self.MappedClasses.get(cname, None)
+            if maybe_base_class is not None:
+                self.remove_class(maybe_base_class)
+                del self.base_classes[cname]
+        L.debug('After deregister_all %s', self)
+
+    def remove_class(self, cls):
+        L.debug("Removing class %s", cls)
+        if hasattr(cls, 'on_mapper_remove_class'):
+            cls.on_mapper_remove_class(self)
+
+        cname = _FCN(cls)
+
+        parents = self.DataObjectsParents[cname]
+
+        if cname in self.DataObjectsParents:
+            del self.DataObjectsParents[cname]
+
+        if cname in self.DataObjectsChildren:
+            children = tuple(self.DataObjectsChildren[cname])
+            for child in children:
+                self.remove_class(self.MappedClasses[child])
+            del self.DataObjectsChildren[cname]
+
+        for parent in parents:
+            pname = _FCN(parent)
+            sibs = self.DataObjectsChildren[pname]
+            sibs.remove(cname)
+
+        if hasattr(cls, 'rdf_type') and cls.rdf_type in self.RDFTypeTable:
+            del self.RDFTypeTable[cls.rdf_type]
+        if cname in self.MappedClasses:
+            del self.MappedClasses[cname]
+        self.class_ordering = self._compute_class_ordering()
 
     def resolve_classes_from_rdf(self, graph):
         """ Gathers Python classes from the RDF graph.
@@ -98,12 +213,12 @@ class Mapper(object):
         # get the DataObject class resource
         # get the subclasses of DataObject, transitively
         # take the list of subclasses and resolve them into Python classes
-        base = self.get_base_class()
-        for x in graph.transitive_subjects(
-                R.RDFS['subClassOf'],
-                base.rdf_type):
-            L.debug("RESOLVING {}".format(x))
-            self.resolve_class(x)
+        for base in self.base_classes.values():
+            L.debug("RESOLVING base {}".format(_FCN(base), base.rdf_type))
+            for x in graph.transitive_subjects(R.RDFS['subClassOf'],
+                                               base.rdf_type):
+                L.debug("RESOLVING {}".format(x))
+                self.resolve_class(x)
 
     def resolve_class(self, uri):
         cr = self.load_module('yarom.classRegistry')
@@ -118,7 +233,9 @@ class Mapper(object):
             re.rdfClass(uri)
             for cd in self.get_class_descriptions(re):
                 # TODO: if load fails, attempt to construct the class
-                return self.load_class_from_description(cd)
+                cls = self.load_class_from_description(cd)
+                cls.map()
+                return cls
 
     def load_class_from_description(self, cd):
         # TODO: Undo the effects to YAROM of loading a class when the
@@ -126,8 +243,7 @@ class Mapper(object):
         #       for.
         mod_name = cd.moduleName.one()
         class_name = cd.className.one()
-        self.load_module(mod_name)
-        mod = Y
+        mod = self.load_module(mod_name)
         if mod is not None:
             if hasattr(mod, class_name):
                 cls = getattr(mod, class_name)
@@ -135,6 +251,9 @@ class Mapper(object):
                     return cls
             else:
                 raise Exception("Cannot find class " + class_name)
+        else:
+            # TODO: Load the module from the graph
+            raise Exception("Cannot find module " + class_name)
 
     def get_class_descriptions(self, re):
         mod_data = []
@@ -144,23 +263,63 @@ class Mapper(object):
         return mod_data
 
     def load_module(self, module_name):
-        """ Loads the module.
+        """ Loads the module. """
+        L.debug("%sLOADING %s",
+                ' ' * self.mapdepth,
+                module_name)
+        self.mapdepth += 1
+        old_mapper = yarom.MAPPER
+        yarom.MAPPER = self
+        self.add_module_dependency(module_name)
+        previously_loading = self.loading_module
+        self.loading_module = module_name
 
-        This is just a convenience method for the normal Python module load.
-        """
-        L.debug("LOADING %s", module_name)
-        a = I.import_module(module_name)
+        if module_name not in self.modules:
+            if module_name in sys.modules:
+                m = reload_module(sys.modules[module_name])
+            else:
+                m = IM.import_module(module_name)
+            self.modules[module_name] = m
+            self._module_load_helper(m)
+
+        a = self.modules[module_name]
+
+        self.loading_module = previously_loading
+        self.mapdepth -= 1
+        yarom.MAPPER = old_mapper
         return a
 
-    def reload_module(self, mod):
-        """ Reloads the module.
+    def add_module_dependency(self, module_name):
+        if self.loading_module:
+            depends = self.ModuleDependencies.get(self.loading_module, set())
+            depends.add(module_name)
+            self.ModuleDependencies[self.loading_module] = depends
 
-        This is just a convenience method for the normal Python module reload.
-        """
-        from six.moves import reload_module
-        L.debug("RE-LOADING %s", mod)
-        a = reload_module(mod)
-        return a
+            callers = self.ModuleDependents.get(module_name, set())
+            callers.add(self.loading_module)
+            self.ModuleDependents[module_name] = callers
+
+    def _module_load_helper(self, module):
+        mod_dir = dir(module)
+        types = set(o for o in (getattr(module, nm) for nm in mod_dir)
+                    if isinstance(o, type))
+        bases = set(t for t in types
+                    if module.__name__ + '.' + t.__name__
+                    in self.base_class_names)
+        others = types - bases
+        classes = list(bases) + list(others)
+        for cls in classes:
+            full_class_name = module.__name__ + '.' + cls.__name__
+            if full_class_name in self.base_class_names:
+                L.debug('Setting base class %s', full_class_name)
+                self.base_classes[full_class_name] = cls
+                if self.base_class_names[0] == full_class_name:
+                    self.resolver = Resolver.get_instance(self)
+
+            if isinstance(cls, type) and \
+                    _FCN(cls) == full_class_name and \
+                    issubclass(cls, tuple(self.base_classes.values())):
+                self.add_class(cls)
 
     def oid(self, identifier_or_rdf_type, rdf_type=False):
         """ Create an object from its rdf type
@@ -168,10 +327,10 @@ class Mapper(object):
         Parameters
         ----------
         identifier_or_rdf_type : :class:`str` or :class:`rdflib.term.URIRef`
-            If `rdf_type` is provided, then this value is used as the identifier
+            If `rdf_type` is provided, then this value is used as the id
             for the newly created object. Otherwise, this value will be the
-            :attr:`rdf_type` of the object used to determine the Python type and
-            the object's identifier will be randomly generated.
+            :attr:`rdf_type` of the object used to determine the Python type
+            and the object's identifier will be randomly generated.
         rdf_type : :class:`str`, :class:`rdflib.term.URIRef`, :const:`False`
             If provided, this will be the :attr:`rdf_type` of the newly created
             object.
@@ -181,6 +340,7 @@ class Mapper(object):
            The newly created object
 
         """
+        L.debug("%s identifier or rdf type", identifier_or_rdf_type)
         identifier = identifier_or_rdf_type
         if not rdf_type:
             rdf_type = identifier_or_rdf_type
@@ -199,8 +359,8 @@ class Mapper(object):
 
     def compare_types(self, a, b):
         try:
-            ordr = self.get_class_ordering()
-            return ordr[a.__name__] - ordr[b.__name__]
+            ordr = self.class_ordering
+            return ordr[_FCN(a)] - ordr[_FCN(b)]
         except KeyError as e:
             raise Exception(
                 "The given type is not in the class ordering: " +
@@ -213,7 +373,7 @@ class Mapper(object):
         among the given URIs.
         """
         # TODO: Use the MappedClasses and DataObjectsParents to get the root
-        least = self.get_base_class()
+        least = self.base_classes[self.base_class_names[0]]
         for x in types:
             try:
                 xtype = self.RDFTypeTable[x]
@@ -222,3 +382,70 @@ class Mapper(object):
             except KeyError:
                 pass
         return least.rdf_type
+
+    def lookup_class(self, cname):
+        """ Gets the class corresponding to a short name """
+        c = self.MappedClasses[cname]
+        L.debug('lookup_class(%s) %s@%s', cname, c, hex(id(c)))
+        return c
+
+    def resolver(self):
+        return self.resolver
+
+    def __str__(self):
+        return ("[" + str(self.MappedClasses) +
+                "\n" + str(self.DataObjectsParents) +
+                "\n" + str(self.DataObjectsChildren) +
+                "\n" + str(self.DataObjectProperties) +
+                "\n" + str(self.RDFTypeTable) +
+                "\n" + str(self.ModuleDependencies) +
+                "]")
+
+
+class _ClassOrderable(object):
+    def __init__(self, cls):
+        self.cls = cls
+
+    def __eq__(self, other):
+        self.cls is other.cls
+
+    def __gt__(self, other):
+        res = False
+        ocls = other.cls
+        scls = self.cls
+        if issubclass(ocls, scls) and not issubclass(scls, ocls):
+            res = True
+        elif issubclass(scls, ocls) == issubclass(ocls, scls):
+            res = scls.__name__ > ocls.__name__
+        return res
+
+    def __lt__(self, other):
+        res = False
+        ocls = other.cls
+        scls = self.cls
+        if issubclass(scls, ocls) and not issubclass(ocls, scls):
+            res = True
+        elif issubclass(scls, ocls) == issubclass(ocls, scls):
+            res = scls.__name__ < ocls.__name__
+        return res
+
+
+class Resolver(RDFTypeResolver):
+    instances = dict()
+
+    @classmethod
+    def get_instance(cls, mapper):
+        if mapper not in cls.instances:
+            # XXX: This is a bit of a kludge. YAROM privileges one of the base
+            # classes which is the DataObject.
+            cls.instances[mapper] = Resolver(mapper)
+        return cls.instances[mapper]
+
+    def __init__(self, mapper):
+        from .rdfUtils import deserialize_rdflib_term
+        DataObject = mapper.base_classes[mapper.base_class_names[0]]
+        super(Resolver, self).__init__(DataObject.rdf_type,
+                                       mapper.get_most_specific_rdf_type,
+                                       mapper.oid,
+                                       deserialize_rdflib_term)
+        self.mapper = mapper

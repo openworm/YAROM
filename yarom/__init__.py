@@ -98,7 +98,33 @@ __all__ = ['ConfigValue',
            'loadConfig',
            'loadData',
            'connect',
-           'disconnect']
+           'disconnect',
+           'mapper']
+
+
+MAPPER = None
+
+
+def yarom_import(cname_or_mname, cnames=None):
+    global MAPPER
+    if cnames:
+        mpart = cname_or_mname
+    else:
+        mpart, cpart = cname_or_mname.rsplit('.', 1)
+        cnames = (cpart,)
+    if mpart not in MAPPER.modules:
+        m = MAPPER.load_module(mpart)
+    else:
+        m = MAPPER.modules[mpart]
+    if len(cnames) == 1:
+        return getattr(m, cnames[0])
+    else:
+        return tuple(getattr(m, cname) for cname in cnames)
+
+
+def yarom_dependency(mname):
+    global MAPPER
+    MAPPER.add_module_dependency(mname)
 
 
 def config(key=None, value=None):
@@ -118,19 +144,19 @@ def loadConfig(f):
 
 def disconnect(c=False):
     """ Close the database """
+    global MAPPER
     m = this_module
     if not m.connected:
         return
 
-    mapper = Mapper.get_instance()
-
     if not c:
         c = Configureable.conf
-    mapper.deregister_all()  # NOTE: We do NOT unmap on disconnect
+    MAPPER.deregister_all()  # NOTE: We do NOT unmap on disconnect
     # Note that `c' could be set in one of the previous branches;
     # don't try to simplify this logic.
     if c:
         c.closeDatabase()
+    MAPPER = None
     m.connected = False
 
 
@@ -166,12 +192,14 @@ def connect(conf=False,
         plugins. 'n3' is the default.
     """
     import atexit
+    global MAPPER
+    if MAPPER is None:
+        MAPPER = Mapper(('yarom.dataObject.DataObject',
+                         'yarom.simpleProperty.SimpleProperty'))
     m = this_module
     if m.connected:
         print("yarom already connected")
         return
-
-    mapper = Mapper.get_instance()
 
     if do_logging:
         logging.basicConfig(level=logging.DEBUG)
@@ -190,13 +218,10 @@ def connect(conf=False,
     atexit.register(disconnect)
 
     for mod in modulesToLoad:
-        if mod in sys.modules:
-            mapper.reload_module(sys.modules[mod])
-        else:
-            mapper.load_module(mod)
+        MAPPER.load_module(mod)
 
-    mapper.remap()
-    mapper.resolve_classes_from_rdf(dbconn['rdf.graph'])
+    MAPPER.remap()
+    MAPPER.resolve_classes_from_rdf(dbconn['rdf.graph'])
     m.connected = True
     if data:
         loadData(data, dataFormat)
@@ -234,6 +259,6 @@ def setConf(conf):
     else:
         try:
             Configureable.setConf(Data.open("yarom.conf"))
-        except:
+        except Exception:
             L.info("Couldn't load default configuration")
             Configureable.setConf(Data())

@@ -3,7 +3,8 @@ __all__ = [
     'warn_mismapping',
     'log_raise_mismapping_exception',
     'raise_mismapping_exception',
-    'warn_mismapping']
+    'warn_mismapping',
+    'parents_str']
 
 
 def mismapMessage(mapping, key, should_be, is_actually):
@@ -41,3 +42,8 @@ def create_mismap_message(mapping, key, should_be, is_actually):
 def get_actual(mapping, key, is_actually):
     if is_actually is None:
         is_actually = mapping[key]
+    return is_actually
+
+
+def parents_str(cls):
+    return ", ".join(p.__name__ + '@' + hex(id(p)) for p in cls.mro())

@@ -2,7 +2,6 @@ import logging
 import yarom
 import rdflib as R
 from .dataUser import DataUser
-from .mapper import Mapper
 from .mapperUtils import warn_mismapping
 from .mappedProperty import MappedPropertyClass
 from .utils import slice_dict
@@ -20,33 +19,32 @@ class MappedClass(type):
 
     Sets up the graph with things needed for MappedClasses
     """
-    def __init__(cls, name, bases, dct):
+    def __init__(self, name, bases, dct):
         L.debug("INITIALIZING %s", name)
-        type.__init__(cls, name, bases, dct)
-        cls.mapper = Mapper.get_instance()
+        type.__init__(self, name, bases, dct)
         if 'auto_mapped' in dct:
-            cls.mapped = True
+            self.mapped = True
         else:
-            cls.mapped = False
+            self.mapped = False
 
         # Set the rdf_type early
         if 'rdf_type' in dct:
-            cls.rdf_type = dct['rdf_type']
+            self.rdf_type = dct['rdf_type']
         else:
-            cls.rdf_type = None
+            self.rdf_type = None
 
         if 'rdf_namespace' in dct:
-            cls.rdf_namespace = dct['rdf_namespace']
+            self.rdf_namespace = dct['rdf_namespace']
         else:
-            cls.rdf_namespace = None
+            self.rdf_namespace = None
 
-        cls.dataObjectProperties = []
+        self.dataObjectProperties = []
+        self.children = []
         for x in bases:
             try:
-                cls.dataObjectProperties += x.dataObjectProperties
+                self.dataObjectProperties += x.dataObjectProperties
             except AttributeError:
                 pass
-        cls.register()
 
     @classmethod
     def make_class(
@@ -65,9 +63,8 @@ class MappedClass(type):
         if not objectProperties:
             objectProperties = []
         cls(name, bases,
-            dict(
-                objectProperties=objectProperties,
-                datatypeProperties=datatypeProperties))
+            dict(objectProperties=objectProperties,
+                 datatypeProperties=datatypeProperties))
 
     @property
     def du(self):
@@ -93,45 +90,35 @@ class MappedClass(type):
             res = self.__name__ < other.__name__
         return res
 
-    def register(cls):
-        """Sets up the object graph related to this class
+    def on_mapper_add_class(self, mapper):
+        """ Called by :class:`yarom.mapper.Mapper`
 
-        :meth:`regsister` never touches the RDF graph itself.
-
-        Also registers the properties of this DataObject
+        Registers certain properties of the class
         """
-        L.debug("REGISTERING %s", cls.__name__)
-        cls._du = DataUser()
-        cls.children = []
-        cls.mapper.MappedClasses[cls.__name__] = cls
-        parents = cls.__bases__
+        self.mapper = mapper
+        L.debug("REGISTERING %s", self.__name__)
+        self._du = DataUser()
+        mapper = self.mapper
+        parents = self.__bases__
         mapped_parents = tuple(x for x in parents
                                if isinstance(x, MappedClass))
-        cls.mapper.DataObjectsParents[cls.__name__] = mapped_parents
-
-        for parent in mapped_parents:
-            sibs = cls.mapper.DataObjectsChildren.get(parent.__name__, set([]))
-            sibs.add(cls.__name__)
-            cls.mapper.DataObjectsChildren[parent.__name__] = sibs
 
         for c in mapped_parents:
-            c.add_child(cls)
+            c.add_child(self)
 
-        cls.parents = mapped_parents
+        self.parents = mapped_parents
 
-        cls.addProperties('objectProperties')
-        cls.addProperties('datatypeProperties')
-        cls.addProperties('_')
-
-        if getattr(yarom, cls.__name__, False):
-            new_name = "_" + cls.__name__
+        self.addProperties('objectProperties')
+        self.addProperties('datatypeProperties')
+        self.addProperties('_')
+        cls = getattr(yarom, self.__name__, None)
+        if cls is not None and cls is not self:
+            new_name = "_" + self.__name__
             warn_mismapping(L,
                             'yarom module',
-                            cls.__name__,
+                            self.__name__,
                             "nothing",
-                            getattr(
-                                yarom,
-                                cls.__name__))
+                            '{}@0x{:X}'.format(cls, id(cls)))
             if getattr(yarom, new_name, False):
                 L.warning(
                     "Still unable to add {0} to {1}. {0} will not be "
@@ -139,79 +126,70 @@ class MappedClass(type):
                         new_name,
                         'yarom module'))
             else:
-                setattr(yarom, new_name, cls)
+                setattr(yarom, new_name, self)
         else:
-            setattr(yarom, cls.__name__, cls)
+            setattr(yarom, self.__name__, self)
 
-        return cls
+        if self.rdf_type is None:
+            self.rdf_type = mapper.base_namespace[self.__name__]
 
-    def deregister(cls):
-        """Removes the class from the object graph.
+        if self.rdf_namespace is None:
+            self.rdf_namespace = R.Namespace(
+                mapper.base_namespace[self.__name__] + "/")
 
-        Should make it possible to garbage collect
+        return self
 
-        :meth:`deregister` never touches the RDF graph itself.
-        """
-        L.debug("DEREGISTERING %s", cls.__name__)
-        if getattr(yarom, cls.__name__) == cls:
-            delattr(yarom, cls.__name__)
-        elif getattr(yarom, "_" + cls.__name__) == cls:
-            delattr(yarom, "_" + cls.__name__)
+    def on_mapper_remove_class(self, mapper):
+        L.debug("DEREGISTERING %s", self.__name__)
+        if getattr(yarom, self.__name__) == self:
+            delattr(yarom, self.__name__)
+        elif getattr(yarom, "_" + self.__name__) == self:
+            delattr(yarom, "_" + self.__name__)
 
-        if cls.__name__ in cls.mapper.MappedClasses:
-            del cls.mapper.MappedClasses[cls.__name__]
+        for c in self.parents:
+            c.remove_child(self)
 
-        if cls.__name__ in cls.mapper.DataObjectsParents:
-            del cls.mapper.DataObjectsParents[cls.__name__]
-
-        for c in cls.parents:
-            c.remove_child(cls)
-            cls.mapper.DataObjectsChildren[c.__name__].remove(cls.__name__)
-
-    def remove_child(cls, child):
-        if hasattr(cls, 'children'):
-            cls.children.remove(child)
+    def remove_child(self, child):
+        if hasattr(self, 'children'):
+            L.debug('removing child %s@0x%x %s@0x%x',
+                    self, id(self), child, id(child))
+            self.children.remove(child)
         else:
             raise Exception(
                 "Cannot remove child {0} from {1} as {1} has not yet "
                 "been registered".format(
                     child,
-                    cls))
+                    self))
 
-    def add_child(cls, child):
-        if hasattr(cls, 'children'):
-            cls.children.append(child)
+    def add_child(self, child):
+        if hasattr(self, 'children'):
+            L.debug('adding child %s@0x%x %s@0x%x',
+                    self, id(self), child, id(child))
+            self.children.append(child)
         else:
             raise Exception(
                 "Cannot add child {0} to {1} "
                 "as {1} has not yet been registered".format(
                     child,
-                    cls))
+                    self))
 
-    def map(cls):
+    def map(self):
         """
         Maps the class to the configured rdf graph.
         """
         # NOTE: Map should be quick: it runs for every DataObject sub-class
         #       created and possibly several times in testing
-        L.debug("MAPPING %s", cls.__name__)
-        from .dataObject import TypeDataObject
+        L.debug("MAPPING %s", self.__name__)
+        TypeDataObject = \
+            self.mapper.lookup_class('yarom.dataObject.TypeDataObject')
         TypeDataObject.mapped = True
-        if cls.rdf_type is None:
-            cls.rdf_type = cls.conf['rdf.namespace'][cls.__name__]
-        if cls.rdf_namespace is None:
-            cls.rdf_namespace = R.Namespace(
-                cls.conf['rdf.namespace'][cls.__name__] + "/")
+        self.rdf_type_object = TypeDataObject(ident=self.rdf_type)
 
-        cls.rdf_type_object = TypeDataObject(ident=cls.rdf_type)
+        self._add_parents_to_graph()
+        self._add_namespace_to_manager()
+        self.mapped = True
 
-        cls.mapper.RDFTypeTable[cls.rdf_type] = cls
-
-        cls._add_parents_to_graph()
-        cls._add_namespace_to_manager()
-        cls.mapped = True
-
-        return cls
+        return self
 
     def unmap(cls):
         """
@@ -231,16 +209,17 @@ class MappedClass(type):
             cls.rdf_namespace,
             replace=True)
 
-    def _add_parents_to_graph(cls):
-        from .dataObject import RDFSSubClassOfProperty, DataObject
-        L.debug('adding parents for %s', cls)
-        for parent in cls.parents:
-            ancestors = (x for x in parent.mro() if issubclass(x, DataObject))
+    def _add_parents_to_graph(self):
+        m = self.mapper.modules['yarom.dataObject']
+        L.debug('adding parents for %s', self)
+        for parent in self.parents:
+            ancestors = (x for x in parent.mro()
+                         if issubclass(x, m.DataObject))
             for ancestor in ancestors:
-                cls.rdf_type_object.relate(
+                self.rdf_type_object.relate(
                     'rdfs_subClassOf',
                     ancestor.rdf_type_object,
-                    RDFSSubClassOfProperty)
+                    m.RDFSSubClassOfProperty)
 
     def addProperties(cls, listName):
         # TODO: Make an option string to abbreviate these options
@@ -309,7 +288,8 @@ def _create_property(
     # XXX: This should actually get called for all of the properties when their
     #      owner classes are defined. The initialization, however, must happen
     #      with the owner object's creation
-    from .simpleProperty import ObjectProperty, DatatypeProperty, UnionProperty
+    mapper = owner_type.mapper
+    ysp = mapper.load_module('yarom.simpleProperty')
 
     properties = slice_dict(locals(), ['owner_type', 'linkName', 'multiple'])
 
@@ -318,14 +298,14 @@ def _create_property(
 
     x = None
     if property_type == 'ObjectProperty':
-        x = ObjectProperty
+        x = ysp.ObjectProperty
         if value_type is None:
             value_type = yarom.DataObject
         properties['value_type'] = value_type
     elif property_type == 'DatatypeProperty':
-        x = DatatypeProperty
+        x = ysp.DatatypeProperty
     else:
-        x = UnionProperty
+        x = ysp.UnionProperty
 
     if link is not None:
         properties['link'] = link
@@ -333,4 +313,5 @@ def _create_property(
             owner_type.rdf_namespace is not None):
         properties['link'] = owner_type.rdf_namespace[linkName]
     c = MappedPropertyClass(property_class_name, (x,), properties)
+    mapper.add_class(c)
     return c
