@@ -4,18 +4,25 @@ import importlib as IM
 import logging
 import rdflib as R
 import yarom
-from itertools import count
+from itertools import count, chain
 from .rdfTypeResolver import RDFTypeResolver
 from six.moves import reload_module
 from .mapperUtils import parents_str
+from pprint import pformat
 
-__all__ = ["Mapper"]
+__all__ = ["Mapper",
+           "FCN",
+           "UnmappedClassException"]
 
 L = logging.getLogger(__name__)
 
 
-def _FCN(cls):
+def FCN(cls):
     return cls.__module__ + '.' + cls.__name__
+
+
+class UnmappedClassException(Exception):
+    pass
 
 
 class Mapper(object):
@@ -28,7 +35,7 @@ class Mapper(object):
 
         return cls._instances[args]
 
-    def __init__(self, base_class_names, base_namespace=None):
+    def __init__(self, base_class_names, base_namespace=None, parent=None):
 
         """ Maps class names to classes """
         self.MappedClasses = dict()
@@ -77,37 +84,38 @@ class Mapper(object):
         self.ModuleDependencies = dict()
         self.ModuleDependents = dict()
 
+        self.parent = parent
+
         self.loading_module = None
         for m in self.base_modules:
             self.load_module(m)
 
     def add_class(self, cls):
-        cname = _FCN(cls)
-        maybe_cls = self.MappedClasses.get(cname, None)
+        cname = FCN(cls)
+        maybe_cls = self._lookup_class(cname)
         if maybe_cls is not None:
             if maybe_cls is cls:
                 return
             else:
                 if hasattr(maybe_cls, 'on_mapper_remove_class'):
                     maybe_cls.on_mapper_remove_class(self)
-        else:
-            L.debug("Adding class %s@0x%x", cls, id(cls))
+        L.debug("Adding class %s@0x%x", cls, id(cls))
 
         self.MappedClasses[cname] = cls
         parents = cls.__bases__
         L.debug('parents %s', parents_str(cls))
         # cls is the child to mapped parents
         mapped_parents = tuple(x for x in parents
-                               if x in self.MappedClasses.values())
+                               if self._lookup_class(FCN(x)) is x)
         self.DataObjectsParents[cname] = mapped_parents
 
         for parent in mapped_parents:
-            pname = _FCN(parent)
+            pname = FCN(parent)
             sibs = self.DataObjectsChildren.get(pname, set([]))
             sibs.add(cname)
             self.DataObjectsChildren[pname] = sibs
 
-        for child_name, parents in self.DataObjectsParents.iteritems():
+        for child_name, parents in self.DataObjectsParents.items():
             child = self.MappedClasses[child_name]
             if cls in child.__bases__ and cls not in parents:
                 # cls is the parent to a mapped child
@@ -124,23 +132,16 @@ class Mapper(object):
         # in the Mapper.
         self.RDFTypeTable[cls.rdf_type] = cls
         self.class_ordering = self._compute_class_ordering()
-        L.debug(self.class_ordering)
 
     def remap(self):
         """ Calls `map` on all of the registered classes """
         classes = set(self.MappedClasses.values())
-        pclasses = set(self.DataObjectProperties.values())
-        oclasses = classes - pclasses
         ordering_map = self.class_ordering
 
-        sorted_oclasses = sorted(
-            oclasses,
-            key=lambda y: ordering_map[_FCN(y)])
+        sorted_classes = sorted(classes,
+                                key=lambda y: ordering_map[FCN(y)])
 
-        for x in sorted_oclasses:
-            x.map()
-
-        for x in pclasses:
+        for x in sorted_classes:
             x.map()
 
     def _compute_class_ordering(self):
@@ -177,7 +178,7 @@ class Mapper(object):
         if hasattr(cls, 'on_mapper_remove_class'):
             cls.on_mapper_remove_class(self)
 
-        cname = _FCN(cls)
+        cname = FCN(cls)
 
         parents = self.DataObjectsParents[cname]
 
@@ -191,7 +192,7 @@ class Mapper(object):
             del self.DataObjectsChildren[cname]
 
         for parent in parents:
-            pname = _FCN(parent)
+            pname = FCN(parent)
             sibs = self.DataObjectsChildren[pname]
             sibs.remove(cname)
 
@@ -214,7 +215,7 @@ class Mapper(object):
         # get the subclasses of DataObject, transitively
         # take the list of subclasses and resolve them into Python classes
         for base in self.base_classes.values():
-            L.debug("RESOLVING base {}".format(_FCN(base), base.rdf_type))
+            L.debug("RESOLVING base {}".format(FCN(base), base.rdf_type))
             for x in graph.transitive_subjects(R.RDFS['subClassOf'],
                                                base.rdf_type):
                 L.debug("RESOLVING {}".format(x))
@@ -270,24 +271,45 @@ class Mapper(object):
         self.mapdepth += 1
         old_mapper = yarom.MAPPER
         yarom.MAPPER = self
+
         self.add_module_dependency(module_name)
         previously_loading = self.loading_module
         self.loading_module = module_name
 
-        if module_name not in self.modules:
+        a = self.lookup_module(module_name)
+        if not a:
             if module_name in sys.modules:
-                m = reload_module(sys.modules[module_name])
+                a = reload_module(sys.modules[module_name])
             else:
-                m = IM.import_module(module_name)
-            self.modules[module_name] = m
-            self._module_load_helper(m)
-
-        a = self.modules[module_name]
+                a = IM.import_module(module_name)
+            self.modules[module_name] = a
+            self._module_load_helper(a)
 
         self.loading_module = previously_loading
         self.mapdepth -= 1
         yarom.MAPPER = old_mapper
         return a
+
+    def lookup_module(self, module_name):
+        m = self.modules.get(module_name, None)
+        if m is None and self.parent:
+            m = self.parent.lookup_module(module_name)
+        return m
+
+    def load_class(self, cname_or_mname, cnames=None):
+        if cnames:
+            mpart = cname_or_mname
+        else:
+            mpart, cpart = cname_or_mname.rsplit('.', 1)
+            cnames = (cpart,)
+        m = self.load_module(mpart)
+        try:
+            if len(cnames) == 1:
+                return getattr(m, cnames[0])
+            else:
+                return tuple(getattr(m, cname) for cname in cnames)
+        except AttributeError:
+            raise UnmappedClassException(cnames)
 
     def add_module_dependency(self, module_name):
         if self.loading_module:
@@ -313,13 +335,19 @@ class Mapper(object):
             if full_class_name in self.base_class_names:
                 L.debug('Setting base class %s', full_class_name)
                 self.base_classes[full_class_name] = cls
-                if self.base_class_names[0] == full_class_name:
-                    self.resolver = Resolver.get_instance(self)
 
             if isinstance(cls, type) and \
-                    _FCN(cls) == full_class_name and \
-                    issubclass(cls, tuple(self.base_classes.values())):
+                    FCN(cls) == full_class_name and \
+                    issubclass(cls, self._merged_base_classes()):
                 self.add_class(cls)
+                if self.base_class_names[0] == full_class_name:
+                    self.resolver = Resolver(self)
+
+    def _merged_base_classes(self):
+        ret = tuple(self.base_classes.values())
+        if self.parent:
+            ret += self.parent._merged_base_classes()
+        return ret
 
     def oid(self, identifier_or_rdf_type, rdf_type=False):
         """ Create an object from its rdf type
@@ -360,7 +388,7 @@ class Mapper(object):
     def compare_types(self, a, b):
         try:
             ordr = self.class_ordering
-            return ordr[_FCN(a)] - ordr[_FCN(b)]
+            return ordr[FCN(a)] - ordr[FCN(b)]
         except KeyError as e:
             raise Exception(
                 "The given type is not in the class ordering: " +
@@ -384,22 +412,35 @@ class Mapper(object):
         return least.rdf_type
 
     def lookup_class(self, cname):
-        """ Gets the class corresponding to a short name """
-        c = self.MappedClasses[cname]
-        L.debug('lookup_class(%s) %s@%s', cname, c, hex(id(c)))
+        """ Gets the class corresponding to a fully-qualified class name """
+        ret = self._lookup_class(cname)
+        if ret is None:
+            raise UnmappedClassException((cname,))
+        return ret
+
+    def _lookup_class(self, cname):
+        c = self.MappedClasses.get(cname, None)
+        if c is None and self.parent:
+            c = self.parent._lookup_class(cname)
+        L.debug('%s.lookup_class(%s) %s@%s', repr(self), cname, c, hex(id(c)))
         return c
+
+    def mapped_classes(self):
+        return chain(self.parent.mapped_classes() if self.parent else (),
+                     self.MappedClasses.values())
 
     def resolver(self):
         return self.resolver
 
     def __str__(self):
-        return ("[" + str(self.MappedClasses) +
-                "\n" + str(self.DataObjectsParents) +
-                "\n" + str(self.DataObjectsChildren) +
-                "\n" + str(self.DataObjectProperties) +
-                "\n" + str(self.RDFTypeTable) +
-                "\n" + str(self.ModuleDependencies) +
-                "]")
+        return "Mapper[" + \
+            pformat({x: getattr(self, x) for x in ('MappedClasses',
+                                                   'DataObjectsParents',
+                                                   'DataObjectsChildren',
+                                                   'DataObjectProperties',
+                                                   'RDFTypeTable',
+                                                   'ModuleDependencies')}) + \
+            "]"
 
 
 class _ClassOrderable(object):

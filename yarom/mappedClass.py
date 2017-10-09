@@ -98,7 +98,6 @@ class MappedClass(type):
         self.mapper = mapper
         L.debug("REGISTERING %s", self.__name__)
         self._du = DataUser()
-        mapper = self.mapper
         parents = self.__bases__
         mapped_parents = tuple(x for x in parents
                                if isinstance(x, MappedClass))

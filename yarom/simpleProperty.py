@@ -14,6 +14,8 @@ from .propertyValue import PropertyValue
 from .mappedProperty import MappedPropertyClass
 from .deprecation import deprecated
 from random import randint
+from lazy_object_proxy import Proxy
+
 
 L = logging.getLogger(__name__)
 
@@ -115,14 +117,26 @@ class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
         if not hasattr(v, "idl"):
             v = PropertyValue(v)
 
+        if not self.multiple:
+            self.clear()
+
+        self._insert_value(v)
+
+        return RelationshipProxy(Rel(self.owner, self, v))
+
+    def _remove_value(self, v):
+        assert self in v.owner_properties
+        v.owner_properties.remove(self)
+        self._v.remove(v)
+
+    def clear(self):
+        for x in self._v:
+            self._remove_value(x)
+
+    def _insert_value(self, v):
+        self._v.append(v)
         if self not in v.owner_properties:
             v.owner_properties.append(self)
-
-        if self.multiple:
-            self._v.append(v)
-        else:
-            self._v = [v]
-        return Rel(self.owner, self, v)
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and (self.link == other.link)
@@ -151,6 +165,19 @@ class UnionProperty(UnionPropertyMixin, SimpleProperty):
     """ A Property that can handle either DataObjects or basic types """
 
 
+class RelationshipProxy(Proxy):
+    def __repr__(self):
+        return repr(self.__wrapped__)
+
+    def in_context(self, context):
+        rel = self.__factory__
+        rel.p.context = context
+        return self
+
+    def unwrapped(self):
+        return self.__wrapped__
+
+
 class Rel(tuple):
 
     """ A container for a relationship-assignment """
@@ -162,9 +189,12 @@ class Rel(tuple):
     def __getattr__(self, n):
         return self[Rel._map[n]]
 
+    def __call__(self):
+        return self.rel()
+
     def rel(self):
         from .relationship import Relationship
         return Relationship(
-            subject=self.s,
-            property=self.p.rdf_object,
-            object=self.o)
+            s=(self.s if self.s.defined else None),
+            p=self.p.rdf_object,
+            o=(self.o if self.o.defined else None))

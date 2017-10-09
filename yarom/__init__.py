@@ -112,10 +112,7 @@ def yarom_import(cname_or_mname, cnames=None):
     else:
         mpart, cpart = cname_or_mname.rsplit('.', 1)
         cnames = (cpart,)
-    if mpart not in MAPPER.modules:
-        m = MAPPER.load_module(mpart)
-    else:
-        m = MAPPER.modules[mpart]
+    m = MAPPER.load_module(mpart)
     if len(cnames) == 1:
         return getattr(m, cnames[0])
     else:
