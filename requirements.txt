@@ -1,3 +1,5 @@
 six>=1.9.0
 rdflib>=4.1.2
 pint
+lazy-object-proxy==1.2.1
+
