@@ -27,17 +27,16 @@ class MappedClass(type):
         else:
             self.mapped = False
 
+        self.__rdf_type = None
         # Set the rdf_type early
         if 'rdf_type' in dct:
-            self.rdf_type = dct['rdf_type']
-        else:
-            self.rdf_type = None
+            self.__rdf_type = dct['rdf_type']
 
+        self.__rdf_namespace = None
         if 'rdf_namespace' in dct:
-            self.rdf_namespace = dct['rdf_namespace']
-        else:
-            self.rdf_namespace = None
+            self.__rdf_namespace = dct['rdf_namespace']
 
+        self._du = None
         self.dataObjectProperties = []
         self.children = []
         for x in bases:
@@ -45,6 +44,14 @@ class MappedClass(type):
                 self.dataObjectProperties += x.dataObjectProperties
             except AttributeError:
                 pass
+
+    @property
+    def rdf_type(self):
+        return self.__rdf_type
+
+    @property
+    def rdf_namespace(self):
+        return self.__rdf_namespace
 
     @classmethod
     def make_class(
@@ -72,10 +79,9 @@ class MappedClass(type):
         # DataUser property before using it. Initialization isn't done in
         # __init__ because I wanted to make sure you could call `connect`
         # before or after declaring your classes
-        if hasattr(self, '_du'):
-            return self._du
-        else:
-            raise Exception("You should have called `map` to get here")
+        if not self._du:
+            self._du = DataUser()
+        return self._du
 
     @du.setter
     def du(self, value):
@@ -97,7 +103,6 @@ class MappedClass(type):
         """
         self.mapper = mapper
         L.debug("REGISTERING %s", self.__name__)
-        self._du = DataUser()
         parents = self.__bases__
         mapped_parents = tuple(x for x in parents
                                if isinstance(x, MappedClass))
@@ -110,40 +115,28 @@ class MappedClass(type):
         self.addProperties('objectProperties')
         self.addProperties('datatypeProperties')
         self.addProperties('_')
-        cls = getattr(yarom, self.__name__, None)
-        if cls is not None and cls is not self:
-            new_name = "_" + self.__name__
-            warn_mismapping(L,
-                            'yarom module',
-                            self.__name__,
-                            "nothing",
-                            '{}@0x{:X}'.format(cls, id(cls)))
-            if getattr(yarom, new_name, False):
-                L.warning(
-                    "Still unable to add {0} to {1}. {0} will not be "
-                    "accessible through {1}".format(
-                        new_name,
-                        'yarom module'))
-            else:
-                setattr(yarom, new_name, self)
-        else:
-            setattr(yarom, self.__name__, self)
 
-        if self.rdf_type is None:
-            self.rdf_type = mapper.base_namespace[self.__name__]
+        if not (hasattr(self, 'base_namespace') and self.base_namespace):
+            self.base_namespace = mapper.base_namespace
 
-        if self.rdf_namespace is None:
-            self.rdf_namespace = R.Namespace(
-                mapper.base_namespace[self.__name__] + "/")
+        if self.__rdf_type is None:
+            self.__rdf_type = self.base_namespace[self.__name__]
+
+        if self.__rdf_namespace is None:
+            self.__rdf_namespace = R.Namespace(
+                self.base_namespace[self.__name__] + "/")
 
         return self
 
+    def after_mapper_module_load(self, mapper):
+        """ Called after all classes in a module have been loaded """
+
     def on_mapper_remove_class(self, mapper):
         L.debug("DEREGISTERING %s", self.__name__)
-        if getattr(yarom, self.__name__) == self:
-            delattr(yarom, self.__name__)
-        elif getattr(yarom, "_" + self.__name__) == self:
-            delattr(yarom, "_" + self.__name__)
+        # if getattr(yarom, self.__name__) == self:
+            # delattr(yarom, self.__name__)
+        # elif getattr(yarom, "_" + self.__name__) == self:
+            # delattr(yarom, "_" + self.__name__)
 
         for c in self.parents:
             c.remove_child(self)
@@ -182,10 +175,10 @@ class MappedClass(type):
         TypeDataObject = \
             self.mapper.lookup_class('yarom.dataObject.TypeDataObject')
         TypeDataObject.mapped = True
+
         self.rdf_type_object = TypeDataObject(ident=self.rdf_type)
 
         self._add_parents_to_graph()
-        self._add_namespace_to_manager()
         self.mapped = True
 
         return self
@@ -195,17 +188,17 @@ class MappedClass(type):
         Unmaps the class
         """
         L.debug("UNMAPPING %s", cls.__name__)
-        del cls.mapper.RDFTypeTable[cls.rdf_type]
+        del cls.mapper.RDFTypeTable[cls.__rdf_type]
         # XXX: What else to do here?
 
     def _remove_namespace_from_manager(cls):
         # XXX: Only way I can think to do this is to remake the ns manager
         pass
 
-    def _add_namespace_to_manager(cls):
-        cls.du['rdf.namespace_manager'].bind(
-            cls.__name__,
-            cls.rdf_namespace,
+    def _add_namespace_to_manager(self):
+        self.du['rdf.namespace_manager'].bind(
+            self.__name__,
+            self.__rdf_namespace,
             replace=True)
 
     def _add_parents_to_graph(self):
@@ -289,6 +282,7 @@ def _create_property(
     #      with the owner object's creation
     mapper = owner_type.mapper
     ysp = mapper.load_module('yarom.simpleProperty')
+    do = mapper.load_module('yarom.dataObject')
 
     properties = slice_dict(locals(), ['owner_type', 'linkName', 'multiple'])
 
@@ -299,7 +293,7 @@ def _create_property(
     if property_type == 'ObjectProperty':
         x = ysp.ObjectProperty
         if value_type is None:
-            value_type = yarom.DataObject
+            value_type = do.DataObject
         properties['value_type'] = value_type
     elif property_type == 'DatatypeProperty':
         x = ysp.DatatypeProperty

@@ -509,9 +509,9 @@ class _QueryPreparer(object):
 
 class DescendantTripler(object):
 
-    """ Gets triples that the object points to, transitively. """
+    """ Gets triples that the object points to, optionally transitively. """
 
-    def __init__(self, start, graph=None):
+    def __init__(self, start, graph=None, transitive=True):
         """
         Parameters
         ----------
@@ -522,9 +522,11 @@ class DescendantTripler(object):
             graph is used
         """
         self.seen = set()
+        self.seen_edges = set()
         self.start = start
         self.graph = graph
         self.results = list()
+        self.transitve = transitive
 
     def g(self, current_node):
         if current_node in self.seen:
@@ -538,13 +540,17 @@ class DescendantTripler(object):
         if self.graph is not None:
             for triple in self.graph.triples((current_node.idl, None, None)):
                 self.results.append(triple)
-                self.g(_DTWrapper(triple[2]))
+                if self.transitve:
+                    self.g(_DTWrapper(triple[2]))
         else:
             for e in current_node.properties:
-                for val in e.values:
-                    if val.defined:
-                        self.results.append((current_node.idl, e.link, val.idl))
-                        self.g(val)
+                if id(e) not in self.seen_edges:
+                    self.seen_edges.add(id(e))
+                    for val in e.values:
+                        if val.defined:
+                            self.results.append((current_node.idl, e.link, val.idl))
+                            if self.transitve:
+                                self.g(val)
 
     def __call__(self):
         self.g(self.start)
@@ -669,6 +675,7 @@ class ReferenceTripler(object):
 
     def __init__(self, start, graph=None):
         self.seen = set()
+        self.seen_edges = set()
         self.start = start
         self.results = set()
         self.graph = graph
@@ -684,13 +691,17 @@ class ReferenceTripler(object):
                 self.results.add(trip)
         else:
             for e in o.properties:
-                for val in e.values:
-                    if val.defined:
-                        self.results.add((o.idl, e.link, val.idl))
+                if (DOWN, id(e)) not in self.seen_edges:
+                    self.seen_edges.add((DOWN, id(e)))
+                    for val in e.values:
+                        if val.defined:
+                            self.results.add((o.idl, e.link, val.idl))
 
             for e in o.owner_properties:
-                if e.owner.defined:
-                    self.results.add((e.owner.idl, e.link, o.idl))
+                if (UP, id(e)) not in self.seen_edges:
+                    self.seen_edges.add((UP, id(e)))
+                    if e.owner.defined:
+                        self.results.add((e.owner.idl, e.link, o.idl))
 
     def __call__(self):
         self.refs(self.start)

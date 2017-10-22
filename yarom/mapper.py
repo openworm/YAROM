@@ -7,6 +7,7 @@ import yarom
 from itertools import count, chain
 from .rdfTypeResolver import RDFTypeResolver
 from six.moves import reload_module
+from six import with_metaclass
 from .mapperUtils import parents_str
 from pprint import pformat
 
@@ -25,7 +26,15 @@ class UnmappedClassException(Exception):
     pass
 
 
-class Mapper(object):
+class MapperMeta(type):
+    def __call__(self, *args, **kwargs):
+        x = super(MapperMeta, self).__call__(*args, **kwargs)
+        for m in x.base_modules:
+            x.load_module(m)
+        return x
+
+
+class Mapper(with_metaclass(MapperMeta, object)):
     _instances = dict()
 
     @classmethod
@@ -35,10 +44,13 @@ class Mapper(object):
 
         return cls._instances[args]
 
-    def __init__(self, base_class_names, base_namespace=None, parent=None):
+    def __init__(self, base_class_names, base_namespace=None, imported=()):
 
         """ Maps class names to classes """
         self.MappedClasses = dict()
+
+        """ Maps classes to decorated versions of the class """
+        self.DecoratedMappedClasses = dict()
 
         """ Maps class names to parents of the related class """
         self.DataObjectsParents = dict()
@@ -84,11 +96,12 @@ class Mapper(object):
         self.ModuleDependencies = dict()
         self.ModuleDependents = dict()
 
-        self.parent = parent
+        self.imported_mappers = imported
 
         self.loading_module = None
-        for m in self.base_modules:
-            self.load_module(m)
+
+    def decorate_class(self, cls):
+        return cls
 
     def add_class(self, cls):
         cname = FCN(cls)
@@ -102,6 +115,7 @@ class Mapper(object):
         L.debug("Adding class %s@0x%x", cls, id(cls))
 
         self.MappedClasses[cname] = cls
+        self.DecoratedMappedClasses[cls] = self.decorate_class(cls)
         parents = cls.__bases__
         L.debug('parents %s', parents_str(cls))
         # cls is the child to mapped parents
@@ -283,7 +297,10 @@ class Mapper(object):
             else:
                 a = IM.import_module(module_name)
             self.modules[module_name] = a
-            self._module_load_helper(a)
+            cs = self._module_load_helper(a)
+            for c in cs:
+                if hasattr(c, 'after_mapper_module_load'):
+                    c.after_mapper_module_load(self)
 
         self.loading_module = previously_loading
         self.mapdepth -= 1
@@ -292,8 +309,11 @@ class Mapper(object):
 
     def lookup_module(self, module_name):
         m = self.modules.get(module_name, None)
-        if m is None and self.parent:
-            m = self.parent.lookup_module(module_name)
+        if m is None:
+            for p in self.imported_mappers:
+                m = p.lookup_module(module_name)
+                if m:
+                    break
         return m
 
     def load_class(self, cname_or_mname, cnames=None):
@@ -304,10 +324,13 @@ class Mapper(object):
             cnames = (cpart,)
         m = self.load_module(mpart)
         try:
-            if len(cnames) == 1:
-                return getattr(m, cnames[0])
-            else:
-                return tuple(getattr(m, cname) for cname in cnames)
+            res = tuple(self.DecoratedMappedClasses[c]
+                        if c in self.DecoratedMappedClasses
+                        else c
+                        for c in
+                        (getattr(m, cname) for cname in cnames))
+
+            return res[0] if len(res) == 1 else res
         except AttributeError:
             raise UnmappedClassException(cnames)
 
@@ -322,6 +345,7 @@ class Mapper(object):
             self.ModuleDependents[module_name] = callers
 
     def _module_load_helper(self, module):
+        res = []
         mod_dir = dir(module)
         types = set(o for o in (getattr(module, nm) for nm in mod_dir)
                     if isinstance(o, type))
@@ -340,13 +364,15 @@ class Mapper(object):
                     FCN(cls) == full_class_name and \
                     issubclass(cls, self._merged_base_classes()):
                 self.add_class(cls)
+                res.append(cls)
                 if self.base_class_names[0] == full_class_name:
                     self.resolver = Resolver(self)
+        return res
 
     def _merged_base_classes(self):
         ret = tuple(self.base_classes.values())
-        if self.parent:
-            ret += self.parent._merged_base_classes()
+        for p in self.imported_mappers:
+            ret += p._merged_base_classes()
         return ret
 
     def oid(self, identifier_or_rdf_type, rdf_type=False):
@@ -420,14 +446,20 @@ class Mapper(object):
 
     def _lookup_class(self, cname):
         c = self.MappedClasses.get(cname, None)
-        if c is None and self.parent:
-            c = self.parent._lookup_class(cname)
+        if c is None:
+            for p in self.imported_mappers:
+                c = p._lookup_class(cname)
+                if c:
+                    break
         L.debug('%s.lookup_class(%s) %s@%s', repr(self), cname, c, hex(id(c)))
         return c
 
     def mapped_classes(self):
-        return chain(self.parent.mapped_classes() if self.parent else (),
-                     self.MappedClasses.values())
+        for p in self.imported_mappers:
+            for c in p.mapped_classes():
+                yield
+        for c in self.MappedClasses.values():
+            yield c
 
     def resolver(self):
         return self.resolver

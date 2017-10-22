@@ -23,39 +23,9 @@ class MappedPropertyClass(type):
         # This is how we create the RDF predicate that points from the owner
         # to this property
         L.debug("REGISTERING %s", self.__name__)
-        # XXX: Should we record class hierarchy of properties?
-        setattr(Y, self.__name__, self)
         self.rdf_type = R.RDF['Property']
 
         return self
-
-    def deregister(cls):
-        if cls.mapper.MappedClasses.get(cls.__name__, False) == cls:
-            del cls.mapper.MappedClasses[cls.__name__]
-        else:
-            log_raise_mismapping_exception(
-                L,
-                cls.mapper.MappedClasses,
-                cls.__name__,
-                cls)
-
-        if cls.mapper.DataObjectProperties.get(
-                cls.__name__,
-                None) == cls:
-            del cls.mapper.DataObjectProperties[cls.__name__]
-        else:
-            log_raise_mismapping_exception(
-                L,
-                cls.mapper.DataObjectProperties,
-                cls.__name__,
-                cls)
-
-        if getattr(Y, cls.__name__) == cls:
-            setattr(Y, cls.__name__, cls)
-        else:
-            log_raise_mismapping_exception(L, dir(Y), cls.__name__, cls)
-
-        return cls
 
     @property
     def value_rdf_type(self):
