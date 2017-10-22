@@ -2,8 +2,7 @@
 Not actually tests, but benchmarks.
 """
 from __future__ import print_function
-import yarom as Y
-from yarom import disconnect, connect
+from yarom import disconnect, connect, yarom_import
 
 
 def setup():
@@ -15,5 +14,7 @@ def teardown():
 
 
 def test_do_create():
+    DO = yarom_import('yarom.dataObject.DataObject')
+
     for i in range(10000):
-        Y.DataObject()
+        DO()

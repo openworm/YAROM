@@ -4,6 +4,7 @@ import unittest
 
 import yarom
 from yarom import (
+    yarom_import,
     Configuration,
     ConfigValue,
     Data,
@@ -12,7 +13,7 @@ from yarom import (
     BadConf,
     Property,
     Quantity)
-from yarom.mapper import Mapper
+
 import yarom as Y
 import rdflib
 import rdflib as R
@@ -25,9 +26,6 @@ from .base_test import TEST_CONFIG, TEST_NS, make_graph
 from .data_test import _DataTest
 from . import test_data as TD
 
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
 HAS_FUXI = False
 
 
@@ -41,7 +39,6 @@ except ImportError:
 
 def clear_graph(graph):
     graph.update("CLEAR ALL")
-
 
 
 class ConfigureTest(unittest.TestCase):
@@ -100,7 +97,7 @@ class ConfigureTest(unittest.TestCase):
         try:
             d = Data.open("tests/test.conf")
             self.assertEqual("test_value", d["test_variable"])
-        except:
+        except Exception:
             self.fail("test.conf should exist and be valid JSON")
 
     def test_read_from_file_fail(self):
@@ -119,19 +116,23 @@ class ConfigureableTest(unittest.TestCase):
 
 class DataObjectTest(_DataTest):
 
+    def setUp(self):
+        super(DataObjectTest, self).setUp()
+        self.DataObject = yarom_import('yarom.dataObject.DataObject')
+
     def test_DataUser(self):
-        do = Y.DataObject()
+        do = self.DataObject()
         self.assertTrue(isinstance(do, yarom.DataUser))
 
     def test_identifier(self):
         """ Test that we can set and return an identifier """
-        do = Y.DataObject(ident="http://example.org")
+        do = self.DataObject(ident="http://example.org")
         self.assertEqual(do.identifier(), R.URIRef("http://example.org"))
 
     def test_call_graph_pattern_twice(self):
         """ Be sure that we can call graph pattern on the same object multiple times and not have it die on us """
 
-        d = Y.DataObject(key="id")
+        d = self.DataObject(key="id")
         self.assertNotEqual(0, len(d.graph_pattern()))
         self.assertNotEqual(0, len(d.graph_pattern()))
 
@@ -140,7 +141,7 @@ class DataObjectTest(_DataTest):
         """ Be sure that we can call graph pattern on the same object multiple times and not have it die on us """
 
         g = make_graph(20)
-        d = Y.DataObject(triples=g)
+        d = self.DataObject(triples=g)
         self.assertNotEqual(0, len(d.graph_pattern(True)))
         self.assertNotEqual(0, len(d.graph_pattern(True)))
 
@@ -149,7 +150,7 @@ class DataObjectTest(_DataTest):
         """ Make sure that we're marking a statement with it's uploader """
 
         g = make_graph(20)
-        r = Y.DataObject(triples=g, conf=self.config)
+        r = self.DataObject(triples=g, conf=self.config)
         r.save()
         u = r.uploader()
         self.assertEqual(self.config['user.email'], u)
@@ -158,7 +159,7 @@ class DataObjectTest(_DataTest):
     def test_upload_date(self):
         """ Make sure that we're marking a statement with it's upload date """
         g = make_graph(20)
-        r = Y.DataObject(triples=g)
+        r = self.DataObject(triples=g)
         r.save()
         u = r.upload_date()
         self.assertIsNotNone(u)
@@ -168,7 +169,7 @@ class DataObjectTest(_DataTest):
         Test that no duplicate triples are released when there's a cycle in the
         graph
         """
-        class T(Y.DataObject):
+        class T(self.DataObject):
             objectProperties = ['s']
             defined = True
 
@@ -198,7 +199,7 @@ class DataObjectTest(_DataTest):
         This is to avoid the simple 'guard' solution in triples which would output B
         twice.
         """
-        class T(Y.DataObject):
+        class T(self.DataObject):
             objectProperties = ['s']
         T.mapper.add_class(T)
         T.mapper.remap()
@@ -217,7 +218,7 @@ class DataObjectTest(_DataTest):
 
     def test_property_matching_method_name(self):
         """ Creating a property with the same name as a method should be disallowed """
-        class T(Y.DataObject):
+        class T(self.DataObject):
             objectProperties = ['load']
         T.mapper.add_class(T)
         T.mapper.remap()
@@ -376,7 +377,7 @@ class RDFLibTest(unittest.TestCase):
     def test_uriref_not_url(self):
         try:
             rdflib.URIRef("daniel@example.com")
-        except:
+        except Exception:
             self.fail("Doesn't actually fail...which is weird")
 
     @unittest.skipIf(six.PY2, "In Python 2.7, no error is thrown by rdflib")
@@ -553,7 +554,7 @@ class DataTest(unittest.TestCase):
         d = Data()
         try:
             d.openDatabase()
-        except:
+        except Exception:
             traceback.print_exc()
             self.fail("Bad state")
 
@@ -655,7 +656,7 @@ class SimplePropertyTest(_DataTest):
 
         # Done dynamically to ensure that all of the yarom setup happens before
         # the class is created
-        class K(Y.DataObject):
+        class K(yarom_import('yarom.dataObject.DataObject')):
             datatypeProperties = [{'name': 'boots', 'multiple': False}, 'bets']
             objectProperties = [{'name': 'bats', 'multiple': False}, 'bits']
 
@@ -664,7 +665,7 @@ class SimplePropertyTest(_DataTest):
         self.k = K
 
     def test_non_multiple_saves_single_values(self):
-        class C(Y.DataObject):
+        class C(yarom_import('yarom.dataObject.DataObject')):
             datatypeProperties = [{'name': 't', 'multiple': False}]
         C.mapper.add_class(C)
         C.mapper.remap()
@@ -735,7 +736,7 @@ class UnionPropertyTest(_DataTest):
 
         # Done dynamically to ensure that all of the yarom setup happens before
         # the class is created
-        class K(Y.DataObject):
+        class K(yarom_import('yarom.dataObject.DataObject')):
             _ = ['name']
         self.k = K
         self.k.mapper.add_class(self.k)
@@ -768,11 +769,13 @@ class ObjectCollectionTest(_DataTest):
 
     def test_member_can_be_restored(self):
         """ Test that we can retrieve a saved collection and its members """
-        oc = Y.ObjectCollection('test')
-        do = Y.DataObject(key="s")
+        DataObject = yarom_import('yarom.dataObject.DataObject')
+        ObjectCollection = yarom_import('yarom.objectCollection.ObjectCollection')
+        oc = ObjectCollection('test')
+        do = DataObject(key="s")
         oc.member(do)
         oc.save()
-        ocr = Y.ObjectCollection('test')
+        ocr = ObjectCollection('test')
         dor = ocr.member.one()
         self.assertEqual(do, dor)
 

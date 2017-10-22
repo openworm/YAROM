@@ -1,7 +1,7 @@
-from .dataObject import DataObject
+from yarom import yarom_import
 
 
-class ObjectCollection(DataObject):
+class ObjectCollection(yarom_import('yarom.dataObject.DataObject')):
 
     """
     A convenience class for working with a collection of objects

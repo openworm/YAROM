@@ -47,14 +47,6 @@ class DataUser(Configureable):
             Configureable.setConf(Data())
 
     @property
-    def base_namespace(self):
-        return self.conf['rdf.namespace']
-
-    @base_namespace.setter
-    def base_namespace(self, value):
-        self.conf['rdf.namespace'] = value
-
-    @property
     def rdf(self):
         return self.conf['rdf.graph']
 

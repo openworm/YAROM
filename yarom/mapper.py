@@ -451,7 +451,7 @@ class Mapper(with_metaclass(MapperMeta, object)):
                 c = p._lookup_class(cname)
                 if c:
                     break
-        L.debug('%s.lookup_class(%s) %s@%s', repr(self), cname, c, hex(id(c)))
+        L.debug('%s.lookup_class("%s") %s@%s', repr(self), cname, c, hex(id(c)))
         return c
 
     def mapped_classes(self):

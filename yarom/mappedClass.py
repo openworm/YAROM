@@ -1,5 +1,6 @@
 import logging
 import yarom
+import six
 import rdflib as R
 from .dataUser import DataUser
 from .mapperUtils import warn_mismapping
@@ -48,6 +49,12 @@ class MappedClass(type):
     @property
     def rdf_type(self):
         return self.__rdf_type
+
+    @rdf_type.setter
+    def rdf_type(self, new_type):
+        if not isinstance(new_type, R.URIRef) and isinstance(new_type, (str, six.text_type)):
+            new_type = R.URIRef(new_type)
+        self.__rdf_type = new_type
 
     @property
     def rdf_namespace(self):
@@ -116,7 +123,9 @@ class MappedClass(type):
         self.addProperties('datatypeProperties')
         self.addProperties('_')
 
-        if not (hasattr(self, 'base_namespace') and self.base_namespace):
+        if not (hasattr(self, 'base_namespace')
+                and self.base_namespace
+                and isinstance(self.base_namespace, R.namespace.Namespace)):
             self.base_namespace = mapper.base_namespace
 
         if self.__rdf_type is None:
@@ -133,10 +142,6 @@ class MappedClass(type):
 
     def on_mapper_remove_class(self, mapper):
         L.debug("DEREGISTERING %s", self.__name__)
-        # if getattr(yarom, self.__name__) == self:
-            # delattr(yarom, self.__name__)
-        # elif getattr(yarom, "_" + self.__name__) == self:
-            # delattr(yarom, "_" + self.__name__)
 
         for c in self.parents:
             c.remove_child(self)
