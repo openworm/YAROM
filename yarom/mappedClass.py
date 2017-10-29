@@ -1,11 +1,9 @@
 from __future__ import print_function
 
 import logging
-import yarom
 import six
 import rdflib as R
 from .dataUser import DataUser
-from .mapperUtils import warn_mismapping
 from .mappedProperty import MappedPropertyClass
 from .utils import slice_dict
 
@@ -24,7 +22,7 @@ class MappedClass(type):
     """
     def __init__(self, name, bases, dct):
         L.debug("INITIALIZING %s", name)
-        type.__init__(self, name, bases, dct)
+        super(MappedClass, self).__init__(name, bases, dct)
         if 'auto_mapped' in dct:
             self.mapped = True
         else:
@@ -54,7 +52,8 @@ class MappedClass(type):
 
     @rdf_type.setter
     def rdf_type(self, new_type):
-        if not isinstance(new_type, R.URIRef) and isinstance(new_type, (str, six.text_type)):
+        if not isinstance(new_type, R.URIRef) and \
+                isinstance(new_type, (str, six.text_type)):
             new_type = R.URIRef(new_type)
         self.__rdf_type = new_type
 
