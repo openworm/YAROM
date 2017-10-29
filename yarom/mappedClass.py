@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import logging
 import yarom
 import six
@@ -239,7 +241,7 @@ class MappedClass(type):
                         value_type=value_type)
                 elif isinstance(x, dict):
                     if 'prop' in x:
-                        p = cls.mapper.DataObjectProperties[x['prop']]
+                        p = cls.mapper.MappedClasses[x['prop']]
                     else:
                         name = x['name']
                         del x['name']

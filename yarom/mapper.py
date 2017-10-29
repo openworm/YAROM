@@ -11,12 +11,14 @@ from six import with_metaclass
 from .mapperUtils import parents_str
 from pprint import pformat
 
+import traceback
+import sys
+
 __all__ = ["Mapper",
            "FCN",
            "UnmappedClassException"]
 
 L = logging.getLogger(__name__)
-
 
 def FCN(cls):
     return cls.__module__ + '.' + cls.__name__
@@ -57,9 +59,6 @@ class Mapper(with_metaclass(MapperMeta, object)):
 
         """ Maps class names to children of the related class """
         self.DataObjectsChildren = dict()
-
-        """ Maps class names to properties of the related class """
-        self.DataObjectProperties = dict()
 
         """ Maps RDF types to properties of the related class """
         self.RDFTypeTable = dict()
@@ -292,10 +291,7 @@ class Mapper(with_metaclass(MapperMeta, object)):
 
         a = self.lookup_module(module_name)
         if not a:
-            if module_name in sys.modules:
-                a = reload_module(sys.modules[module_name])
-            else:
-                a = IM.import_module(module_name)
+            a = IM.import_module(module_name)
             self.modules[module_name] = a
             cs = self._module_load_helper(a)
             for c in cs:
@@ -451,7 +447,8 @@ class Mapper(with_metaclass(MapperMeta, object)):
                 c = p._lookup_class(cname)
                 if c:
                     break
-        L.debug('%s.lookup_class("%s") %s@%s', repr(self), cname, c, hex(id(c)))
+        else:
+            L.debug('%s.lookup_class("%s") %s@%s', repr(self), cname, c, hex(id(c)))
         return c
 
     def mapped_classes(self):
@@ -469,7 +466,6 @@ class Mapper(with_metaclass(MapperMeta, object)):
             pformat({x: getattr(self, x) for x in ('MappedClasses',
                                                    'DataObjectsParents',
                                                    'DataObjectsChildren',
-                                                   'DataObjectProperties',
                                                    'RDFTypeTable',
                                                    'ModuleDependencies')}) + \
             "]"
