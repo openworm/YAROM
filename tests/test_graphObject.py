@@ -3,8 +3,11 @@ from logging import getLogger
 from random import random
 from yarom.graphObject import (GraphObject,
                                ComponentTripler,
-                               GraphObjectQuerier)
+                               Variable,
+                               GraphObjectQuerier,
+                               _QueryPreparer)
 from yarom.rangedObjects import InRange, LessThan
+from pprint import pprint
 
 import rdflib
 
@@ -13,10 +16,10 @@ L = getLogger(__name__)
 
 class G(GraphObject):
 
-    def __init__(self, k=None, **kwargs):
+    def __init__(self, k=None, v=None, **kwargs):
         super(G, self).__init__(**kwargs)
         if k is None:
-            self._v = random()
+            self._v = random() if v is None else v
             self._k = None
         else:
             self._k = k
@@ -36,7 +39,10 @@ class G(GraphObject):
         return self._k is not None
 
     def __repr__(self):
-        return 'G('+self._k+')' if self._k else 'G()'
+        if self._k is not None:
+            return 'G(' + repr(self._k) + ')'
+        else:
+            return 'G(v=' + repr(self._v) + ')'
 
 
 class Graph(object):
@@ -142,10 +148,352 @@ class P(object):
         y.owner_properties.append(self)
         x.properties.append(self)
         if graph is not None and x.defined and y.defined:
-            graph.add((x.identifier(), P.link, y.identifier()))
+            graph.add((x.identifier(),
+                       type(self).link,
+                       y.identifier()))
+
+
+class Q(P):
+    link = '>>'
+
+
+class QueryPreparerTest(unittest.TestCase):
+
+    def test_single1(self):
+        a = G(v='a')
+        b = G(v='b')
+        d = G(v='d')
+        c = G(1)
+        P(b, a)
+        P(c, b)
+        P(d, a)
+        P(c, d)
+        expected = [(G(v='a'), [[(Variable(0), '->', None, G(v='a')),
+                                 (1, '->', None, G(v='b'))],
+                                [(Variable(2), '->', None, G(v='a')),
+                                 (1, '->', None, G(v='d'))]])]
+        self.assertListEqual(expected, _QueryPreparer(a)())
+
+    def test_single2(self):
+        a = G(v='a')
+        b = G(v='b')
+        d = G(v='d')
+        e = G(v='e')
+        f = G(2)
+        c = G(1)
+        P(a, e)
+        P(e, f)
+        P(b, a)
+        P(c, b)
+        P(d, a)
+        P(c, d)
+        qpout = _QueryPreparer(a)()
+        expected = [(G(v='a'), [[(Variable(0), '->', None, G(v='a')),
+                                 (1, '->', None, G(v='b'))],
+                                [(Variable(2), '->', None, G(v='a')),
+                                 (1, '->', None, G(v='d'))],
+                                [(None, '->', Variable(3), G(v='a')),
+                                 (None, '->', 2, G(v='e'))]])]
+        self.assertListEqual(expected, qpout)
+
+    def test_single3(self):
+        a = G(v='a')
+        b = G(v='b')
+        d = G(v='d')
+        c = G(v='c')
+        f = G(v='f')
+        goal = G(1)
+        P(c, goal)
+        P(f, goal)
+
+        P(a, b)
+        P(a, c)
+        P(b, c)
+        P(c, d)
+        P(d, f)
+        qp = _QueryPreparer(a)
+        qpout = qp()
+
+        self.assertListEqual([(G(v='a'),
+                               [[(None, '->', Variable(0), G(v='a')),
+                                 (None, '->', Variable(2), G(v='b')),
+                                 (None, '->', 1, G(v='c'))],
+                                [(None, '->', Variable(0), G(v='a')),
+                                 (None, '->', Variable(2), G(v='b')),
+                                 (None, '->', Variable(3), G(v='c')),
+                                 (None, '->', Variable(4), G(v='d')),
+                                 (None, '->', 1, G(v='f'))],
+                                [(None, '->', Variable(2), G(v='a')),
+                                 (None, '->', 1, G(v='c'))],
+                                [(None, '->', Variable(2), G(v='a')),
+                                 (None, '->', Variable(3), G(v='c')),
+                                 (None, '->', Variable(4), G(v='d')),
+                                 (None, '->', 1, G(v='f'))]])], qpout)
+
+    def test_multiple1(self):
+        a = G(v='a')
+        b = G(v='b')
+        c = G(1)
+        P(a, c)
+        P(b, c)
+
+        self.assertListEqual([(G(v='a'), [[(None, '->', 1, G(v='a'))]]),
+                              (G(v='b'), [[(None, '->', 1, G(v='b'))]])],
+                             _QueryPreparer((a, b))())
+
+    def test_multiple2(self):
+        a = G(v='a')
+        b = G(v='b')
+        d = G(v='d')
+        c = G(1)
+        P(a, d)
+        P(b, d)
+        P(d, c)
+
+        self.assertListEqual([(G(v='a'), [[(None, '->', Variable(0), G(v='a')),
+                                           (None, '->', 1, G(v='d'))]]),
+                              (G(v='b'), [[(None, '->', Variable(0), G(v='b')),
+                                           (None, '->', 1, G(v='d'))]])],
+                             _QueryPreparer((a, b))())
+
+    def test_multiple3(self):
+        a = G(v='a')
+        b = G(v='b')
+        d = G(v='d')
+        c = G(1)
+        P(a, b)
+        P(b, d)
+        P(d, c)
+
+        self.assertListEqual([(G(v='a'), [[(None, '->', Variable(0), G(v='a')),
+                                          (None, '->', Variable(2), G(v='b')),
+                                          (None, '->', 1, G(v='d'))]]),
+                              (G(v='b'), [[(None, '->', Variable(2), G(v='b')),
+                                          (None, '->', 1, G(v='d'))]])],
+                             _QueryPreparer((a, b))())
+
+    def test_multiple4(self):
+        a = G(v='a')
+        b = G(v='b')
+        d = G(v='d')
+        c = G(1)
+        P(a, b)
+        P(b, d)
+        P(d, c)
+
+        self.assertListEqual([(G(v='a'), [[(None, '->', Variable(0), G(v='a')),
+                                           (None, '->', Variable(2), G(v='b')),
+                                           (None, '->', 1, G(v='d'))]]),
+                              (G(v='b'), [[(None, '->', Variable(2), G(v='b')),
+                                           (None, '->', 1, G(v='d'))]]),
+                              (G(v='d'), [[(None, '->', 1, G(v='d'))]])],
+                             _QueryPreparer((a, b, d))())
+
+    def test_multiple5(self):
+        a = G(v='a')
+        b = G(v='b')
+        d = G(v='d')
+        c = G(1)
+        e = G(2)
+        P(a, b)
+        P(b, d)
+        P(d, c)
+        P(d, e)
+        qp = _QueryPreparer((a, b, d))
+        self.assertListEqual([(G(v='a'), [[(None, '->', Variable(0), G(v='a')),
+                                           (None, '->', Variable(2), G(v='b')),
+                                           (None, '->', 1, G(v='d'))],
+                                          [(None, '->', Variable(0), G(v='a')),
+                                           (None, '->', Variable(2), G(v='b')),
+                                           (None, '->', 2, G(v='d'))]]),
+                              (G(v='b'), [[(None, '->', Variable(2), G(v='b')),
+                                           (None, '->', 1, G(v='d'))],
+                                          [(None, '->', Variable(2), G(v='b')),
+                                           (None, '->', 2, G(v='d'))]]),
+                              (G(v='d'), [[(None, '->', 1, G(v='d'))],
+                                          [(None, '->', 2, G(v='d'))]])],
+                             qp())
 
 
 class GraphObjectQuerierTest(unittest.TestCase):
+
+    def test_query_single1(self):
+        a = G(1)
+        b = G(2)
+        c = G(3)
+        d = G(4)
+        e = G(5)
+
+        g = Graph()
+        P(a, b, g)
+        P(b, c, g)
+        P(a, d, g)
+        P(d, e, g)
+
+        at = G(v='at')
+        bt = G(v='bt')
+        ct = G(3)
+        dt = G(v='dt')
+        et = G(5)
+        P(at, bt)
+        P(bt, ct)
+        P(at, dt)
+        P(dt, et)
+        r = set(GraphObjectQuerier(at, g, parallel=False)())
+        self.assertSetEqual(set([1]), r)
+
+    def test_query_single2(self):
+        a = G(1)
+        b = G(2)
+        c = G(3)
+        d = G(4)
+        e = G(5)
+
+        g = Graph()
+        P(a, b, g)
+        P(b, c, g)
+        P(a, d, g)
+        P(d, e, g)
+
+        at = G(v='at')
+        bt = G(v='bt')
+        ct = G(3)
+        dt = G(v='dt')
+        et = G(5)
+        P(at, bt)
+        P(bt, ct)
+        P(at, dt)
+        P(dt, et)
+        r = set(GraphObjectQuerier(at, g, parallel=False)())
+        self.assertSetEqual(set([1]), r)
+
+    def test_query_single3(self):
+        a = G(1)
+        b = G(2)
+        c = G(3)
+        d = G(4)
+        e = G(5)
+
+        g = Graph()
+        P(a, b, g)
+        P(b, c, g)
+        P(a, d, g)
+        P(d, e, g)
+
+        a = G(1)
+        b = G(7)
+        c = G(3)
+        d = G(8)
+        e = G(5)
+
+        P(a, b, g)
+        P(b, c, g)
+        P(a, d, g)
+        P(d, e, g)
+
+        at = G(v='at')
+        bt = G(v='bt')
+        ct = G(3)
+        dt = G(v='dt')
+        et = G(5)
+        P(at, bt)
+        P(bt, ct)
+        P(at, dt)
+        P(dt, et)
+        r = set(GraphObjectQuerier(at, g, parallel=False)())
+        self.assertSetEqual(set([1]), r)
+
+    def test_query_multiple1(self):
+        a = G(3)
+        b = G(1)
+        c = G(2)
+        d = G(7)
+
+        g = Graph()
+        P(a, b, g)
+        P(c, d, g)
+        P(a, d, g)
+        P(b, c, g)
+
+        at = G(v='at')
+        bt = G(v='bt')
+        t = G(7)
+        s = G(2)
+        P(at, bt)
+        P(bt, s)
+        P(at, t)
+        r = set(GraphObjectQuerier((at, bt), g, parallel=False)())
+        self.assertSetEqual(set([(3, 1)]), r)
+
+    def test_query_multiple2(self):
+        a = G(3)
+        b = G(1)
+        c = G(2)
+        d = G(7)
+
+        g = Graph()
+        P(a, b, g)
+        P(b, c, g)
+
+        P(a, d, g)
+        P(d, c, g)
+
+        at = G(v='at')
+        bt = G(v='bt')
+        s = G(2)
+
+        P(at, bt)
+        P(bt, s)
+
+        r = set(GraphObjectQuerier((at, bt), g, parallel=False)())
+        self.assertSetEqual(set([(3, 1), (3, 7)]), r)
+
+    def test_query_multiple3(self):
+        e = G(4)
+        a = G(3)
+        b = G(1)
+        c = G(2)
+        d = G(7)
+
+        g = Graph()
+        P(e, b, g)
+        P(b, c, g)
+
+        Q(a, d, g)
+        Q(d, c, g)
+
+        at = G(v='at')
+        bt = G(v='bt')
+        s = G(2)
+
+        P(at, bt)
+        P(bt, s)
+
+        r = set(GraphObjectQuerier((at, bt), g, parallel=False)())
+        self.assertSetEqual(set([(4, 1)]), r)
+
+    def test_query_multiple4(self):
+        a = G(3)
+        b = G(1)
+        c = G(2)
+        d = G(7)
+
+        g = Graph()
+        P(a, b, g)
+        P(b, c, g)
+
+        Q(a, d, g)
+        P(d, c, g)
+
+        at = G(v='at')
+        bt = G(v='bt')
+        s = G(2)
+
+        P(at, bt)
+        P(bt, s)
+
+        r = set(GraphObjectQuerier((at, bt), g, parallel=False)())
+        self.assertSetEqual(set([(3, 1), (3, 7)]), r)
 
     def test_query_defined_and_in_graph_returns_self(self):
         a = G(3)
@@ -159,7 +507,7 @@ class GraphObjectQuerierTest(unittest.TestCase):
 
         at = G(3)
         r = list(GraphObjectQuerier(at, g, parallel=False)())
-        self.assertListEqual([at], r)
+        self.assertListEqual([3], r)
 
     def test_query_defined_validates(self):
         """

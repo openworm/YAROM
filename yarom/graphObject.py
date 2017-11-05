@@ -1,6 +1,8 @@
+from __future__ import print_function
+import rdflib
 import logging
-from itertools import chain
-from pprint import pformat
+from itertools import chain, product, islice
+from pprint import pformat, pprint
 from .rangedObjects import InRange
 import threading
 
@@ -21,7 +23,8 @@ EMPTY_SET = frozenset([])
 
 
 class Variable(int):
-    pass
+    def __repr__(self):
+        return 'Variable(' + super(Variable, self).__repr__() + ')'
 
 
 class _Range(InRange):
@@ -188,48 +191,43 @@ class GraphObjectQuerier(object):
             self.graph_iter = graph
 
         self.parallel = parallel
-        self.results = dict()
-        self.triples_cache = dict()
 
     def do_query(self):
-        if self.query_object.defined:
-            gv = GraphObjectChecker(self.query_object, self.graph)
-            if gv():
-                return set([self.query_object])
-            else:
-                return EMPTY_SET
+        # if self.query_object.defined:
+            # gv = GraphObjectChecker(self.query_object, self.graph)
+            # if gv():
+                # return set([self.query_object.idl])
+            # else:
+                # return EMPTY_SET
 
         qp = _QueryPreparer(self.query_object)
         paths = qp()
         if len(paths) == 0:
             return EMPTY_SET
-        h = self.merge_paths(paths)
+        h = qp.merge_paths(paths)
         L.debug('do_query: merge_paths_result: {}'.format(pformat(h)))
-        return self.query_path_resolver(h)
+        return ((m[0], self.query_path_resolver(m[1])) for m in h)
 
-    def merge_paths(self, l):
-        """ Combines a list of lists into a multi-level table with
-        the elements of the lists as the keys. For given::
-
-            [[a, b, c], [a, b, d], [a, e, d]]
-
-        merge_paths returns::
-
-            {a: {b: {c: {},
-                     d: {}},
-                 e: {d: {}}}}
-        """
+    def foom(self, sm):
         res = dict()
-        L.debug("merge_paths: {}".format(l))
-        for x in l:
-            if len(x) > 0:
-                tmp = res.get(x[0], [])
-                tmp.append(x[1:])
-                res[x[0]] = tmp
+        for x in sm:
+            if x[0][0] not in res:
+                res[x[0][0]] = set([x])
+            else:
+                res[x[0][0]].add(x)
+        return res
 
-        for x in res:
-            res[x] = self.merge_paths(res[x])
+    def defoom(self, m):
+        res = set()
+        for x in m.values():
+            res |= x
+        return res
 
+    def keyint(self, f, t):
+        res = dict()
+        keys = f.viewkeys() & t.viewkeys()
+        for z in keys:
+            res[z] = t[z] | f[z]
         return res
 
     def query_path_resolver(self, path_table):
@@ -267,18 +265,18 @@ class GraphObjectQuerier(object):
 
         if len(join_args) > 0:
             L.debug("Joining {} args on {}".format(len(join_args), goal))
-            res = set(join_args[0])
+            print(list((m[0][0].toPython() if isinstance(m[0][0], rdflib.term.Literal)
+                                     else m[0][0].n3()
+                        for m in islice(join_args[0], 5))))
+            res = self.foom(join_args[0])
             for x in join_args[1:]:
-                #res.intersection_update(x)
-                lres = res
-                res = set([])
-                for z in x:
-                    if z in lres:
-                        res.add(z)
+                res = self.keyint(res, self.foom(x))
+            res = self.defoom(res)
             L.debug("Joined {} args on {}".format(len(join_args), goal))
-            return res
         else:
-            return EMPTY_SET
+            res = EMPTY_SET
+
+        return res
 
     def _qpr_helper(self, sub, search_triple, join_args, cv, graph):
         seen = set()
@@ -286,18 +284,28 @@ class GraphObjectQuerier(object):
             idx = search_triple.index(None)
             other_idx = 0 if (idx == 2) else 2
 
+            sub_results = None
             if isinstance(search_triple[other_idx], Variable):
-                sub_results = list(self.query_path_resolver(sub))
-
+                sub_results = self.query_path_resolver(sub)
+                foomed_subs = self.foom(sub_results)
+                sub_terms = list(foomed_subs.keys())
                 if idx == 2:
-                    qx = (sub_results, search_triple[1], None)
+                    qx = (sub_terms, search_triple[1], None)
                 else:
-                    qx = (None, search_triple[1], sub_results)
+                    qx = (None, search_triple[1], sub_terms)
 
                 trips = self.triples_choices(qx)
             else:
                 trips = self.triples(search_triple[:-1])
-            seen = set(y[idx] for y in trips)
+            seen = set(((y[idx], y[1], y[other_idx], search_triple[3]),) for y in trips)
+
+            if sub_results is not None:
+                noo = set([])
+                for x in seen:
+                    fses = foomed_subs[x[0][2]]
+                    for fs in fses:
+                        noo.add(x + fs)
+                seen = noo
             L.debug("Done with {} {}".format(search_triple, len(seen)))
         finally:
             if cv:
@@ -328,8 +336,24 @@ class GraphObjectQuerier(object):
 
     def __call__(self):
         res = self.do_query()
-        L.debug('GOQ: results:{}'.format(str(pformat(self.results))))
-        return res
+        if not isinstance(self.query_object, tuple):
+            idxen = {self.query_object: 0}
+        else:
+            idxen = {p: i for i, p in enumerate(self.query_object)}
+
+        accbindings = []
+        for var, paths in res:
+            bindings = tuple(set([]) for __ in range(len(idxen)))
+            for p in paths:
+                for ent in p:
+                    if ent[3] in idxen:
+                        these_binds = bindings[idxen[ent[3]]]
+                        these_binds.add(ent[0])
+            accbindings.append(bindings)
+        if not isinstance(self.query_object, tuple):
+            return accbindings[0][0]
+        else:
+            return chain(*(product(*b) for b in accbindings))
 
 
 class ComponentTripler(object):
@@ -410,14 +434,46 @@ class _QueryPathElement(tuple):
 class _QueryPreparer(object):
 
     def __init__(self, start):
-        self.seen = list()
-        self.stack = list()
-        self.paths = list()
         self.start = start
+        self.reset()
         self.variables = dict()
         self.vcount = 0
         # TODO: Refactor. The return values are not actually
         # used for anything
+
+    def reset(self):
+        self.seen = list()
+        self.stack = list()
+        self.paths = list()
+
+    def merge_paths(self, l):
+        """ Combines a list of lists into a multi-level table with
+        the elements of the lists as the keys. For given::
+
+            [[a, b, c], [a, b, d], [a, e, d]]
+
+        merge_paths returns::
+
+            {a: {b: {c: {},
+                     d: {}},
+                 e: {d: {}}}}
+        """
+        L.debug("merge_paths: {}".format(l))
+        res = [(m[0], self._merge_paths_helper(m[1]))
+               for m in l]
+        return res
+
+    def _merge_paths_helper(self, l):
+        res = dict()
+        for x in l:
+            if len(x) > 0:
+                tmp = res.get(x[0], [])
+                tmp.append(x[1:])
+                res[x[0]] = tmp
+
+        for x in res:
+            res[x] = self._merge_paths_helper(res[x])
+        return res
 
     def gather_paths_along_properties(
             self,
@@ -501,10 +557,17 @@ class _QueryPreparer(object):
             return (owner_parts[0] or owned_parts[0], ret)
 
     def __call__(self):
-        x = self.prepare(self.start)
-        L.debug("self.prepare() result:" + str(x))
-        L.debug("_QueryPreparer paths:" + str(pformat(self.paths)))
-        return self.paths
+        res = []
+        start = self.start
+        if not isinstance(start, tuple):
+            start = (start,)
+        for s in start:
+            x = self.prepare(s)
+            L.debug("self.prepare() result:" + str(x))
+            L.debug("_QueryPreparer paths:" + str(pformat(self.paths)))
+            res.append((s, self.paths))
+            self.reset()
+        return res
 
 
 class DescendantTripler(object):
