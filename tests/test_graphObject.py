@@ -157,6 +157,10 @@ class Q(P):
     link = '>>'
 
 
+class Z(P):
+    link = '~>'
+
+
 class QueryPreparerTest(unittest.TestCase):
 
     def test_single1(self):
@@ -314,6 +318,57 @@ class QueryPreparerTest(unittest.TestCase):
                                           [(None, '->', 2, G(v='d'))]])],
                              qp())
 
+    def test_shared_path1(self):
+        goal = G(1)
+        a = G(v='a')
+        b = G(v='b')
+        c = G(v='c')
+        P(a, b)
+        P(a, c)
+        P(c, b)
+        P(b, goal)
+        qp = _QueryPreparer(a)
+        self.assertListEqual(
+            [(G(v='a'),
+              [[(None, '->', Variable(0),
+                 G(v='a')),
+                (None, '->', 1, G(v='b'))],
+               [(None, '->', Variable(2),
+                 G(v='a')),
+                (None, '->', Variable(0),
+                 G(v='c')),
+                (None, '->', 1, G(v='b'))]])],
+            qp())
+
+    def test_shared_path2(self):
+        goal = G(1)
+        a = G(v='a')
+        b = G(v='b')
+        c = G(v='c')
+        d = G(v='d')
+        P(a, b)
+        P(a, c)
+        P(c, b)
+        P(b, d)
+        P(d, goal)
+        qp = _QueryPreparer(a)
+        print(qp())
+        self.assertListEqual(
+            [(G(v='a'),
+              [[(None, '->', Variable(0),
+                 G(v='a')),
+                (None, '->', Variable(3),
+                 G(v='b')),
+                (None, '->', 1, G(v='d'))],
+               [(None, '->', Variable(2),
+                 G(v='a')),
+                (None, '->', Variable(0),
+                 G(v='c')),
+                (None, '->', Variable(3),
+                 G(v='b')),
+                (None, '->', 1, G(v='d'))]])],
+            qp())
+
 
 class GraphObjectQuerierTest(unittest.TestCase):
 
@@ -403,6 +458,70 @@ class GraphObjectQuerierTest(unittest.TestCase):
         r = set(GraphObjectQuerier(at, g, parallel=False)())
         self.assertSetEqual(set([1]), r)
 
+    def test_query_single4(self):
+        a = G(1)
+        b = G(2)
+        c = G(3)
+
+        d = G(4)
+        e = G(5)
+
+        f = G(6)
+        g = Graph()
+        P(a, b, g)
+        P(b, c, g)
+
+        P(d, e, g)
+        P(e, c, g)
+
+        P(d, f, g)
+        P(f, e, g)
+
+        at = G(v='a')
+        bt = G(v='b')
+        ct = G(v='c')
+        goal = G(3)
+
+        P(at, bt)
+        P(bt, goal)
+        P(at, ct)
+        P(ct, bt)
+
+        r = set(GraphObjectQuerier(at, g, parallel=False)())
+        self.assertSetEqual(set([4]), r)
+
+    def test_query_single5(self):
+        a = G(1)
+        b = G(2)
+        c = G(3)
+
+        d = G(4)
+        e = G(5)
+
+        f = G(6)
+        g = Graph()
+        P(a, b, g)
+        P(b, c, g)
+
+        P(d, e, g)
+        P(e, c, g)
+
+        P(d, f, g)
+        P(f, e, g)
+
+        at = G(v='a')
+        bt = G(v='b')
+        ct = G(v='c')
+        goal = G(1)
+
+        P(at, bt)
+        P(bt, goal)
+        P(at, ct)
+        P(ct, bt)
+
+        r = set(GraphObjectQuerier(at, g, parallel=False)())
+        self.assertSetEqual(set([]), r)
+
     def test_query_multiple1(self):
         a = G(3)
         b = G(1)
@@ -447,6 +566,26 @@ class GraphObjectQuerierTest(unittest.TestCase):
 
         r = set(GraphObjectQuerier((at, bt), g, parallel=False)())
         self.assertSetEqual(set([(3, 1), (3, 7)]), r)
+
+    def test_query_multiple5(self):
+        g = Graph()
+        conn = G(1)
+        conn_type = G(2)
+        syntype = G(3)
+        number = G(4)
+        P(conn, conn_type, g)
+        Q(conn, syntype, g)
+        Z(conn, number, g)
+
+        conn = G(v='conn')
+        syntype = G(v='syntype')
+        number = G(v='number')
+        P(conn, conn_type)
+        Q(conn, syntype)
+        Z(conn, number)
+
+        r = set(GraphObjectQuerier((syntype, number), g, parallel=False)())
+        self.assertSetEqual(set([(3, 4)]), r)
 
     def test_query_multiple3(self):
         e = G(4)

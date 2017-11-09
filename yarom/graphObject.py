@@ -1,8 +1,7 @@
 from __future__ import print_function
-import rdflib
 import logging
-from itertools import chain, product, islice
-from pprint import pformat, pprint
+from itertools import chain, product
+from pprint import pformat
 from .rangedObjects import InRange
 import threading
 
@@ -206,6 +205,7 @@ class GraphObjectQuerier(object):
             return EMPTY_SET
         h = qp.merge_paths(paths)
         L.debug('do_query: merge_paths_result: {}'.format(pformat(h)))
+        print('do_query: merge_paths_result: {}'.format(pformat(h)))
         return ((m[0], self.query_path_resolver(m[1])) for m in h)
 
     def foom(self, sm):
@@ -264,10 +264,8 @@ class GraphObjectQuerier(object):
                     cv.wait()
 
         if len(join_args) > 0:
-            L.debug("Joining {} args on {}".format(len(join_args), goal))
-            print(list((m[0][0].toPython() if isinstance(m[0][0], rdflib.term.Literal)
-                                     else m[0][0].n3()
-                        for m in islice(join_args[0], 5))))
+            L.debug("Joining {} args on {}".format(join_args, goal))
+
             res = self.foom(join_args[0])
             for x in join_args[1:]:
                 res = self.keyint(res, self.foom(x))
@@ -289,22 +287,25 @@ class GraphObjectQuerier(object):
                 sub_results = self.query_path_resolver(sub)
                 foomed_subs = self.foom(sub_results)
                 sub_terms = list(foomed_subs.keys())
-                if idx == 2:
-                    qx = (sub_terms, search_triple[1], None)
+                if sub_terms:
+                    if idx == 2:
+                        qx = (sub_terms, search_triple[1], None)
+                    else:
+                        qx = (None, search_triple[1], sub_terms)
+                    trips = self.triples_choices(qx)
                 else:
-                    qx = (None, search_triple[1], sub_terms)
-
-                trips = self.triples_choices(qx)
+                    trips = set([])
             else:
                 trips = self.triples(search_triple[:-1])
-            seen = set(((y[idx], y[1], y[other_idx], search_triple[3]),) for y in trips)
+            seen = set(((y[idx], y[1], y[other_idx], search_triple[3], idx), ()) for y in trips)
+            print('search', search_triple, 'seen', seen)
 
-            if sub_results is not None:
+            if sub_results:
                 noo = set([])
                 for x in seen:
                     fses = foomed_subs[x[0][2]]
                     for fs in fses:
-                        noo.add(x + fs)
+                        noo.add((x[0], fs))
                 seen = noo
             L.debug("Done with {} {}".format(search_triple, len(seen)))
         finally:
@@ -342,18 +343,25 @@ class GraphObjectQuerier(object):
             idxen = {p: i for i, p in enumerate(self.query_object)}
 
         accbindings = []
+        bindings = tuple(set([]) for __ in range(len(idxen)))
         for var, paths in res:
-            bindings = tuple(set([]) for __ in range(len(idxen)))
+            L.debug("gen bindings for {} from {}".format(var, paths))
+            print('var', var)
             for p in paths:
-                for ent in p:
+                print('path', p)
+                while len(p) > 0:
+                    ent = p[0]
                     if ent[3] in idxen:
+                        L.debug('ent[3]={} in idxen={}'.format(ent[3], idxen))
                         these_binds = bindings[idxen[ent[3]]]
                         these_binds.add(ent[0])
-            accbindings.append(bindings)
+                        L.debug('these_binds {}'.format(these_binds))
+                    p = p[1]
+        L.debug('accbindings {}'.format(accbindings))
         if not isinstance(self.query_object, tuple):
-            return accbindings[0][0]
+            return bindings[0]
         else:
-            return chain(*(product(*b) for b in accbindings))
+            return product(*bindings)
 
 
 class ComponentTripler(object):
@@ -529,12 +537,14 @@ class _QueryPreparer(object):
 
     def prepare(self, current_node):
         L.debug("prepare: current_node %s", repr(current_node))
+        print(' ' * len(self.stack), 'prepare: current_node %s' % repr(current_node))
         if current_node.defined or isinstance(current_node, InRange):
             if len(self.stack) > 0:
                 self.paths.append(list(self.stack))
             return True, _QueryPathElement()
         else:
             if current_node in self.seen:
+                print(' ' * len(self.stack), 'prepare: %s seen' % repr(current_node))
                 return False, _QueryPathElement()
             else:
                 self.seen.append(current_node)
