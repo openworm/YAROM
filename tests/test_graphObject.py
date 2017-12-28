@@ -268,7 +268,8 @@ class GraphObjectQuerierRangeQueryTest(unittest.TestCase):
 
         at = G()
         P(at, LessThan(rdflib.Literal(5)))
-        self.assertRaises(Exception, lambda: GraphObjectQuerier(at, g, parallel=False)())
+        self.assertRaises(Exception,
+                          lambda: GraphObjectQuerier(at, g, parallel=False)())
 
     def test_query_undefined_range(self):
         at = G()

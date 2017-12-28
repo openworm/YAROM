@@ -44,27 +44,8 @@ Classes
 
 
 import logging
-import rdflib
-from .configure import (Configuration, Configureable, ConfigValue, BadConf)
-from .data import (
-    Data,
-    SPARQLSource,
-    DefaultSource,
-    TrixSource,
-    SerializationSource)
 
-from .dataUser import DataUser
 from .mapper import Mapper
-from .mappedClass import MappedClass
-from .quantity import Quantity
-from .yProperty import Property
-from .rdfUtils import (
-    print_graph,
-    serialize_rdflib_term,
-    triples_to_bgp,
-    deserialize_rdflib_term)
-
-import sys
 
 __version__ = "0.10.0"
 __author__ = 'Mark Watts'
@@ -79,27 +60,12 @@ DEFAULT_MODULES_TO_LOAD = ["yarom.dataObject",
                            "yarom.relationship",
                            "yarom.classRegistry"]
 
-__all__ = ['ConfigValue',
-           'BadConf',
-           'Configuration',
-           'Data',
-           'SPARQLSource',
-           'DefaultSource',
-           'DataUser',
-           'MappedClass',
-           'Quantity',
-           'Property',
-           'triples_to_bgp',
-           'print_graph',
-           'serialize_rdflib_term',
-           'deserialize_rdflib_term',
-           'setConf',
+__all__ = ['setConf',
            'config',
            'loadConfig',
            'loadData',
            'connect',
-           'disconnect',
-           'mapper']
+           'disconnect']
 
 
 MAPPER = None
@@ -125,6 +91,7 @@ def yarom_dependency(mname):
 
 
 def config(key=None, value=None):
+    from .configure import Configureable
     if key is None:
         return Configureable.conf
     elif value is None:
@@ -135,12 +102,15 @@ def config(key=None, value=None):
 
 def loadConfig(f):
     """ Load configuration for the module """
+    from .configure import Configureable
+    from .data import Data
     Configureable.setConf(Data.open(f))
     return Configureable.conf
 
 
 def disconnect(c=False):
     """ Close the database """
+    from .configure import Configureable
     global MAPPER
     m = this_module
     if not m.connected:
@@ -158,6 +128,7 @@ def disconnect(c=False):
 
 
 def loadData(data, dataFormat):
+    import rdflib
     if isinstance(data, str):
         config('rdf.graph').parse(data, format=dataFormat)
     elif isinstance(data, rdflib.ConjunctiveGraph):
@@ -188,6 +159,11 @@ def connect(conf=False,
         The formats available are those accepted by RDFLib's serializer
         plugins. 'n3' is the default.
     """
+    from .configure import Configureable
+    from .data import (
+        SPARQLSource,
+        TrixSource,
+        SerializationSource)
     import atexit
     global MAPPER
     if MAPPER is None:
@@ -246,6 +222,8 @@ def setConf(conf):
         your current directory as the configuration. Failing that, an 'empty'
         config with default values will be loaded.
     """
+    from .configure import Configuration, Configureable
+    from .data import Data
     if conf:
         if isinstance(conf, Data):
             Configureable.setConf(conf)

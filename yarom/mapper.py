@@ -1,18 +1,14 @@
 from __future__ import print_function
-import sys
 import importlib as IM
 import logging
 import rdflib as R
 import yarom
-from itertools import count, chain
+from itertools import count
 from .rdfTypeResolver import RDFTypeResolver
-from six.moves import reload_module
 from six import with_metaclass
 from .mapperUtils import parents_str
 from pprint import pformat
 
-import traceback
-import sys
 
 __all__ = ["Mapper",
            "FCN",
@@ -20,8 +16,9 @@ __all__ = ["Mapper",
 
 L = logging.getLogger(__name__)
 
+
 def FCN(cls):
-    return cls.__module__ + '.' + cls.__name__
+    return str(cls.__module__) + '.' + str(cls.__name__)
 
 
 class UnmappedClassException(Exception):
@@ -31,8 +28,6 @@ class UnmappedClassException(Exception):
 class MapperMeta(type):
     def __call__(self, *args, **kwargs):
         x = super(MapperMeta, self).__call__(*args, **kwargs)
-        for m in x.base_modules:
-            x.load_module(m)
         return x
 
 
@@ -278,6 +273,23 @@ class Mapper(with_metaclass(MapperMeta, object)):
 
     def load_module(self, module_name):
         """ Loads the module. """
+        module = self.lookup_module(module_name)
+        if not module:
+            module = IM.import_module(module_name)
+            return self.process_module(module)
+        else:
+            return module
+
+    def process_module(self, module=None, cb=None, module_name=None):
+        if module is None:
+            if cb is None:
+                raise ValueError("At least one of cb or module argument must"
+                                 " be provided")
+            if module_name is None:
+                raise ValueError("At least one of module argument or"
+                                 " module_name must be provided")
+        if module_name is None:
+            module_name = module.__name__
         L.debug("%sLOADING %s",
                 ' ' * self.mapdepth,
                 module_name)
@@ -289,19 +301,21 @@ class Mapper(with_metaclass(MapperMeta, object)):
         previously_loading = self.loading_module
         self.loading_module = module_name
 
-        a = self.lookup_module(module_name)
-        if not a:
-            a = IM.import_module(module_name)
-            self.modules[module_name] = a
-            cs = self._module_load_helper(a)
-            for c in cs:
-                if hasattr(c, 'after_mapper_module_load'):
-                    c.after_mapper_module_load(self)
+        if cb is not None:
+            x = cb()
+            if module is None:
+                module = x
+
+        self.modules[module_name] = module
+        cs = self._module_load_helper(module)
+        for c in cs:
+            if hasattr(c, 'after_mapper_module_load'):
+                c.after_mapper_module_load(self)
 
         self.loading_module = previously_loading
         self.mapdepth -= 1
         yarom.MAPPER = old_mapper
-        return a
+        return module
 
     def lookup_module(self, module_name):
         m = self.modules.get(module_name, None)
@@ -355,7 +369,8 @@ class Mapper(with_metaclass(MapperMeta, object)):
             if full_class_name in self.base_class_names:
                 L.debug('Setting base class %s', full_class_name)
                 self.base_classes[full_class_name] = cls
-
+            if cls.__name__.endswith('Cell'):
+                L.debug('_module_load_helper: cls={}'.format(cls))
             if isinstance(cls, type) and \
                     FCN(cls) == full_class_name and \
                     issubclass(cls, self._merged_base_classes()):
@@ -448,7 +463,8 @@ class Mapper(with_metaclass(MapperMeta, object)):
                 if c:
                     break
         else:
-            L.debug('%s.lookup_class("%s") %s@%s', repr(self), cname, c, hex(id(c)))
+            L.debug('%s.lookup_class("%s") %s@%s',
+                    repr(self), cname, c, hex(id(c)))
         return c
 
     def mapped_classes(self):
