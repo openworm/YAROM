@@ -3,18 +3,17 @@
 import unittest
 
 import yarom
-from yarom import (
-    yarom_import,
-    Configuration,
-    ConfigValue,
-    Data,
-    Configureable,
-    DataUser,
-    BadConf,
-    Property,
-    Quantity)
+from yarom.configure import (Configuration,
+                             ConfigValue,
+                             Configureable,
+                             BadConf)
+from yarom.data import Data
+from yarom.dataUser import DataUser
+from yarom.simpleProperty import Property
+from yarom.quantity import Quantity
 
-import yarom as Y
+from yarom import yarom_import
+
 import rdflib
 import rdflib as R
 import pint as Q
@@ -122,7 +121,7 @@ class DataObjectTest(_DataTest):
 
     def test_DataUser(self):
         do = self.DataObject()
-        self.assertTrue(isinstance(do, yarom.DataUser))
+        self.assertTrue(isinstance(do, DataUser))
 
     def test_identifier(self):
         """ Test that we can set and return an identifier """

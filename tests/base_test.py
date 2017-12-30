@@ -1,5 +1,7 @@
-from yarom import (Configuration, connect, disconnect)
+from yarom import connect, disconnect
 from yarom import config as C
+from yarom.configure import Configuration
+
 import rdflib
 import unittest
 import subprocess
