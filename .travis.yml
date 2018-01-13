@@ -21,6 +21,7 @@ matrix:
     - DEPLOY=1
 install: "./.travis.sh"
 script:
-- py.test tests
+- if [ ! "$DEPLOY" ] ; then py.test tests ; fi
+
 after_success:
 - ./.travis.success.sh
