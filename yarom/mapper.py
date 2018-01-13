@@ -93,6 +93,7 @@ class Mapper(with_metaclass(MapperMeta, object)):
         self.imported_mappers = imported
 
         self.loading_module = None
+        self.class_ordering = dict()
 
     def decorate_class(self, cls):
         return cls

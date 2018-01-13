@@ -625,3 +625,7 @@ class RDFSRangeProperty(ObjectProperty):
     owner_type = RDFProperty
     value_type = RDFSClass
     multiple = True
+
+
+__yarom_mapped_classes__ = (DataObject, PropertyDataObject, RDFProperty, RDFSClass,
+                            DataObjectSingleton, TypeDataObject)

@@ -50,3 +50,6 @@ class ObjectCollection(yarom_import('yarom.dataObject.DataObject')):
         self.add = self.member
         self.group_name = self.name
         self.name(group_name)
+
+
+__yarom_mapped_classes__ = (ObjectCollection,)
