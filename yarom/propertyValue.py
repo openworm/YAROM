@@ -15,6 +15,7 @@ class PropertyValue(GraphObject):
     def triples(self, *args, **kwargs):
         return []
 
+    @property
     def identifier(self):
         return self.value
 
@@ -24,7 +25,7 @@ class PropertyValue(GraphObject):
 
     @property
     def idl(self):
-        return self.identifier()
+        return self.identifier
 
     def __hash__(self):
         return hash(self.value)

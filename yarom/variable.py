@@ -7,6 +7,7 @@ class Variable(GraphObject):
         super(Variable, self).__init__()
         self.var = rdflib.Variable(name)
 
+    @property
     def identifier(self):
         raise IdentifierMissingException(self)
 

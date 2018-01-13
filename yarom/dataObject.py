@@ -369,6 +369,7 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
         from six.moves import urllib
         return R.URIRef(cls.rdf_namespace[urllib.parse.quote(string)])
 
+    @property
     def identifier(self):
         """ The identifier for this object in the rdf graph.
 
@@ -624,3 +625,7 @@ class RDFSRangeProperty(ObjectProperty):
     owner_type = RDFProperty
     value_type = RDFSClass
     multiple = True
+
+
+__yarom_mapped_classes__ = (DataObject, PropertyDataObject, RDFProperty, RDFSClass,
+                            DataObjectSingleton, TypeDataObject)

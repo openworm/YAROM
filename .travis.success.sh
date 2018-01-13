@@ -1,6 +1,6 @@
-#!/bin/sh
-echo "$TRAVIS_COMMIT_MESSAGE" | head -n1 | grep '^MINOR:' >/dev/null
-if [ $? -ne 0 ] ; then
-    ./codespeed-submit.sh
-    ./deploy.sh && ./travis-downstream-trigger.sh
+#!/bin/sh -e
+echo "$TRAVIS_COMMIT_MESSAGE" | head -n1 | grep -q '^MINOR:' && exit 0
+./codespeed-submit.sh
+if [ $DEPLOY ] ; then
+    ./check-build-status.sh && ./deploy.sh && ./travis-downstream-trigger.sh
 fi

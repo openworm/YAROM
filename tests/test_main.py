@@ -3,18 +3,17 @@
 import unittest
 
 import yarom
-from yarom import (
-    yarom_import,
-    Configuration,
-    ConfigValue,
-    Data,
-    Configureable,
-    DataUser,
-    BadConf,
-    Property,
-    Quantity)
+from yarom.configure import (Configuration,
+                             ConfigValue,
+                             Configureable,
+                             BadConf)
+from yarom.data import Data
+from yarom.dataUser import DataUser
+from yarom.simpleProperty import Property
+from yarom.quantity import Quantity
 
-import yarom as Y
+from yarom import yarom_import
+
 import rdflib
 import rdflib as R
 import pint as Q
@@ -122,12 +121,12 @@ class DataObjectTest(_DataTest):
 
     def test_DataUser(self):
         do = self.DataObject()
-        self.assertTrue(isinstance(do, yarom.DataUser))
+        self.assertTrue(isinstance(do, DataUser))
 
     def test_identifier(self):
         """ Test that we can set and return an identifier """
         do = self.DataObject(ident="http://example.org")
-        self.assertEqual(do.identifier(), R.URIRef("http://example.org"))
+        self.assertEqual(do.identifier, R.URIRef("http://example.org"))
 
     def test_call_graph_pattern_twice(self):
         """ Be sure that we can call graph pattern on the same object multiple times and not have it die on us """
@@ -173,6 +172,7 @@ class DataObjectTest(_DataTest):
             objectProperties = ['s']
             defined = True
 
+            @property
             def identifier(self):
                 return TEST_NS["soup"]
 
@@ -697,7 +697,7 @@ class SimplePropertyTest(_DataTest):
 
         o = self.k(key='blah')
         bats.set(o)
-        bats.unset(o.identifier())
+        bats.unset(o.identifier)
         self.assertEqual(len(bats.values), 0)
 
     def test_unset_multiple(self):

@@ -198,3 +198,6 @@ class Rel(tuple):
             s=(self.s if self.s.defined else None),
             p=self.p.rdf_object,
             o=(self.o if self.o.defined else None))
+
+
+__yarom_mapped_classes__ = (SimpleProperty, ObjectProperty, DatatypeProperty, UnionProperty)
