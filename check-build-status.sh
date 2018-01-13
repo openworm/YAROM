@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 LAST_CACHE=0
-CACHE_INTERVAL=2
+CACHE_INTERVAL=3
 CACHED_TRAVIS_JOBS=$(mktemp travis-downstream-trigger.XXXXXXXXXX)
 
 get_cached_travis_jobs () {
