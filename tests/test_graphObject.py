@@ -22,6 +22,7 @@ class G(GraphObject):
             self._k = k
             self._v = None
 
+    @property
     def identifier(self):
         return self._k
 
@@ -142,7 +143,7 @@ class P(object):
         y.owner_properties.append(self)
         x.properties.append(self)
         if graph is not None and x.defined and y.defined:
-            graph.add((x.identifier(), P.link, y.identifier()))
+            graph.add((x.identifier, P.link, y.identifier))
 
 
 class GraphObjectQuerierTest(unittest.TestCase):

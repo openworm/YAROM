@@ -126,7 +126,7 @@ class DataObjectTest(_DataTest):
     def test_identifier(self):
         """ Test that we can set and return an identifier """
         do = self.DataObject(ident="http://example.org")
-        self.assertEqual(do.identifier(), R.URIRef("http://example.org"))
+        self.assertEqual(do.identifier, R.URIRef("http://example.org"))
 
     def test_call_graph_pattern_twice(self):
         """ Be sure that we can call graph pattern on the same object multiple times and not have it die on us """
@@ -172,6 +172,7 @@ class DataObjectTest(_DataTest):
             objectProperties = ['s']
             defined = True
 
+            @property
             def identifier(self):
                 return TEST_NS["soup"]
 
@@ -696,7 +697,7 @@ class SimplePropertyTest(_DataTest):
 
         o = self.k(key='blah')
         bats.set(o)
-        bats.unset(o.identifier())
+        bats.unset(o.identifier)
         self.assertEqual(len(bats.values), 0)
 
     def test_unset_multiple(self):

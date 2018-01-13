@@ -126,9 +126,9 @@ class MappedClass(type):
         self.addProperties('datatypeProperties')
         self.addProperties('_')
 
-        if not (hasattr(self, 'base_namespace')
-                and self.base_namespace
-                and isinstance(self.base_namespace, R.namespace.Namespace)):
+        if not (hasattr(self, 'base_namespace') and
+                self.base_namespace and
+                isinstance(self.base_namespace, R.namespace.Namespace)):
             self.base_namespace = mapper.base_namespace
 
         if self.__rdf_type is None:

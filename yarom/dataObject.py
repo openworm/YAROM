@@ -369,6 +369,7 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
         from six.moves import urllib
         return R.URIRef(cls.rdf_namespace[urllib.parse.quote(string)])
 
+    @property
     def identifier(self):
         """ The identifier for this object in the rdf graph.
 

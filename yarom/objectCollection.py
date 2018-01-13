@@ -50,6 +50,3 @@ class ObjectCollection(yarom_import('yarom.dataObject.DataObject')):
         self.add = self.member
         self.group_name = self.name
         self.name(group_name)
-
-    def identifier(self, query=False):
-        return self.make_identifier(self.group_name)

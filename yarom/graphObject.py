@@ -40,6 +40,7 @@ class GraphObject(object):
         self.properties = []
         self.owner_properties = []
 
+    @property
     def identifier(self):
         """ Must return an object representing this object or else
         raise an Exception. """
@@ -63,7 +64,7 @@ class GraphObject(object):
     @property
     def idl(self):
         if self.defined:
-            return self.identifier()
+            return self.identifier
         else:
             return self.variable()
 

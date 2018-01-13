@@ -290,9 +290,8 @@ class Mapper(with_metaclass(MapperMeta, object)):
                                  " module_name must be provided")
         if module_name is None:
             module_name = module.__name__
-        L.debug("%sLOADING %s",
-                ' ' * self.mapdepth,
-                module_name)
+
+        L.debug("%sLOADING %s", ' ' * self.mapdepth, module_name)
         self.mapdepth += 1
         old_mapper = yarom.MAPPER
         yarom.MAPPER = self
@@ -356,28 +355,20 @@ class Mapper(with_metaclass(MapperMeta, object)):
 
     def _module_load_helper(self, module):
         res = []
-        mod_dir = dir(module)
-        types = set(o for o in (getattr(module, nm) for nm in mod_dir)
-                    if isinstance(o, type))
-        bases = set(t for t in types
-                    if module.__name__ + '.' + t.__name__
-                    in self.base_class_names)
-        others = types - bases
-        classes = list(bases) + list(others)
-        for cls in classes:
-            full_class_name = module.__name__ + '.' + cls.__name__
-            if full_class_name in self.base_class_names:
-                L.debug('Setting base class %s', full_class_name)
-                self.base_classes[full_class_name] = cls
-            if cls.__name__.endswith('Cell'):
-                L.debug('_module_load_helper: cls={}'.format(cls))
-            if isinstance(cls, type) and \
-                    FCN(cls) == full_class_name and \
-                    issubclass(cls, self._merged_base_classes()):
-                self.add_class(cls)
-                res.append(cls)
-                if self.base_class_names[0] == full_class_name:
-                    self.resolver = Resolver(self)
+        # TODO: Make this class selector pluggable and decouple the Resolver
+        # init from this -- maybe put it in a callback of some kind
+        if hasattr(module, '__yarom_mapped_classes__'):
+            for cls in module.__yarom_mapped_classes__:
+                full_class_name = module.__name__ + '.' + cls.__name__
+                if full_class_name in self.base_class_names:
+                    L.debug('Setting base class %s', full_class_name)
+                    self.base_classes[full_class_name] = cls
+                if isinstance(cls, type) and \
+                        FCN(cls) == full_class_name:
+                    self.add_class(cls)
+                    res.append(cls)
+                    if self.base_class_names[0] == full_class_name:
+                        self.resolver = Resolver(self)
         return res
 
     def _merged_base_classes(self):
