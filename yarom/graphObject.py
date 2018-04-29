@@ -245,7 +245,7 @@ class GraphObjectQuerier(object):
             L.debug("Executing queries in parallel")
         goal = None
         for hop in path_table:
-            goal = hop[4]
+            goal = hop[3]
             if hasattr(self, 'graph'):
                 graph = self.graph
             else:
@@ -295,9 +295,9 @@ class GraphObjectQuerier(object):
                 else:
                     qx = (None, search_triple[1], sub_results)
 
-                trips = self.triples_choices(qx, context=search_triple[3])
+                trips = self.triples_choices(qx)
             else:
-                trips = self.triples(search_triple[:3], context=search_triple[3])
+                trips = self.triples(search_triple[:3])
             seen = set(y[idx] for y in trips)
             L.debug("Done with {} {}".format(search_triple, len(seen)))
         finally:
@@ -308,23 +308,23 @@ class GraphObjectQuerier(object):
             else:
                 join_args.append(seen)
 
-    def triples_choices(self, query_triple, context=None):
-        return self.graph.triples_choices(query_triple, context=context)
+    def triples_choices(self, query_triple):
+        return self.graph.triples_choices(query_triple)
 
-    def triples(self, query_triple, context=None):
+    def triples(self, query_triple):
         if isinstance(query_triple[2], _Range):
             in_range = query_triple[2]
             if in_range.defined:
                 if getattr(self.graph, 'supports_range_queries', False):
-                    return self.graph.triples(query_triple, context=context)
+                    return self.graph.triples(query_triple)
                 else:
                     qt = (query_triple[0], query_triple[1], None)
-                    return set(x for x in self.graph.triples(qt, context=context) if in_range(x[2]))
+                    return set(x for x in self.graph.triples(qt) if in_range(x[2]))
             else:
                 qt = (query_triple[0], query_triple[1], None)
-                return self.graph.triples(qt, context=context)
+                return self.graph.triples(qt)
         else:
-            return self.graph.triples(query_triple, context=context)
+            return self.graph.triples(query_triple)
 
     def __call__(self):
         res = self.do_query()
@@ -442,15 +442,12 @@ class _QueryPreparer(object):
                 elif not other.defined:
                     other_id = self.var(other_id)
 
-                ctx = getattr(getattr(this_property, 'context', None),
-                              'identifier',
-                              None)
                 if direction is UP:
                     self.stack.append((other_id, this_property.link, None,
-                                      ctx, current_node))
+                                      current_node))
                 else:
                     self.stack.append((None, this_property.link, other_id,
-                                      ctx, current_node))
+                                      current_node))
                 L.debug("gpap: preparing %s from %s", other, this_property)
                 subpath = self.prepare(other)
 

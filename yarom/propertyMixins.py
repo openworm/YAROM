@@ -18,14 +18,14 @@ class DatatypePropertyMixin(object):
             Resolves RDF identifiers returned from :meth:`get` into objects
         """
         super(DatatypePropertyMixin, self).__init__(**kwargs)
-        self._resolver = resolver
+        self.resolver = resolver
 
     def set(self, v):
         return super(DatatypePropertyMixin, self).set(v)
 
     def get(self):
         for val in super(DatatypePropertyMixin, self).get():
-            yield self._resolver.deserializer(val)
+            yield self.resolver.deserializer(val)
 
 
 class ObjectPropertyMixin(object):
@@ -38,7 +38,7 @@ class ObjectPropertyMixin(object):
             Resolves RDF identifiers returned from :meth:`get` into objects
         """
         super(ObjectPropertyMixin, self).__init__(**kwargs)
-        self._resolver = resolver
+        self.resolver = resolver
 
     def set(self, v):
         from .graphObject import GraphObject
@@ -70,8 +70,8 @@ class ObjectPropertyMixin(object):
                        ' property. Retrieved values will be created as ' +
                        str(self.value_rdf_type))
 
-            the_type = self._resolver.type_resolver(types)
-            yield self._resolver.id2ob(ident, the_type)
+            the_type = self.resolver.type_resolver(types)
+            yield self.resolver.id2ob(ident, the_type)
 
 
 class UnionPropertyMixin(object):
@@ -86,7 +86,7 @@ class UnionPropertyMixin(object):
             Resolves RDF identifiers into objects returned from :meth:`get`
         """
         super(UnionPropertyMixin, self).__init__(**kwargs)
-        self._resolver = resolver
+        self.resolver = resolver
 
     def set(self, v):
         return super(UnionPropertyMixin, self).set(v)
@@ -94,7 +94,7 @@ class UnionPropertyMixin(object):
     def get(self):
         for ident in super(UnionPropertyMixin, self).get():
             if isinstance(ident, rdflib.Literal):
-                yield self._resolver.deserializer(ident)
+                yield self.resolver.deserializer(ident)
             elif isinstance(ident, rdflib.BNode):
                 L.warn(
                     'UnionProperty.get: Retrieved BNode, "' +
@@ -106,14 +106,14 @@ class UnionPropertyMixin(object):
                 for rdf_type in rdf.objects(ident, rdflib.RDF['type']):
                     types.add(rdf_type)
                 L.debug("{} <- types, {} <- ident".format(types, ident))
-                the_type = self._resolver.base_type
+                the_type = self.resolver.base_type
                 if len(types) == 0:
                     L.warn(
                         'UnionProperty.get: Retrieved un-typed URI, "' +
                         ident +
                         '", for a DataObject. Creating a default-typed object')
                 else:
-                    the_type = self._resolver.type_resolver(types)
+                    the_type = self.resolver.type_resolver(types)
                     L.debug("the_type = {}".format(the_type))
 
-                yield self._resolver.id2ob(ident, the_type)
+                yield self.resolver.id2ob(ident, the_type)
