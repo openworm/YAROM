@@ -1,4 +1,4 @@
-import rdflib as R
+from rdflib.term import Literal, URIRef
 
 
 def print_graph(g, hide_namespaces=False):
@@ -14,9 +14,9 @@ def serialize_rdflib_term(x, namespace_manager=None):
 
 
 def deserialize_rdflib_term(x):
-    if isinstance(x, R.Literal):
+    if isinstance(x, Literal):
         x = x.toPython()
-        if isinstance(x, R.Literal):
+        if isinstance(x, Literal):
             x = str(x)
     return x
 
@@ -30,9 +30,9 @@ def triples_to_bgp(trips, namespace_manager=None, show_namespaces=False):
         p = ''
         for x in y:
             s = serialize_rdflib_term(x, namespace_manager)
-            if isinstance(x, R.URIRef) and s[0] != '<':
+            if isinstance(x, URIRef) and s[0] != '<':
                 ns.add(s.split(':', 1)[0])
-            elif isinstance(x, R.Literal) and '^^' in s and s[-1] != '>':
+            elif isinstance(x, Literal) and '^^' in s and s[-1] != '>':
                 ns.add(s.split('^^', 1)[1].split(':', 1)[0])
 
             p += s + ' '

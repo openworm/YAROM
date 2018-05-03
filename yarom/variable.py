@@ -25,4 +25,4 @@ class Variable(GraphObject):
         return str(self.var)
 
     def __repr__(self):
-        return "Variable('"+str(self)+"')"
+        return "yarom.variable.Variable('"+str(self.var)+"')"

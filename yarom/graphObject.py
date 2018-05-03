@@ -297,7 +297,7 @@ class GraphObjectQuerier(object):
 
                 trips = self.triples_choices(qx)
             else:
-                trips = self.triples(search_triple[:-1])
+                trips = self.triples(search_triple[:3])
             seen = set(y[idx] for y in trips)
             L.debug("Done with {} {}".format(search_triple, len(seen)))
         finally:
@@ -315,8 +315,7 @@ class GraphObjectQuerier(object):
         if isinstance(query_triple[2], _Range):
             in_range = query_triple[2]
             if in_range.defined:
-                if (hasattr(self.graph, 'supports_range_queries')
-                        and self.graph.supports_range_queries):
+                if getattr(self.graph, 'supports_range_queries', False):
                     return self.graph.triples(query_triple)
                 else:
                     qt = (query_triple[0], query_triple[1], None)
@@ -437,6 +436,7 @@ class _QueryPreparer(object):
 
             for other in others:
                 other_id = other.idl
+
                 if isinstance(other, InRange):
                     other_id = _Range(other.min_value, other.max_value)
                 elif not other.defined:
@@ -444,10 +444,10 @@ class _QueryPreparer(object):
 
                 if direction is UP:
                     self.stack.append((other_id, this_property.link, None,
-                                       current_node))
+                                      current_node))
                 else:
                     self.stack.append((None, this_property.link, other_id,
-                                       current_node))
+                                      current_node))
                 L.debug("gpap: preparing %s from %s", other, this_property)
                 subpath = self.prepare(other)
 

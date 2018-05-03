@@ -292,7 +292,7 @@ class Mapper(with_metaclass(MapperMeta, object)):
         if module_name is None:
             module_name = module.__name__
 
-        L.debug("%sLOADING %s", ' ' * self.mapdepth, module_name)
+        L.log(5, "%sLOADING %s", ' ' * self.mapdepth, module_name)
         self.mapdepth += 1
         old_mapper = yarom.MAPPER
         yarom.MAPPER = self

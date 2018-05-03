@@ -82,6 +82,7 @@ class DataObject(six.with_metaclass(MappedClass, GraphObject, DataUser)):
             "hashlib.new()",
             "directly_configureable": True},
     }
+    base_namespace = R.Namespace("http://openworm.org/entities/")
 
     @classmethod
     def open_set(self):

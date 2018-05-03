@@ -33,11 +33,19 @@ class MappedClass(type):
         if 'rdf_type' in dct:
             self.__rdf_type = dct['rdf_type']
 
+        if self.__rdf_type is None:
+            self.__rdf_type = self.base_namespace[self.__name__]
+
         self.__rdf_namespace = None
         rdf_ns = dct.get('rdf_namespace', None)
         if rdf_ns is not None:
             L.debug("Setting rdf_namespace to {}".format(rdf_ns))
             self.__rdf_namespace = rdf_ns
+
+        if self.__rdf_namespace is None:
+            L.debug("Setting rdf_namespace to {}".format(self.base_namespace[self.__name__]))
+            self.__rdf_namespace = R.Namespace(
+                self.base_namespace[self.__name__] + "/")
 
         self._du = None
         self.dataObjectProperties = []
@@ -125,19 +133,6 @@ class MappedClass(type):
         self.addProperties('objectProperties')
         self.addProperties('datatypeProperties')
         self.addProperties('_')
-
-        if not (hasattr(self, 'base_namespace') and
-                self.base_namespace and
-                isinstance(self.base_namespace, R.namespace.Namespace)):
-            self.base_namespace = mapper.base_namespace
-
-        if self.__rdf_type is None:
-            self.__rdf_type = self.base_namespace[self.__name__]
-
-        if self.__rdf_namespace is None:
-            self.__rdf_namespace = R.Namespace(
-                self.base_namespace[self.__name__] + "/")
-            L.debug("Adding namespace {} to {}".format(self.base_namespace[self.__name__], hex(id(self))))
 
         return self
 
