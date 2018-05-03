@@ -96,13 +96,19 @@ class SimpleProperty(six.with_metaclass(MappedPropertyClass, Property)):
         return results
 
     def unset(self, v):
-        idx = self._v.index(v)
-        if idx >= 0:
-            actual_val = self._v[idx]
-            actual_val.owner_properties.remove(self)
-            self._v.remove(actual_val)
-        else:
+
+        for idx, val in enumerate(self._v):
+            if not hasattr(v, 'idl') and isinstance(val, PropertyValue):
+                deval = self.resolver.deserializer(val.identifier)
+            else:
+                deval = val
+            if deval == v:
+                break
+        else: # no break
             raise Exception("Can't find value {}".format(v))
+        actual_val = self._v[idx]
+        actual_val.owner_properties.remove(self)
+        self._v.remove(actual_val)
 
     def set(self, v):
         if isinstance(v, Rel):

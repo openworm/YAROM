@@ -35,12 +35,12 @@ class PropertyValue(GraphObject):
 
     def __str__(self):
         if six.PY3:
-            return self.value
+            return "PV("+self.value+")"
         else:
-            return self.value.encode('UTF-8')
+            return "PV("+self.value.encode('UTF-8')+")"
 
     def __repr__(self):
-        return repr(self.value)
+        return 'yarom.propertyValue.PropertyValue(' + repr(self.value) + ')'
 
     def __lt__(self, other):
         return self.value < other.value
