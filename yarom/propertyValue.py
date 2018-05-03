@@ -1,10 +1,9 @@
 from rdflib.term import Literal, bind, Identifier, URIRef
 import six
 from .graphObject import GraphObject
-from PyOpenWorm import BASE_SCHEMA_URL
 from json import loads, dumps
 
-bind(URIRef(BASE_SCHEMA_URL + '/datatype/list'), list, constructor=loads, lexicalizer=dumps)
+bind(URIRef('http://markw.cc/yarom/schema/datatype/list'), list, constructor=loads, lexicalizer=dumps)
 
 
 class PropertyValue(GraphObject):
