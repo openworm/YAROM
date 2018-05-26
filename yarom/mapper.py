@@ -103,7 +103,7 @@ class Mapper(with_metaclass(MapperMeta, object)):
         maybe_cls = self._lookup_class(cname)
         if maybe_cls is not None:
             if maybe_cls is cls:
-                return
+                return False
             else:
                 if hasattr(maybe_cls, 'on_mapper_remove_class'):
                     maybe_cls.on_mapper_remove_class(self)
@@ -141,6 +141,7 @@ class Mapper(with_metaclass(MapperMeta, object)):
         # in the Mapper.
         self.RDFTypeTable[cls.rdf_type] = cls
         self.class_ordering = self._compute_class_ordering()
+        return True
 
     def remap(self):
         """ Calls `map` on all of the registered classes """
@@ -307,8 +308,7 @@ class Mapper(with_metaclass(MapperMeta, object)):
                 module = x
 
         self.modules[module_name] = module
-        cs = self._module_load_helper(module)
-        for c in cs:
+        for c in self._module_load_helper(module):
             if hasattr(c, 'after_mapper_module_load'):
                 c.after_mapper_module_load(self)
 
@@ -364,9 +364,7 @@ class Mapper(with_metaclass(MapperMeta, object)):
                 if full_class_name in self.base_class_names:
                     L.debug('Setting base class %s', full_class_name)
                     self.base_classes[full_class_name] = cls
-                if isinstance(cls, type) and \
-                        FCN(cls) == full_class_name:
-                    self.add_class(cls)
+                if isinstance(cls, type) and FCN(cls) == full_class_name and self.add_class(cls):
                     res.append(cls)
                     if self.base_class_names[0] == full_class_name:
                         self.resolver = Resolver(self)
