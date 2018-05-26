@@ -529,6 +529,11 @@ class QuantityTest(unittest.TestCase):
         q = Quantity(23, "milliliter")
         self.assertEqual(q, q_rdf.toPython())
 
+    def test_quantity_to_literal_and_back(self):
+        q = Quantity.parse('22 N')
+        k = rdflib.term.Literal(q)
+        self.assertEqual(q, k.toPython())
+
 
 class DataTest(unittest.TestCase):
 
