@@ -1,7 +1,7 @@
 #!/bin/sh
 
 BRANCH=$(git for-each-ref --format='%(objectname) %(refname:short)' refs/heads | awk "/^$(git rev-parse HEAD)/ {print \$2}"|head -n 1)
-BRANCH=${TRAVIS_BRANCH:-$BRANCH}
+#BRANCH=${TRAVIS_BRANCH:-$BRANCH}
 ENV=travis-ci
 COMMIT=$(git rev-parse HEAD)
 OWCS_USERNAME=travisci-yarom
