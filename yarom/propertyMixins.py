@@ -51,27 +51,32 @@ class ObjectPropertyMixin(object):
 
     def get(self):
         for ident in super(ObjectPropertyMixin, self).get():
-            if not isinstance(ident, rdflib.URIRef):
-                L.warn(
-                    'ObjectProperty.get: Skipping non-URI term, "' +
-                    str(ident) +
-                    '", returned for a DataObject.')
-                continue
+            n = self.id2ob(ident)
+            if n:
+                yield n
 
-            types = set()
-            types.add(self.value_rdf_type)
-            sup = super(ObjectPropertyMixin, self)
-            if hasattr(sup, 'rdf'):
-                for rdf_type in sup.rdf.objects(
-                        ident, rdflib.RDF['type']):
-                    types.add(rdf_type)
-            else:
-                L.warn('ObjectProperty.get: base type is missing an "rdf"'
-                       ' property. Retrieved values will be created as ' +
-                       str(self.value_rdf_type))
+    def id2ob(self, ident):
+        if not isinstance(ident, rdflib.URIRef):
+            L.warn(
+                'ObjectProperty.get: Skipping non-URI term, "' +
+                str(ident) +
+                '", returned for a DataObject.')
+            return None
 
-            the_type = self.resolver.type_resolver(types)
-            yield self.resolver.id2ob(ident, the_type)
+        types = set()
+        types.add(self.value_rdf_type)
+        sup = super(ObjectPropertyMixin, self)
+        if hasattr(sup, 'rdf'):
+            for rdf_type in sup.rdf.objects(
+                    ident, rdflib.RDF['type']):
+                types.add(rdf_type)
+        else:
+            L.warn('ObjectProperty.get: base type is missing an "rdf"'
+                   ' property. Retrieved values will be created as ' +
+                   str(self.value_rdf_type))
+
+        the_type = self.resolver.type_resolver(types)
+        return self.resolver.id2ob(ident, the_type)
 
 
 class UnionPropertyMixin(object):
