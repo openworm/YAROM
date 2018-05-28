@@ -355,19 +355,22 @@ class Mapper(with_metaclass(MapperMeta, object)):
             self.ModuleDependents[module_name] = callers
 
     def _module_load_helper(self, module):
-        res = []
         # TODO: Make this class selector pluggable and decouple the Resolver
         # init from this -- maybe put it in a callback of some kind
-        if hasattr(module, '__yarom_mapped_classes__'):
-            for cls in module.__yarom_mapped_classes__:
-                full_class_name = module.__name__ + '.' + cls.__name__
-                if full_class_name in self.base_class_names:
-                    L.debug('Setting base class %s', full_class_name)
-                    self.base_classes[full_class_name] = cls
-                if isinstance(cls, type) and FCN(cls) == full_class_name and self.add_class(cls):
-                    res.append(cls)
-                    if self.base_class_names[0] == full_class_name:
-                        self.resolver = Resolver(self)
+        return self.handle_mapped_classes(getattr(module, '__yarom_mapped_classes__', ()))
+
+    def handle_mapped_classes(self, classes):
+        res = []
+        for cls in classes:
+            # This previously used the
+            full_class_name = FCN(cls)
+            if full_class_name in self.base_class_names:
+                L.debug('Setting base class %s', full_class_name)
+                self.base_classes[full_class_name] = cls
+            if isinstance(cls, type) and self.add_class(cls):
+                res.append(cls)
+                if self.base_class_names[0] == full_class_name:
+                    self.resolver = Resolver(self)
         return res
 
     def _merged_base_classes(self):
