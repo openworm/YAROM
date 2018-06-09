@@ -40,6 +40,11 @@ class ObjectPropertyMixin(object):
         super(ObjectPropertyMixin, self).__init__(**kwargs)
         self.resolver = resolver
 
+    def set(self, v):
+        if not hasattr(v, 'idl'):
+            raise Exception("An ObjectProperty must have an attribute named 'idl'")
+        return super(ObjectPropertyMixin, self).set(v)
+
     def get(self):
         for ident in super(ObjectPropertyMixin, self).get():
             n = self.id2ob(ident)
