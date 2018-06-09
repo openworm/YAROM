@@ -1,6 +1,5 @@
 from rdflib.term import Literal, bind, Identifier, URIRef
 import six
-from .graphObject import GraphObject
 from .quantity import Quantity
 from json import loads, dumps
 
@@ -14,10 +13,16 @@ bind(URIRef('http://markw.cc/yarom/schema/datatype/quantity'),
      lexicalizer=Quantity.__str__)
 
 
-class PropertyValue(GraphObject):
+class PropertyValue(object):
     """ Holds a literal value for a property """
+
+    # Made to look like a GraphObject, but not subclassing so we can have slots
+
+    __slots__ = ('value', 'properties', 'owner_properties')
+
     def __init__(self, value):
-        super(PropertyValue, self).__init__()
+        self.properties = []
+        self.owner_properties = []
         if not isinstance(value, Identifier):
             self.value = Literal(value)
         else:

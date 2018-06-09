@@ -41,12 +41,8 @@ class ObjectPropertyMixin(object):
         self.resolver = resolver
 
     def set(self, v):
-        from .graphObject import GraphObject
-        if not isinstance(v, GraphObject):
-            raise Exception(
-                "An ObjectProperty only accepts GraphObject"
-                " instances. Got a " + str(type(v)) + " aka " +
-                str(type(v).__bases__))
+        if not hasattr(v, 'idl'):
+            raise Exception("An ObjectProperty must have an attribute named 'idl'")
         return super(ObjectPropertyMixin, self).set(v)
 
     def get(self):
