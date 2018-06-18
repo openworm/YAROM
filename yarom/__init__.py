@@ -21,16 +21,6 @@ and::
 The get() method also allows for parameterizing the query in ways specific to
 the Property.
 
-Notes:
-
-- Of course, when these methods communicate with an external database, they may
-  fail due to the database being unavailable and the user should be notified if
-  a connection cannot be established in a reasonable time. Also, some objects
-  are created by querying the database; these may be made out-of-date in that
-  case.
-
-- ``a : {x_0,...,x_n}`` means ``a`` could have the value of any one of ``x_0`` through ``x_n``
-
 Classes
 -------
 .. automodule:: yarom.dataObject
@@ -47,7 +37,7 @@ import logging
 
 from .mapper import Mapper
 
-__version__ = "0.10.0"
+__version__ = "0.11.0"
 __author__ = 'Mark Watts'
 
 this_module = __import__('yarom')
