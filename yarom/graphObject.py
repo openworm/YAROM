@@ -270,7 +270,6 @@ class GraphObjectQuerier(object):
             L.debug("Joining {} args on {}".format(len(join_args), goal))
             res = set(join_args[0])
             for x in join_args[1:]:
-                #res.intersection_update(x)
                 lres = res
                 res = set([])
                 for z in x:
