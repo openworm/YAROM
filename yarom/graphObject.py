@@ -4,8 +4,6 @@ from itertools import chain
 from pprint import pformat
 from .rangedObjects import InRange
 import threading
-from time import time
-import rdflib
 
 L = logging.getLogger(__name__)
 
@@ -162,7 +160,7 @@ class GraphObjectQuerier(object):
 
     """
 
-    def __init__(self, q, graph, parallel=False):
+    def __init__(self, q, graph, parallel=False, hop_scorer=None):
         """ Initialize the querier.
 
         Call the GraphObjectQuerier object to perform the query.
@@ -183,6 +181,12 @@ class GraphObjectQuerier(object):
                 the graph must have a property ``supports_range_queries``
                 equal to ``True`` and ``triples`` must accept, in any position
                 of the
+        hop_scorer : callable
+            Returns a score for a hop (a four-tuple, (subject, predicate,
+            object, target)) indicating how selective the query would be for
+            that hop, with lower numbers being more selective. In general the
+            score should only take the given hop into account -- it should not
+            take previously given hops into account when calculating a score.
         """
 
         self.query_object = q
@@ -194,6 +198,7 @@ class GraphObjectQuerier(object):
         self.parallel = parallel
         self.results = dict()
         self.triples_cache = dict()
+        self.hop_scorer = hop_scorer
 
     def do_query(self):
         if self.query_object.defined:
@@ -297,11 +302,20 @@ class GraphObjectQuerier(object):
 
                 trips = self.triples_choices(qx)
             else:
-                # XXX: Hack... heuristic to make queries against type act more like filters since they are very
-                # 'un-selective'. This should be communicated through a score passed in from above.
-                if search_triple[1] == rdflib.RDF.type and search_triple[0] is None and len(join_args) > 0:
-                    qx = search_triple[:2] + (list(join_args[0]),)
-                    trips = self.triples_choices(qx)
+                # join_args is assumed to be sorted such that it the most selective query was executed first, so we
+                # should be able to profitably call triples_choices to reduce the size of our branch
+                if join_args:
+                    # We use the last-added join_arg. It should be the smallest at this point
+                    last_join = join_args[-1]
+                    if last_join:
+                        tl = (list(last_join),)
+                        if idx == 2:
+                            qx = search_triple[:2] + tl
+                        else:
+                            qx = tl + search_triple[1:3]
+                        trips = self.triples_choices(qx)
+                    else: # triples_choices treats [] as wildcard, but for us it's a 'match nothing', so...
+                        trips = iter(())
                 else:
                     trips = self.triples(search_triple[:3])
             seen = set(y[idx] for y in trips)
@@ -315,8 +329,8 @@ class GraphObjectQuerier(object):
                 join_args.append(seen)
 
     def score(self, hop):
-        if hop[1] == rdflib.RDF.type:
-            return 1
+        if self.hop_scorer is not None:
+            return self.hop_scorer(hop)
         return 0
 
     def triples_choices(self, query_triple):
