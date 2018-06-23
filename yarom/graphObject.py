@@ -1,8 +1,11 @@
+from __future__ import print_function
 import logging
 from itertools import chain
 from pprint import pformat
 from .rangedObjects import InRange
 import threading
+from time import time
+import rdflib
 
 L = logging.getLogger(__name__)
 
@@ -244,7 +247,7 @@ class GraphObjectQuerier(object):
         if par:
             L.debug("Executing queries in parallel")
         goal = None
-        for hop in path_table:
+        for hop in sorted(path_table.keys(), key=self.score):
             goal = hop[3]
             if hasattr(self, 'graph'):
                 graph = self.graph
@@ -266,15 +269,13 @@ class GraphObjectQuerier(object):
                 while len(join_args) < tcount:
                     cv.wait()
 
-        if len(join_args) > 0:
+        if len(join_args) == 1:
+            return join_args[0]
+        elif len(join_args) > 0:
             L.debug("Joining {} args on {}".format(len(join_args), goal))
-            res = set(join_args[0])
-            for x in join_args[1:]:
-                lres = res
-                res = set([])
-                for z in x:
-                    if z in lres:
-                        res.add(z)
+            join_args = sorted(join_args, key=len)
+            res = join_args[0]
+            res.intersection_update(*join_args[1:])
             L.debug("Joined {} args on {}".format(len(join_args), goal))
             return res
         else:
@@ -296,7 +297,13 @@ class GraphObjectQuerier(object):
 
                 trips = self.triples_choices(qx)
             else:
-                trips = self.triples(search_triple[:3])
+                # XXX: Hack... heuristic to make queries against type act more like filters since they are very
+                # 'un-selective'. This should be communicated through a score passed in from above.
+                if search_triple[1] == rdflib.RDF.type and search_triple[0] is None and len(join_args) > 0:
+                    qx = search_triple[:2] + (list(join_args[0]),)
+                    trips = self.triples_choices(qx)
+                else:
+                    trips = self.triples(search_triple[:3])
             seen = set(y[idx] for y in trips)
             L.debug("Done with {} {}".format(search_triple, len(seen)))
         finally:
@@ -306,6 +313,11 @@ class GraphObjectQuerier(object):
                     cv.notify()
             else:
                 join_args.append(seen)
+
+    def score(self, hop):
+        if hop[1] == rdflib.RDF.type:
+            return 1
+        return 0
 
     def triples_choices(self, query_triple):
         return self.graph.triples_choices(query_triple)
@@ -327,7 +339,8 @@ class GraphObjectQuerier(object):
 
     def __call__(self):
         res = self.do_query()
-        L.debug('GOQ: results:{}'.format(str(pformat(self.results))))
+        if L.isEnabledFor(logging.DEBUG):
+            L.debug('GOQ: results:{}'.format(str(pformat(self.results))))
         return res
 
 
