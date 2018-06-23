@@ -1,3 +1,2 @@
 openworm/PyOpenWorm dev
-openworm/PyOpenWorm mwatts15
-openworm/PyOpenWorm 333-implement-contexts
+openworm/PyOpenWorm query-performance
