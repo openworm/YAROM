@@ -1,9 +1,11 @@
 from __future__ import print_function
+import warnings
 import logging
 from itertools import chain
 from pprint import pformat
 from .rangedObjects import InRange
-import threading
+from .rdfUtils import transitive_subjects, UP, DOWN
+from .go_modifiers import ZeroOrMore
 
 L = logging.getLogger(__name__)
 
@@ -13,11 +15,8 @@ __all__ = [
     "GraphObjectChecker",
     "ComponentTripler",
     "IdentifierMissingException"
-    ]
+]
 
-# Directions for traversal across triples
-UP = 'up'  # left, towards the subject
-DOWN = 'down'  # right, towards the object
 EMPTY_SET = frozenset([])
 
 
@@ -179,8 +178,9 @@ class GraphObjectQuerier(object):
             The ``graph`` method can optionally implement the 'range query'
             'interface':
                 the graph must have a property ``supports_range_queries``
-                equal to ``True`` and ``triples`` must accept, in any position
-                of the
+                equal to ``True`` and ``triples`` must accept an InRange
+                object in the object position of the query triple, but only for
+                literals
         hop_scorer : callable
             Returns a score for a hop (a four-tuple, (subject, predicate,
             object, target)) indicating how selective the query would be for
@@ -190,12 +190,10 @@ class GraphObjectQuerier(object):
         """
 
         self.query_object = q
-        if hasattr(graph, 'triples'):
-            self.graph = graph
-        else:
-            self.graph_iter = graph
+        self.graph = _default_tq_layers(graph)
 
-        self.parallel = parallel
+        if parallel:
+            warnings.warn('Parallel execution is not supported')
         self.results = dict()
         self.triples_cache = dict()
         self.hop_scorer = hop_scorer
@@ -243,36 +241,10 @@ class GraphObjectQuerier(object):
 
     def query_path_resolver(self, path_table):
         join_args = []
-        par = self.parallel and len(path_table) > 1
-        if par:
-            cv = threading.Condition()
-            tcount = 0
-        else:
-            cv = None
-        if par:
-            L.debug("Executing queries in parallel")
         goal = None
         for hop in sorted(path_table.keys(), key=self.score):
             goal = hop[3]
-            if hasattr(self, 'graph'):
-                graph = self.graph
-            else:
-                graph = next(self.graph_iter)
-
-            def f():
-                self._qpr_helper(path_table[hop], hop, join_args, cv, graph)
-
-            if par:
-                t = threading.Thread(target=f)
-                t.start()
-                tcount += 1
-            else:
-                f()
-
-        if par:
-            with cv:
-                while len(join_args) < tcount:
-                    cv.wait()
+            self._qpr_helper(path_table[hop], hop, join_args)
 
         if len(join_args) == 1:
             return join_args[0]
@@ -286,7 +258,7 @@ class GraphObjectQuerier(object):
         else:
             return EMPTY_SET
 
-    def _qpr_helper(self, sub, search_triple, join_args, cv, graph):
+    def _qpr_helper(self, sub, search_triple, join_args):
         seen = set()
         try:
             idx = search_triple.index(None)
@@ -321,12 +293,7 @@ class GraphObjectQuerier(object):
             seen = set(y[idx] for y in trips)
             L.debug("Done with {} {}".format(search_triple, len(seen)))
         finally:
-            if cv:
-                with cv:
-                    join_args.append(seen)
-                    cv.notify()
-            else:
-                join_args.append(seen)
+            join_args.append(seen)
 
     def score(self, hop):
         if self.hop_scorer is not None:
@@ -337,25 +304,111 @@ class GraphObjectQuerier(object):
         return self.graph.triples_choices(query_triple)
 
     def triples(self, query_triple):
-        if isinstance(query_triple[2], _Range):
-            in_range = query_triple[2]
-            if in_range.defined:
-                if getattr(self.graph, 'supports_range_queries', False):
-                    return self.graph.triples(query_triple)
-                else:
-                    qt = (query_triple[0], query_triple[1], None)
-                    return set(x for x in self.graph.triples(qt) if in_range(x[2]))
-            else:
-                qt = (query_triple[0], query_triple[1], None)
-                return self.graph.triples(qt)
-        else:
-            return self.graph.triples(query_triple)
+        return self.graph.triples(query_triple)
 
     def __call__(self):
         res = self.do_query()
         if L.isEnabledFor(logging.DEBUG):
             L.debug('GOQ: results:{}'.format(str(pformat(self.results))))
         return res
+
+
+class TQLayer(object):
+    _NADA = object()
+
+    def __init__(self, nxt=None):
+        self.next = nxt
+
+    def triples(self, qt, context=None):
+        return self.next.triples(qt)
+
+    def triples_choices(self, qt, context=None):
+        return self.next.triples_choices(qt)
+
+    def __contains__(self, x):
+        return x in self.next
+
+    def __getattr__(self, attr):
+        res = getattr(super(TQLayer, self), attr, TQLayer._NADA)
+        if res is TQLayer._NADA:
+            return getattr(self.next, attr)
+
+
+class TerminalTQLayer(object):
+
+    @property
+    def next(self):
+        raise AttributeError(str(type(self)) + ' has no next layer')
+
+    @next.setter
+    def next(self, val):
+        raise AttributeError(str(type(self)) + ' has no next layer')
+
+    def triples(self, qt, context=None):
+        raise NotImplementedError()
+
+    def triples_choices(self, qt, context=None):
+        raise NotImplementedError()
+
+
+class RangeTQLayer(TQLayer):
+
+    def triples(self, query_triple, context=None):
+        if isinstance(query_triple[2], _Range):
+            in_range = query_triple[2]
+            if in_range.defined:
+                if getattr(self.next, 'supports_range_queries', False):
+                    return self.next.triples(query_triple, context)
+                else:
+                    qt = (query_triple[0], query_triple[1], None)
+                    return set(x for x in self.next.triples(qt, context) if in_range(x[2]))
+            else:
+                qt = (query_triple[0], query_triple[1], None)
+                return self.next.triples(qt, context)
+        else:
+            return self.next.triples(query_triple, context)
+
+    def triples_choices(self, query_triple, context=None):
+        if isinstance(query_triple[2], _Range):
+            in_range = query_triple[2]
+            qt = (query_triple[0], query_triple[1], None)
+            if in_range.defined:
+                # XXX: Assuming triples_choices does not also support range
+                # queries.
+                return set(x for x in self.next.triples_choices(qt, context) if in_range(x[2]))
+            else:
+                return self.next.triples_choices(qt, context)
+        else:
+            return self.next.triples_choices(query_triple, context)
+
+
+class ZeroOrMoreTQLayer(TQLayer):
+    def triples(self, query_triple, context=None):
+        for i, x in enumerate(query_triple):
+            if isinstance(x, ZeroOrMore):
+                break
+        else: # no break
+            return self.next.triples(query_triple, context)
+        qx = list(query_triple)
+        qx[i] = [sub for sub in transitive_subjects(self.next,
+                                                    query_triple[i].identifier,
+                                                    query_triple[i].predicate,
+                                                    context,
+                                                    query_triple[i].direction)]
+        return self.next.triples_choices(tuple(qx))
+
+
+_default_tq_layers_list = [
+    ZeroOrMoreTQLayer,
+    RangeTQLayer,
+]
+
+
+def _default_tq_layers(base):
+    res = base
+    for layer in reversed(_default_tq_layers_list):
+        res = layer(res)
+    return res
 
 
 class ComponentTripler(object):

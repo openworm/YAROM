@@ -1,4 +1,8 @@
-from rdflib.term import Literal, URIRef
+from __future__ import print_function
+
+# Directions for traversal across triples
+UP = 'up'
+DOWN = 'down'
 
 
 def print_graph(g, hide_namespaces=False):
@@ -14,6 +18,7 @@ def serialize_rdflib_term(x, namespace_manager=None):
 
 
 def deserialize_rdflib_term(x):
+    from rdflib.term import Literal
     if isinstance(x, Literal):
         x = x.toPython()
         if isinstance(x, Literal):
@@ -22,6 +27,7 @@ def deserialize_rdflib_term(x):
 
 
 def triples_to_bgp(trips, namespace_manager=None, show_namespaces=False):
+    from rdflib.term import Literal, URIRef
     # XXX: Collisions could result between the variable names of different
     # objects
     g = ""
@@ -45,3 +51,33 @@ def triples_to_bgp(trips, namespace_manager=None, show_namespaces=False):
                     if x in ns) + g
 
     return g
+
+
+_none_singleton_set = frozenset([None])
+
+
+def transitive_lookup(graph, start, predicate, context=None, direction=DOWN):
+    res = set()
+    border = set([start])
+    while border:
+        new_border = set()
+        for b in border:
+            if direction is DOWN:
+                qx = (b, predicate, None)
+                idx = 2
+            else:
+                qx = (None, predicate, b)
+                idx = 0
+
+            itr = graph.triples(qx, context=context)
+            for t in itr:
+                o = t[0][idx] if isinstance(t[0], tuple) else t[idx]
+                if o not in res:
+                    new_border.add(o)
+        res |= border
+        border = new_border
+    res -= _none_singleton_set
+    return res
+
+
+transitive_subjects = transitive_lookup

@@ -3,8 +3,11 @@ from logging import getLogger
 from random import random
 from yarom.graphObject import (GraphObject,
                                ComponentTripler,
-                               GraphObjectQuerier)
+                               GraphObjectQuerier,
+                               TQLayer)
+
 from yarom.rangedObjects import InRange, LessThan
+from yarom.rdfUtils import UP
 
 import rdflib
 
@@ -37,7 +40,7 @@ class G(GraphObject):
         return self._k is not None
 
     def __repr__(self):
-        return 'G('+self._k+')' if self._k else 'G()'
+        return 'G(' + repr(self._k) + ')' if self._k else 'G()'
 
 
 class Graph(object):
@@ -99,7 +102,7 @@ class Graph(object):
                         (subject, None, object_)):
                     yield (s1, p1, o1)
 
-    def triples(self, q):
+    def triples(self, q, context=None):
         s = q[0]
         p = q[1]
         o = q[2]
@@ -159,7 +162,7 @@ class GraphObjectQuerierTest(unittest.TestCase):
         P(a, d, g)
 
         at = G(3)
-        r = list(GraphObjectQuerier(at, g, parallel=False)())
+        r = list(GraphObjectQuerier(at, g)())
         self.assertListEqual([at], r)
 
     def test_query_defined_validates(self):
@@ -179,8 +182,81 @@ class GraphObjectQuerierTest(unittest.TestCase):
         kt = G(5)
         P(at, kt)
 
-        r = list(GraphObjectQuerier(at, g, parallel=False)())
+        r = list(GraphObjectQuerier(at, g)())
         self.assertListEqual([], r)
+
+    def test_query_layered(self):
+        a = G(3)
+        b = G(1)
+        c = G(2)
+        d = G(7)
+        g = Graph()
+        P(a, b, g)
+        P(c, d, g)
+        P(a, d, g)
+
+        at = G()
+        kt = G(7)
+        P(at, kt)
+
+        ge = TQLayer(g)
+
+        r = set(GraphObjectQuerier(at, ge)())
+        self.assertEqual(set([2, 3]), r)
+
+    def test_query_zero_or_more_1(self):
+        from yarom.go_modifiers import ZeroOrMore
+        a = G(3)
+        b = G(1)
+        c = G(2)
+        d = G(7)
+        g = Graph()
+        P(a, b, g)
+        P(b, c, g)
+        P(c, d, g)
+
+        at = G()
+        kt = G(ZeroOrMore(1, P.link))
+        P(at, kt)
+
+        r = set(GraphObjectQuerier(at, g)())
+        self.assertEqual(set([3, 1, 2]), r)
+
+    def test_query_zero_or_more_2(self):
+        from yarom.go_modifiers import ZeroOrMore
+        a = G(3)
+        b = G(1)
+        c = G(2)
+        d = G(7)
+        g = Graph()
+        P(a, b, g)
+        P(b, c, g)
+        P(c, d, g)
+
+        at = G()
+        kt = G(ZeroOrMore(2, P.link))
+        P(at, kt)
+
+        r = set(GraphObjectQuerier(at, g)())
+        self.assertEqual(set([1, 2]), r)
+
+    def test_query_zero_or_more_3(self):
+        from yarom.go_modifiers import ZeroOrMore
+        a = G(3)
+        b = G(1)
+        c = G(2)
+        d = G(7)
+        g = Graph()
+        P(a, b, g)
+        P(b, c, g)
+        P(c, d, g)
+
+        at = G()
+        kt = G(ZeroOrMore(2, P.link, direction=UP))
+        P(at, kt)
+
+        r = set(GraphObjectQuerier(at, g)())
+        self.assertEqual(set([1, 3]), r)
 
 
 class GraphObjectQuerierRangeQueryTest(unittest.TestCase):
@@ -210,7 +286,7 @@ class GraphObjectQuerierRangeQueryTest(unittest.TestCase):
         at = G()
         kt = InRange(2, 5)
         P(at, kt)
-        r = set(GraphObjectQuerier(at, self.g, parallel=False)())
+        r = set(GraphObjectQuerier(at, self.g)())
         self.assertEqual(set([23, 34]), r)
 
     def test_query_when_supported(self):
@@ -226,20 +302,20 @@ class GraphObjectQuerierRangeQueryTest(unittest.TestCase):
                 return self._triples(query_triple)
 
         self.g._triples = self.g.triples
-        self.g.triples = lambda qt: triples(self.g, qt)
+        self.g.triples = lambda qt, ctx: triples(self.g, qt)
         self.g.supports_range_queries = True
 
         at = G()
         kt = InRange(2, 5)
         P(at, kt)
-        r = set(GraphObjectQuerier(at, self.g, parallel=False)())
+        r = set(GraphObjectQuerier(at, self.g)())
         self.assertEqual(set([23, 34]), r)
         self.assertTrue(met[0])
 
     def test_query_no_lb(self):
         at = G()
         P(at, LessThan(5))
-        r = set(GraphObjectQuerier(at, self.g, parallel=False)())
+        r = set(GraphObjectQuerier(at, self.g)())
         self.assertEqual(set([12, 23, 34]), r)
 
     def test_query_unorderable_types(self):
@@ -270,12 +346,12 @@ class GraphObjectQuerierRangeQueryTest(unittest.TestCase):
         at = G()
         P(at, LessThan(rdflib.Literal(5)))
         self.assertRaises(Exception,
-                          lambda: GraphObjectQuerier(at, g, parallel=False)())
+                          lambda: GraphObjectQuerier(at, g)())
 
     def test_query_undefined_range(self):
         at = G()
         P(at, InRange())
-        r = set(GraphObjectQuerier(at, self.g, parallel=False)())
+        r = set(GraphObjectQuerier(at, self.g)())
         self.assertEqual(set([12, 23, 34]), r)
 
     def test_query_unorderable_types_with_undefined_range(self):
@@ -300,7 +376,7 @@ class GraphObjectQuerierRangeQueryTest(unittest.TestCase):
 
         at = G()
         P(at, InRange())
-        set(GraphObjectQuerier(at, g, parallel=False)())
+        set(GraphObjectQuerier(at, g)())
 
 
 class ComponentTriplerTest(unittest.TestCase):
@@ -346,6 +422,27 @@ class ComponentTriplerTest(unittest.TestCase):
     def assert_component_matches(self, expected, start_node):
         g = ComponentTripler(start_node, generator=False)()
         self.assertEqual(expected, g)
+
+
+class TQLayerTest(unittest.TestCase):
+
+    def test_getattr_success(self):
+        class A(object):
+            def __init__(self):
+                self.a = 3
+
+        cut = TQLayer()
+        cut.next = A()
+        self.assertEqual(cut.a, 3)
+
+    def test_getattr_fail(self):
+        class A(object):
+            pass
+
+        cut = TQLayer()
+        cut.next = A()
+        with self.assertRaises(AttributeError):
+            cut.ax
 
 
 if __name__ == '__main__':

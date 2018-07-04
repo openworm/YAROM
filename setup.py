@@ -2,6 +2,7 @@
 
 from setuptools import setup
 import os
+import sys
 from glob import glob
 
 REQUIRED = []
@@ -11,6 +12,8 @@ with open('requirements.txt') as f:
     if on_rtd:
         REQUIRED.append("numpydoc")
 FEATURE_DEPS = {}
+
+PY2 = sys.version_info.major == 2
 
 for feature_file in glob("*.requirements.txt"):
     feature, _ = feature_file.split(".", 1)
@@ -24,6 +27,7 @@ LONG_DESCRIPTION = open("README.rst").read()
 setup(
     name="YAROM",
     setup_requires=['six>=1.9.0'],
+    tests_require=[] + (['mock==2.0.0'] if PY2 else []),
     install_requires=REQUIRED,
     dependency_links=[
         "git://github.com/zopefoundation/ZODB.git#egg=ZODB",
