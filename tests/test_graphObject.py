@@ -4,7 +4,8 @@ from random import random
 from yarom.graphObject import (GraphObject,
                                ComponentTripler,
                                GraphObjectQuerier,
-                               TQLayer)
+                               TQLayer,
+                               ZeroOrMoreTQLayer)
 
 from yarom.rangedObjects import InRange, LessThan
 from yarom.rdfUtils import UP
@@ -204,7 +205,12 @@ class GraphObjectQuerierTest(unittest.TestCase):
         r = set(GraphObjectQuerier(at, ge)())
         self.assertEqual(set([2, 3]), r)
 
-    def test_query_zero_or_more_1(self):
+
+class ZeroOrMoreTQLayerTest(unittest.TestCase):
+    # test ZeroOrMore literal fails
+    # test ZeroOrMore triples_choices
+
+    def test_triples_1(self):
         from yarom.go_modifiers import ZeroOrMore
         a = G(3)
         b = G(1)
@@ -219,10 +225,13 @@ class GraphObjectQuerierTest(unittest.TestCase):
         kt = G(ZeroOrMore(1, P.link))
         P(at, kt)
 
-        r = set(GraphObjectQuerier(at, g)())
-        self.assertEqual(set([3, 1, 2]), r)
+        r = ZeroOrMoreTQLayer(g).triples((None, P.link, ZeroOrMore(1, P.link)))
+        self.assertEqual(set([(3, P.link, 1),
+                              (1, P.link, 2),
+                              (2, P.link, 7)]),
+                         set(r))
 
-    def test_query_zero_or_more_2(self):
+    def test_triples_2(self):
         from yarom.go_modifiers import ZeroOrMore
         a = G(3)
         b = G(1)
@@ -237,10 +246,12 @@ class GraphObjectQuerierTest(unittest.TestCase):
         kt = G(ZeroOrMore(2, P.link))
         P(at, kt)
 
-        r = set(GraphObjectQuerier(at, g)())
-        self.assertEqual(set([1, 2]), r)
+        r = ZeroOrMoreTQLayer(g).triples((None, P.link, ZeroOrMore(2, P.link)))
+        self.assertEqual(set([(1, P.link, 2),
+                              (2, P.link, 7)]),
+                         set(r))
 
-    def test_query_zero_or_more_3(self):
+    def test_triples_3(self):
         from yarom.go_modifiers import ZeroOrMore
         a = G(3)
         b = G(1)
@@ -255,8 +266,89 @@ class GraphObjectQuerierTest(unittest.TestCase):
         kt = G(ZeroOrMore(2, P.link, direction=UP))
         P(at, kt)
 
-        r = set(GraphObjectQuerier(at, g)())
-        self.assertEqual(set([1, 3]), r)
+        r = ZeroOrMoreTQLayer(g).triples((None, P.link, ZeroOrMore(2, P.link, direction=UP)))
+        self.assertEqual(set([(1, P.link, 2), (3, P.link, 1)]), set(r))
+
+    def test_triples_choices_filtered(self):
+        from yarom.go_modifiers import ZeroOrMore
+        a = G(3)
+        b0 = G(1)
+        b1 = G(4)
+        b10 = G(5)
+        b11 = G(6)
+        c0 = G(7)
+        c1 = G(8)
+        g = Graph()
+        P(a, b0, g)
+        P(c0, b0, g)
+        P(c1, b0, g)
+        P(a, b11, g)
+        P(b1, b10, g)
+        P(b10, b11, g)
+
+        r = ZeroOrMoreTQLayer(g).triples_choices(([3, 7], P.link, ZeroOrMore(4, P.link)))
+        self.assertEqual(set([(3, P.link, 6)]), set(r))
+
+    def test_triples_choices_multiple_result(self):
+        from yarom.go_modifiers import ZeroOrMore
+        a = G(3)
+        b0 = G(1)
+        b1 = G(4)
+        b10 = G(5)
+        b11 = G(6)
+        c0 = G(7)
+        c1 = G(8)
+        g = Graph()
+        P(a, b0, g)
+        P(c0, b0, g)
+        P(c1, b0, g)
+        P(a, b11, g)
+        P(b1, b10, g)
+        P(b10, b11, g)
+        P(c0, b10, g)
+
+        r = ZeroOrMoreTQLayer(g).triples_choices(([3, 7], P.link, ZeroOrMore(4, P.link)))
+        self.assertEqual(set([(3, P.link, 6),
+                              (7, P.link, 5)]), set(r))
+
+    def test_triples_choices_empty(self):
+        from yarom.go_modifiers import ZeroOrMore
+        g = Graph()
+
+        r = ZeroOrMoreTQLayer(g).triples_choices(([3, 7], P.link, ZeroOrMore(4, P.link)))
+        self.assertEqual(set([]), set(r))
+
+    def test_no_links_empty_result(self):
+        from yarom.go_modifiers import ZeroOrMore
+        a = G(3)
+        b0 = G(1)
+        b11 = G(6)
+        c0 = G(7)
+        c1 = G(8)
+        g = Graph()
+        P(a, b0, g)
+        P(c0, b0, g)
+        P(c1, b0, g)
+        P(a, b11, g)
+
+        r = ZeroOrMoreTQLayer(g).triples_choices(([3, 7], P.link, ZeroOrMore(4, P.link)))
+        self.assertEqual(set(), set(r))
+
+    def test_no_links_non_empty(self):
+        from yarom.go_modifiers import ZeroOrMore
+        a = G(3)
+        b0 = G(1)
+        b11 = G(6)
+        c0 = G(7)
+        c1 = G(8)
+        g = Graph()
+        P(a, b0, g)
+        P(c0, b0, g)
+        P(c1, b0, g)
+        P(a, b11, g)
+
+        r = ZeroOrMoreTQLayer(g).triples_choices(([3, 7], P.link, ZeroOrMore(6, P.link)))
+        self.assertEqual(set([(3, P.link, 6)]), set(r))
 
 
 class GraphObjectQuerierRangeQueryTest(unittest.TestCase):

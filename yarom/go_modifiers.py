@@ -3,7 +3,6 @@ from .rdfUtils import DOWN
 
 
 class ZeroOrMore(object):
-
     def __init__(self, identifier, predicate, direction=DOWN):
         self.identifier = identifier
         self.predicate = predicate

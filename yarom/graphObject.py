@@ -5,7 +5,6 @@ from itertools import chain
 from pprint import pformat
 from .rangedObjects import InRange
 from .rdfUtils import transitive_subjects, UP, DOWN
-from .go_modifiers import ZeroOrMore
 
 L = logging.getLogger(__name__)
 
@@ -202,7 +201,7 @@ class GraphObjectQuerier(object):
         if self.query_object.defined:
             gv = GraphObjectChecker(self.query_object, self.graph)
             if gv():
-                return set([self.query_object])
+                return set([self.query_object.identifier])
             else:
                 return EMPTY_SET
 
@@ -383,23 +382,87 @@ class RangeTQLayer(TQLayer):
 
 
 class ZeroOrMoreTQLayer(TQLayer):
+    def __init__(self, transformer, *args):
+        '''
+        Parameters
+        ----------
+        transformer : `callable`
+            Returns an object describing the relationship or `None`.
+            If an object is returned it must have `predicate`, `identifier`, and
+            `direction` attributes.
+            - `identifier` is the identifier to start from
+            - `predicate` is the predicate to traverse
+            - `direction` is the direction of traversal: Either
+              `yarom.rdfUtils.DOWN` for subject -> object or `yarom.rdfUtils.UP`
+              for object -> subject
+        *args : other arguments
+            Go to `TQLayer` init
+        '''
+        super(ZeroOrMoreTQLayer, self).__init__(*args)
+        self._tf = transformer
+
     def triples(self, query_triple, context=None):
-        for i, x in enumerate(query_triple):
-            if isinstance(x, ZeroOrMore):
-                break
-        else: # no break
+        i, match = self._find_match(query_triple)
+        if not match:
             return self.next.triples(query_triple, context)
         qx = list(query_triple)
-        qx[i] = [sub for sub in transitive_subjects(self.next,
-                                                    query_triple[i].identifier,
-                                                    query_triple[i].predicate,
-                                                    context,
-                                                    query_triple[i].direction)]
-        return self.next.triples_choices(tuple(qx))
+        qx[i] = list(transitive_subjects(self.next,
+                                         match.identifier,
+                                         match.predicate,
+                                         context,
+                                         match.direction))
+        return self._zom_result_helper(qx, match, i, context)
+
+    def _zom_result_helper(self, qx, match, i, context):
+        qx = tuple(qx)
+        zomses = dict()
+        direction = DOWN if match.direction is UP else DOWN
+        predicate = match.predicate
+        for tr in self.next.triples_choices(qx, context):
+            zoms = zomses.get(tr[i])
+            if zoms is None:
+                zoms = [sub for sub in transitive_subjects(self.next, tr[i], predicate, context, direction)]
+                zomses[tr[i]] = zoms
+            for z in zoms:
+                sh = tuple(x if x is not tr[i] else z for x in tr)
+                yield sh
+
+    def triples_choices(self, query_triple, context=None):
+        i, match = self._find_match(query_triple)
+        if not match:
+            return self.next.triples_choices(query_triple, context)
+        qx = list(query_triple)
+        iters = []
+        # XXX: We should, maybe, apply some stats or heuristics here to determine which list to iterate over.
+        for sub in transitive_subjects(self.next,
+                                       match.identifier,
+                                       match.predicate,
+                                       context,
+                                       match.direction):
+            qx[i] = sub
+            iters.append(self.next.triples_choices(tuple(qx), context))
+        ch = chain(*iters)
+        return ch
+
+    def __contains__(self, query_triple):
+        try:
+            next(self.triples(query_triple))
+            return True
+        except StopIteration:
+            return False
+
+    def _find_match(self, query_triple):
+        match = None
+        for i, x in enumerate(query_triple):
+            match = self._tf(x)
+            if match:
+                break
+        else: # no break
+            return None, None
+        return i, match
 
 
 _default_tq_layers_list = [
-    ZeroOrMoreTQLayer,
     RangeTQLayer,
 ]
 
