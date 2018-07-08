@@ -42,7 +42,7 @@ class ObjectPropertyMixin(object):
 
     def set(self, v):
         if not hasattr(v, 'idl'):
-            raise Exception("An ObjectProperty must have an attribute named 'idl'")
+            raise Exception("An ObjectProperty value must have an attribute named 'idl': Got {}".format(v))
         return super(ObjectPropertyMixin, self).set(v)
 
     def get(self):
