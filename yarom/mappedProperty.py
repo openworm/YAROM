@@ -1,11 +1,5 @@
 import logging
 import rdflib as R
-import yarom as Y
-
-import traceback
-
-from .mapper import Mapper
-from .mapperUtils import log_raise_mismapping_exception
 
 L = logging.getLogger(__name__)
 
@@ -27,9 +21,11 @@ class MappedPropertyClass(type):
 
         return self
 
-    @property
-    def value_rdf_type(self):
-        return self.value_type.rdf_type
+    def after_mapper_module_load(self, mapper):
+        vt = getattr(self, 'value_type', None)
+        vrt = getattr(vt, 'rdf_type', None)
+        if vrt:
+            self.value_rdf_type = vrt
 
     def map(cls):
         from .dataObject import (

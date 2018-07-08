@@ -3,6 +3,8 @@ import warnings
 import logging
 from itertools import chain
 from pprint import pformat
+from yarom.utils import FCN
+
 from .rangedObjects import InRange
 from .rdfUtils import transitive_subjects, UP, DOWN
 
@@ -90,8 +92,10 @@ class GraphObjectChecker(object):
 
     def __call__(self):
         tripler = ComponentTripler(self.query_object)
+        L.debug('GOC: Checking {}'.format(self.query_object))
         for x in sorted(tripler()):
             if x not in self.graph:
+                L.debug('GOC: Failed on {}'.format(x))
                 return False
         return True
 
@@ -189,6 +193,7 @@ class GraphObjectQuerier(object):
         """
 
         self.query_object = q
+        L.debug('GOQ graph %s', graph)
         self.graph = _default_tq_layers(graph)
 
         if parallel:
@@ -198,11 +203,14 @@ class GraphObjectQuerier(object):
         self.hop_scorer = hop_scorer
 
     def do_query(self):
+        L.debug('do_query: Graph {}'.format(self.graph))
         if self.query_object.defined:
+            L.debug('do_query: Query object {} is already defined'.format(self.query_object))
             gv = GraphObjectChecker(self.query_object, self.graph)
             if gv():
                 return set([self.query_object.identifier])
             else:
+                L.debug('do_query: Query graph does not align with the backing graph')
                 return EMPTY_SET
 
         qp = _QueryPreparer(self.query_object)
@@ -306,10 +314,7 @@ class GraphObjectQuerier(object):
         return self.graph.triples(query_triple)
 
     def __call__(self):
-        res = self.do_query()
-        if L.isEnabledFor(logging.DEBUG):
-            L.debug('GOQ: results:{}'.format(str(pformat(self.results))))
-        return res
+        return self.do_query()
 
 
 class TQLayer(object):
@@ -331,6 +336,12 @@ class TQLayer(object):
         res = getattr(super(TQLayer, self), attr, TQLayer._NADA)
         if res is TQLayer._NADA:
             return getattr(self.next, attr)
+
+    def __repr__(self):
+        return FCN(type(self)) + '(' + repr(self.next) + ')'
+
+    def __str__(self):
+        return FCN(type(self)) + '(' + str(self.next) + ')'
 
 
 class TerminalTQLayer(object):
@@ -418,6 +429,7 @@ class ZeroOrMoreTQLayer(TQLayer):
         zomses = dict()
         direction = DOWN if match.direction is UP else DOWN
         predicate = match.predicate
+        L.debug('ZeroOrMoreTQLayer: start %s zoms %s', match, qx[i])
         for tr in self.next.triples_choices(qx, context):
             zoms = zomses.get(tr[i])
             if zoms is None:

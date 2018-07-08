@@ -7,6 +7,7 @@ from itertools import count
 from .rdfTypeResolver import RDFTypeResolver
 from six import with_metaclass
 from .mapperUtils import parents_str
+from .utils import FCN
 from pprint import pformat
 
 
@@ -15,10 +16,6 @@ __all__ = ["Mapper",
            "UnmappedClassException"]
 
 L = logging.getLogger(__name__)
-
-
-def FCN(cls):
-    return str(cls.__module__) + '.' + str(cls.__name__)
 
 
 class UnmappedClassException(Exception):
@@ -212,31 +209,13 @@ class Mapper(with_metaclass(MapperMeta, object)):
             del self.MappedClasses[cname]
         self.class_ordering = self._compute_class_ordering()
 
-    def resolve_classes_from_rdf(self, graph):
-        """ Gathers Python classes from the RDF graph.
-
-        If there is a remote Python module registered in the RDF graph, then an
-        import of the module is attempted. If no remote module can be found
-        (i.e., none has been registered or the registered module cannot be
-        retrieved) then a subclass of the base class is generated from data
-        available in the graph
-        """
-        # get the DataObject class resource
-        # get the subclasses of DataObject, transitively
-        # take the list of subclasses and resolve them into Python classes
-        for base in self.base_classes.values():
-            L.debug("RESOLVING base {}".format(FCN(base), base.rdf_type))
-            for x in graph.transitive_subjects(R.RDFS['subClassOf'],
-                                               base.rdf_type):
-                L.debug("RESOLVING {}".format(x))
-                self.resolve_class(x)
-
     def resolve_class(self, uri):
         cr = self.load_module('yarom.classRegistry')
         # look up the class in the registryCache
-        if uri in self.RDFTypeTable:
+        c = self.RDFTypeTable.get(uri)
+        if c is not None:
             # if it is in the regCache, then return the class;
-            return self.RDFTypeTable[uri]
+            return c
         else:
             # otherwise, attempt to load into the cache by
             # reading the RDF graph.
