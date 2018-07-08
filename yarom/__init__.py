@@ -184,7 +184,6 @@ def connect(conf=False,
         MAPPER.load_module(mod)
 
     MAPPER.remap()
-    MAPPER.resolve_classes_from_rdf(dbconn['rdf.graph'])
     m.connected = True
     if data:
         loadData(data, dataFormat)

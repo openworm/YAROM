@@ -8,7 +8,7 @@ from yarom.graphObject import (GraphObject,
                                ZeroOrMoreTQLayer)
 
 from yarom.rangedObjects import InRange, LessThan
-from yarom.rdfUtils import UP
+from yarom.rdfUtils import UP, DOWN
 
 import rdflib
 
@@ -164,7 +164,7 @@ class GraphObjectQuerierTest(unittest.TestCase):
 
         at = G(3)
         r = list(GraphObjectQuerier(at, g)())
-        self.assertListEqual([at], r)
+        self.assertListEqual([3], r)
 
     def test_query_defined_validates(self):
         """
@@ -210,8 +210,15 @@ class ZeroOrMoreTQLayerTest(unittest.TestCase):
     # test ZeroOrMore literal fails
     # test ZeroOrMore triples_choices
 
-    def test_triples_1(self):
+    def zm(self, x, direction=DOWN):
         from yarom.go_modifiers import ZeroOrMore
+
+        def f(ident):
+            if x == ident:
+                return ZeroOrMore(x, P.link, direction)
+        return f
+
+    def test_triples_1(self):
         a = G(3)
         b = G(1)
         c = G(2)
@@ -221,18 +228,16 @@ class ZeroOrMoreTQLayerTest(unittest.TestCase):
         P(b, c, g)
         P(c, d, g)
 
-        at = G()
-        kt = G(ZeroOrMore(1, P.link))
-        P(at, kt)
-
-        r = ZeroOrMoreTQLayer(g).triples((None, P.link, ZeroOrMore(1, P.link)))
+        r = ZeroOrMoreTQLayer(self.zm(1), g).triples((None, P.link, 1))
         self.assertEqual(set([(3, P.link, 1),
                               (1, P.link, 2),
-                              (2, P.link, 7)]),
+                              (2, P.link, 7),
+                              (3, P.link, 2),
+                              (3, P.link, 7),
+                              (1, P.link, 7)]),
                          set(r))
 
     def test_triples_2(self):
-        from yarom.go_modifiers import ZeroOrMore
         a = G(3)
         b = G(1)
         c = G(2)
@@ -242,17 +247,13 @@ class ZeroOrMoreTQLayerTest(unittest.TestCase):
         P(b, c, g)
         P(c, d, g)
 
-        at = G()
-        kt = G(ZeroOrMore(2, P.link))
-        P(at, kt)
-
-        r = ZeroOrMoreTQLayer(g).triples((None, P.link, ZeroOrMore(2, P.link)))
+        r = ZeroOrMoreTQLayer(self.zm(2), g).triples((None, P.link, 2))
         self.assertEqual(set([(1, P.link, 2),
+                              (1, P.link, 7),
                               (2, P.link, 7)]),
                          set(r))
 
     def test_triples_3(self):
-        from yarom.go_modifiers import ZeroOrMore
         a = G(3)
         b = G(1)
         c = G(2)
@@ -262,15 +263,14 @@ class ZeroOrMoreTQLayerTest(unittest.TestCase):
         P(b, c, g)
         P(c, d, g)
 
-        at = G()
-        kt = G(ZeroOrMore(2, P.link, direction=UP))
-        P(at, kt)
-
-        r = ZeroOrMoreTQLayer(g).triples((None, P.link, ZeroOrMore(2, P.link, direction=UP)))
-        self.assertEqual(set([(1, P.link, 2), (3, P.link, 1)]), set(r))
+        r = ZeroOrMoreTQLayer(self.zm(2, UP), g).triples((None, P.link, 2))
+        self.assertEqual(set([(1, P.link, 2),
+                              (3, P.link, 1),
+                              (3, P.link, 2),
+                              (3, P.link, 7),
+                              (1, P.link, 7)]), set(r))
 
     def test_triples_choices_filtered(self):
-        from yarom.go_modifiers import ZeroOrMore
         a = G(3)
         b0 = G(1)
         b1 = G(4)
@@ -286,11 +286,10 @@ class ZeroOrMoreTQLayerTest(unittest.TestCase):
         P(b1, b10, g)
         P(b10, b11, g)
 
-        r = ZeroOrMoreTQLayer(g).triples_choices(([3, 7], P.link, ZeroOrMore(4, P.link)))
+        r = ZeroOrMoreTQLayer(self.zm(4), g).triples_choices(([3, 7], P.link, 4))
         self.assertEqual(set([(3, P.link, 6)]), set(r))
 
     def test_triples_choices_multiple_result(self):
-        from yarom.go_modifiers import ZeroOrMore
         a = G(3)
         b0 = G(1)
         b1 = G(4)
@@ -307,19 +306,17 @@ class ZeroOrMoreTQLayerTest(unittest.TestCase):
         P(b10, b11, g)
         P(c0, b10, g)
 
-        r = ZeroOrMoreTQLayer(g).triples_choices(([3, 7], P.link, ZeroOrMore(4, P.link)))
+        r = ZeroOrMoreTQLayer(self.zm(4), g).triples_choices(([3, 7], P.link, 4))
         self.assertEqual(set([(3, P.link, 6),
                               (7, P.link, 5)]), set(r))
 
     def test_triples_choices_empty(self):
-        from yarom.go_modifiers import ZeroOrMore
         g = Graph()
 
-        r = ZeroOrMoreTQLayer(g).triples_choices(([3, 7], P.link, ZeroOrMore(4, P.link)))
+        r = ZeroOrMoreTQLayer(self.zm(4), g).triples_choices(([3, 7], P.link, 4))
         self.assertEqual(set([]), set(r))
 
     def test_no_links_empty_result(self):
-        from yarom.go_modifiers import ZeroOrMore
         a = G(3)
         b0 = G(1)
         b11 = G(6)
@@ -331,11 +328,10 @@ class ZeroOrMoreTQLayerTest(unittest.TestCase):
         P(c1, b0, g)
         P(a, b11, g)
 
-        r = ZeroOrMoreTQLayer(g).triples_choices(([3, 7], P.link, ZeroOrMore(4, P.link)))
+        r = ZeroOrMoreTQLayer(self.zm(4), g).triples_choices(([3, 7], P.link, 4))
         self.assertEqual(set(), set(r))
 
     def test_no_links_non_empty(self):
-        from yarom.go_modifiers import ZeroOrMore
         a = G(3)
         b0 = G(1)
         b11 = G(6)
@@ -347,7 +343,7 @@ class ZeroOrMoreTQLayerTest(unittest.TestCase):
         P(c1, b0, g)
         P(a, b11, g)
 
-        r = ZeroOrMoreTQLayer(g).triples_choices(([3, 7], P.link, ZeroOrMore(6, P.link)))
+        r = ZeroOrMoreTQLayer(self.zm(6), g).triples_choices(([3, 7], P.link, 6))
         self.assertEqual(set([(3, P.link, 6)]), set(r))
 
 
