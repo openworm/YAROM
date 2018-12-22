@@ -26,23 +26,28 @@ def deserialize_rdflib_term(x):
     return x
 
 
-def triples_to_bgp(trips, namespace_manager=None, show_namespaces=False):
+def triple_to_n3(trip, namespace_manager=None):
     from rdflib.term import Literal, URIRef
+    p = ''
+    ns = set([])
+    for x in trip:
+        s = serialize_rdflib_term(x, namespace_manager)
+        if isinstance(x, URIRef) and s[0] != '<':
+            ns.add(s.split(':', 1)[0])
+        elif isinstance(x, Literal) and '^^' in s and s[-1] != '>':
+            ns.add(s.split('^^', 1)[1].split(':', 1)[0])
+
+        p += s + ' '
+    return p
+
+
+def triples_to_bgp(trips, namespace_manager=None, show_namespaces=False):
     # XXX: Collisions could result between the variable names of different
     # objects
     g = ""
     ns = set([])
     for y in trips:
-        p = ''
-        for x in y:
-            s = serialize_rdflib_term(x, namespace_manager)
-            if isinstance(x, URIRef) and s[0] != '<':
-                ns.add(s.split(':', 1)[0])
-            elif isinstance(x, Literal) and '^^' in s and s[-1] != '>':
-                ns.add(s.split('^^', 1)[1].split(':', 1)[0])
-
-            p += s + ' '
-        g += p + ".\n"
+        g += triple_to_n3(y) + ".\n"
 
     if (namespace_manager is not None) and show_namespaces:
         g = "".join('@prefix ' + str(x) + ': ' + y.n3() + ' .\n'

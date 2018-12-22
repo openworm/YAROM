@@ -15,7 +15,8 @@ __all__ = [
     "GraphObjectQuerier",
     "GraphObjectChecker",
     "ComponentTripler",
-    "IdentifierMissingException"
+    "IdentifierMissingException",
+    "ZeroOrMoreTQLayer",
 ]
 
 EMPTY_SET = frozenset([])
