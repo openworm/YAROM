@@ -94,7 +94,6 @@ class GraphObjectChecker(object):
     def __call__(self):
         tripler = ComponentTripler(self.query_object)
         L.debug('GOC: Checking {}'.format(self.query_object))
-        L.debug('GOC context {}'.format(self.query_object.context))
         for x in sorted(tripler()):
             if x not in self.graph:
                 L.debug('GOC: Failed on {}'.format(x))
