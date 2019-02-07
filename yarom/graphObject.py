@@ -94,6 +94,7 @@ class GraphObjectChecker(object):
     def __call__(self):
         tripler = ComponentTripler(self.query_object)
         L.debug('GOC: Checking {}'.format(self.query_object))
+        L.debug('GOC context {}'.format(self.query_object.context))
         for x in sorted(tripler()):
             if x not in self.graph:
                 L.debug('GOC: Failed on {}'.format(x))
@@ -219,7 +220,7 @@ class GraphObjectQuerier(object):
         if len(paths) == 0:
             return EMPTY_SET
         h = self.merge_paths(paths)
-        L.debug('do_query: merge_paths_result: {}'.format(pformat(h)))
+        L.debug('do_query: merge_paths_result:\n{}'.format(self._format_merged(h)))
         return self.query_path_resolver(h)
 
     def merge_paths(self, l):
@@ -235,7 +236,7 @@ class GraphObjectQuerier(object):
                  e: {d: {}}}}
         """
         res = dict()
-        L.debug("merge_paths: {}".format(l))
+        L.debug("merge_paths: path {}".format(_format_paths(l)))
         for x in l:
             if len(x) > 0:
                 tmp = res.get(x[0], [])
@@ -247,13 +248,23 @@ class GraphObjectQuerier(object):
 
         return res
 
+    def _format_merged(self, merge, depth=0):
+        import six
+        sio = six.StringIO()
+        for triple, remainder in merge.items():
+            idx = triple.index(None)
+            other_idx = 0 if (idx == 2) else 2
+            print((depth * 4 * ' ') + str(triple[1]) + '->' + str(triple[other_idx]), file=sio)
+            print(self._format_merged(remainder, depth+1), file=sio, end='')
+        return sio.getvalue()
+
     def query_path_resolver(self, path_table):
         join_args = []
         goal = None
         for hop in sorted(path_table.keys(), key=self.score):
+            L.debug("HOP %s", str(hop))
             goal = hop[3]
             self._qpr_helper(path_table[hop], hop, join_args)
-
         if len(join_args) == 1:
             return join_args[0]
         elif len(join_args) > 0:
@@ -261,7 +272,8 @@ class GraphObjectQuerier(object):
             join_args = sorted(join_args, key=len)
             res = join_args[0]
             res.intersection_update(*join_args[1:])
-            L.debug("Joined {} args on {}".format(len(join_args), goal))
+            L.debug("Joined {}(sizes={}) args on {}. Result size = {}".format(len(join_args),
+                [len(s) for s in join_args], goal, len(res)))
             return res
         else:
             return EMPTY_SET
@@ -271,6 +283,7 @@ class GraphObjectQuerier(object):
         try:
             idx = search_triple.index(None)
             other_idx = 0 if (idx == 2) else 2
+            qx = None
 
             if isinstance(search_triple[other_idx], Variable):
                 sub_results = list(self.query_path_resolver(sub))
@@ -280,7 +293,10 @@ class GraphObjectQuerier(object):
                 else:
                     qx = (None, search_triple[1], sub_results)
 
-                trips = self.triples_choices(qx)
+                if sub_results:
+                    trips = self.triples_choices(qx)
+                else:
+                    trips = iter(())
             else:
                 # join_args is assumed to be sorted such that it the most selective query was executed first, so we
                 # should be able to profitably call triples_choices to reduce the size of our branch
@@ -297,9 +313,10 @@ class GraphObjectQuerier(object):
                     else: # triples_choices treats [] as wildcard, but for us it's a 'match nothing', so...
                         trips = iter(())
                 else:
-                    trips = self.triples(search_triple[:3])
+                    qx = search_triple[:3]
+                    trips = self.triples(qx)
             seen = set(y[idx] for y in trips)
-            L.debug("Done with {} {}".format(search_triple, len(seen)))
+            L.debug("Done with {} {}".format(qx, len(seen)))
         finally:
             join_args.append(seen)
 
@@ -316,6 +333,19 @@ class GraphObjectQuerier(object):
 
     def __call__(self):
         return self.do_query()
+
+
+def _format_paths(paths):
+    import six
+    sio = six.StringIO()
+    for path in paths:
+        for triple in path:
+            idx = triple.index(None)
+            other_idx = 0 if (idx == 2) else 2
+            direction = '' if idx == 2 else '^'
+            print('->' + str(triple[1]) + direction + '->' + str(triple[other_idx]), file=sio, end='')
+        print(file=sio)
+    return sio.getvalue()
 
 
 class TQLayer(object):
@@ -659,7 +689,7 @@ class _QueryPreparer(object):
     def __call__(self):
         x = self.prepare(self.start)
         L.debug("self.prepare() result:" + str(x))
-        L.debug("_QueryPreparer paths:" + str(pformat(self.paths)))
+        L.debug("_QueryPreparer paths:" + str(_format_paths(self.paths)))
         return self.paths
 
 
