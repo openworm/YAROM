@@ -7,6 +7,10 @@ bind(URIRef('http://markw.cc/yarom/schema/datatype/list'),
      list,
      constructor=loads,
      lexicalizer=dumps)
+bind(URIRef('http://markw.cc/yarom/schema/datatype/object'),
+     dict,
+     constructor=loads,
+     lexicalizer=dumps)
 bind(URIRef('http://markw.cc/yarom/schema/datatype/quantity'),
      Quantity,
      constructor=Quantity.parse,

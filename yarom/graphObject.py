@@ -4,6 +4,7 @@ import logging
 from itertools import chain
 from pprint import pformat
 from yarom.utils import FCN
+import six
 
 from .rangedObjects import InRange
 from .rdfUtils import transitive_subjects, UP, DOWN
@@ -248,7 +249,6 @@ class GraphObjectQuerier(object):
         return res
 
     def _format_merged(self, merge, depth=0):
-        import six
         sio = six.StringIO()
         for triple, remainder in merge.items():
             idx = triple.index(None)
@@ -335,7 +335,6 @@ class GraphObjectQuerier(object):
 
 
 def _format_paths(paths):
-    import six
     sio = six.StringIO()
     for path in paths:
         for triple in path:
@@ -466,8 +465,7 @@ class ZeroOrMoreTQLayer(TQLayer):
                 zoms = [sub for sub in transitive_subjects(self.next, tr[i], predicate, context, direction)]
                 zomses[tr[i]] = zoms
             for z in zoms:
-                sh = tuple(x if x is not tr[i] else z for x in tr)
-                yield sh
+                yield tuple(x if x is not tr[i] else z for x in tr)
 
     def triples_choices(self, query_triple, context=None):
         i, match = self._find_match(query_triple)
