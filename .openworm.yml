@@ -1,0 +1,5 @@
+--- 
+repo: openworm/yarom
+shortDescription: "Contains some RDF-Python mapping logic used by PyOpenWorm"
+parent:
+  - openworm/PyOpenWorm
