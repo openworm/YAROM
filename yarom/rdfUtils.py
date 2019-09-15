@@ -66,19 +66,21 @@ def transitive_lookup(graph, start, predicate, context=None, direction=DOWN):
     border = set([start])
     while border:
         new_border = set()
-        for b in border:
-            if direction is DOWN:
-                qx = (b, predicate, None)
-                idx = 2
-            else:
-                qx = (None, predicate, b)
-                idx = 0
+        if direction is DOWN:
+            qx = (list(border), predicate, None)
+            idx = 2
+        else:
+            qx = (None, predicate, list(border))
+            idx = 0
 
-            itr = graph.triples(qx, context=context)
-            for t in itr:
-                o = t[0][idx] if isinstance(t[0], tuple) else t[idx]
-                if o not in res:
-                    new_border.add(o)
+        itr = graph.triples_choices(qx, context=context)
+        for t in itr:
+            if isinstance(t[0], tuple):
+                o = t[0][idx]
+            else:
+                o = t[idx]
+            if o not in res:
+                new_border.add(o)
         res |= border
         border = new_border
     res -= _none_singleton_set
