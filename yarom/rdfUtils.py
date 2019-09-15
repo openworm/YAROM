@@ -72,7 +72,6 @@ def transitive_lookup(graph, start, predicate, context=None, direction=DOWN):
         else:
             qx = (None, predicate, list(border))
             idx = 0
-
         itr = graph.triples_choices(qx, context=context)
         for t in itr:
             if isinstance(t[0], tuple):

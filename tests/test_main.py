@@ -188,7 +188,7 @@ class DataObjectTest(_DataTest):
         trips = list(t.triples())
         for e in trips:
             g.add(e)
-        self.assertEquals(len(set(trips)), len(trips))
+        self.assertEqual(len(set(trips)), len(trips))
 
     def test_triples_clone_sibling(self):
         """ Test that no duplicate triples are released when there's a clone in the graph.
