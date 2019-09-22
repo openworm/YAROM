@@ -1,9 +1,9 @@
 YAROM
 =====
 
-.. image:: https://travis-ci.org/mwatts15/YAROM.png?branch=master
+.. image:: https://travis-ci.org/openworm/YAROM.png?branch=master
    :alt: Build Status
-   :target: https://travis-ci.org/mwatts15/YAROM
+   :target: https://travis-ci.org/openworm/YAROM
 
 Yet Another RDF-Object Mapper (YAROM) is a Python library useful for building
 Create-Read-Update-Delete (CRUD) tools and applications using Python objects
