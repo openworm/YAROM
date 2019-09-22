@@ -21,7 +21,7 @@ for feature_file in glob("*.requirements.txt"):
     with open(feature_file) as f:
         FEATURE_DEPS[feature] = f.read().splitlines()
 
-VERSION = open("version.txt").read()
+VERSION = open("version.txt").read().strip()
 LONG_DESCRIPTION = open("README.rst").read()
 
 setup(
