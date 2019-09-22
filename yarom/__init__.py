@@ -37,7 +37,7 @@ import logging
 
 from .mapper import Mapper
 
-__version__ = "0.12.0"
+__version__ = "0.12.1.dev0"
 __author__ = 'Mark Watts'
 
 this_module = __import__('yarom')
