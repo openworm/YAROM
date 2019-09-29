@@ -15,12 +15,7 @@ Contents
    adding_data
    data_stores
    docs
-
-API
----
-
-.. automodule:: yarom
-   :members:
+   api/modules
 
 Questions/concerns?
 ===================

@@ -21,15 +21,6 @@ and::
 The get() method also allows for parameterizing the query in ways specific to
 the Property.
 
-Classes
--------
-.. automodule:: yarom.dataObject
-.. automodule:: yarom.dataUser
-.. automodule:: yarom.data
-.. automodule:: yarom.zodb
-.. automodule:: yarom.configure
-.. automodule:: yarom.graphObject
-.. automodule:: yarom.mapper
 """
 
 
