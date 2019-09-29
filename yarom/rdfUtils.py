@@ -2,7 +2,10 @@ from __future__ import print_function
 
 # Directions for traversal across triples
 UP = 'up'
+''' Object to Subject direction for traversal across triples. '''
+
 DOWN = 'down'
+''' Subject to Object direction for traversal across triples. '''
 
 
 def print_graph(g, hide_namespaces=False):
@@ -61,8 +64,40 @@ def triples_to_bgp(trips, namespace_manager=None, show_namespaces=False):
 _none_singleton_set = frozenset([None])
 
 
-def transitive_lookup(graph, start, predicate, context=None, direction=DOWN):
-    res = set()
+def transitive_lookup(graph, start, predicate, context=None, direction=DOWN, seen=None):
+    '''
+    Do a transitive lookup over an `rdflib.graph.Graph` or `rdflib.store.Store`
+
+    In other words, finds all resources which relate to `start` through zero or more
+    `predicate` relationships. `start` itself will be included in the return value.
+
+    Loops in the input `graph` will not cause non-termination.
+
+    Parameters
+    ----------
+    graph : rdflib.graph.Graph or rdflib.store.Store
+        The graph to query
+    start : rdflib.term.Identifier
+        The resource in the graph to start from
+    predicate : rdflib.term.URIRef
+        The predicate relating terms in the closure
+    context : rdflib.graph.Graph or rdflib.term.URIRef
+        The context in which the query should run. Optional
+    direction : DOWN or UP
+        The direction in which to traverse
+    seen : set of rdflib.term.Identifier
+        A set of terms which have already been "seen" by the algorithm. Useful for
+        repeated calls to `transitive_lookup`. Optional
+
+    Returns
+    -------
+    set of rdflib.term.Identifier
+        resources in the transitive closure of `predicate` from `start`
+    '''
+    if seen:
+        res = seen
+    else:
+        res = set()
     border = set([start])
     while border:
         new_border = set()
@@ -86,4 +121,33 @@ def transitive_lookup(graph, start, predicate, context=None, direction=DOWN):
     return res
 
 
+class BatchAddGraph(object):
+    ''' Wrapper around graph that turns calls to 'add' into calls to 'addN' '''
+    def __init__(self, graph, batchsize=1000, *args, **kwargs):
+        self.graph = graph
+        self.g = (graph,)
+        self.batchsize = batchsize
+        self.reset()
+
+    def reset(self):
+        self.batch = []
+        self.count = 0
+
+    def add(self, triple):
+        if self.count > 0 and self.count % self.batchsize == 0:
+            self.graph.addN(self.batch)
+            self.batch = []
+        self.count += 1
+        self.batch.append(triple + self.g)
+
+    def __enter__(self):
+        self.reset()
+        return self
+
+    def __exit__(self, *exc):
+        if exc[0] is None:
+            self.graph.addN(self.batch)
+
+
 transitive_subjects = transitive_lookup
+''' Alias to `transitive_lookup` '''
