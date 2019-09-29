@@ -1,2 +1,2 @@
-openworm/PyOpenWorm dev
-openworm/PyOpenWorm query-performance
+openworm/owmeta dev
+openworm/owmeta design-docs
