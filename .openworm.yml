@@ -1,5 +1,5 @@
 --- 
 repo: openworm/yarom
-shortDescription: "Contains some RDF-Python mapping logic used by PyOpenWorm"
+shortDescription: "Contains some RDF-Python mapping logic used by owmeta"
 parent:
-  - openworm/PyOpenWorm
+  - openworm/owmeta
