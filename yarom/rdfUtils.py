@@ -123,15 +123,35 @@ def transitive_lookup(graph, start, predicate, context=None, direction=DOWN, see
 
 class BatchAddGraph(object):
     ''' Wrapper around graph that turns calls to 'add' into calls to 'addN' '''
-    def __init__(self, graph, batchsize=1000, *args, **kwargs):
+    def __init__(self, graph, batchsize=1000, _parent=None, *args, **kwargs):
         self.graph = graph
         self.g = (graph,)
-        self.batchsize = batchsize
-        self.reset()
+        if _parent:
+            self.batch = _parent.batch
+            self.batchsize = _parent.batchsize
+            self._parent = _parent
+        else:
+            self.batchsize = batchsize
+            self._parent = None
+            self.reset()
 
     def reset(self):
         self.batch = []
-        self.count = 0
+        self._count = 0
+
+    @property
+    def count(self):
+        if self._parent:
+            return self._parent.count
+        else:
+            return self._count
+
+    @count.setter
+    def count(self, value):
+        if self._parent:
+            self._parent.count = value
+        else:
+            self._count = value
 
     def add(self, triple):
         if self.count > 0 and self.count % self.batchsize == 0:
@@ -139,6 +159,9 @@ class BatchAddGraph(object):
             self.batch = []
         self.count += 1
         self.batch.append(triple + self.g)
+
+    def get_context(self, ctx):
+        return BatchAddGraph(self.graph.get_context(ctx), _parent=self)
 
     def __enter__(self):
         self.reset()
